@@ -44,9 +44,13 @@ with `completeUntilFirstUserAuthentication` file protection, and both the app an
   the extension, and `provideCredentialWithoutUserInteraction` always refuses. Only domains, usernames and
   passkey ids are shared with the system's QuickType list, never passwords.
 - **SSH agent** (off by default) listens on a `0600` socket in the App Group container. It only lists and
-  signs; it never adds, removes or exports keys. Every signature asks for Touch ID or the Mac password, names
-  the requesting program, and can optionally be remembered for 1 or 10 minutes per key and program. Keys
-  are only available while their account is unlocked.
+  signs; it never adds, removes or exports keys. A signature request names the app that owns the connecting
+  process (bundle id and Team ID when the signature is readable, otherwise the executable path). The person
+  allows it once, for 10 minutes, or until the vault locks; macOS then asks for Touch ID or the Mac login
+  password, which Triwarden never receives. Grants live in memory and are cleared on lock. Allowing once
+  also covers the same app and key for 15 seconds. Every request is appended to `ssh-access-log.json` in the
+  App Group container (newest 200; app, tool, path, key name, outcome; no key material and no signed payload).
+  Keys are only available while their account is unlocked.
 - **`tw` command line** (off by default) talks to the app over a `0600` socket in the App Group container.
   Status, generate and lock work without approval. Listing or reading anything needs the vault unlocked and
   Touch ID or the Mac password, with a prompt that names the calling program. Secrets go to stdout only,

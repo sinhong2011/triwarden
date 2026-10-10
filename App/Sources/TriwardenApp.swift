@@ -1,5 +1,6 @@
 import SwiftUI
 import TipKit
+import UserNotifications
 import VaultwardenAPI
 
 @main
@@ -76,7 +77,7 @@ struct TriwardenApp: App {
             MenuBarContent()
                 .environment(model)
         } label: {
-            Image(nsImage: MenuBarGlyph.image)
+            Image(nsImage: MenuBarGlyph.image(pending: model.sshAgent.pendingCount > 0))
                 .opacity(model.isUnlocked ? 1 : 0.55)
         }
         .menuBarExtraStyle(.window)
@@ -381,6 +382,7 @@ enum DemoLaunch {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     var model: AppModel?
+    private let sshNotifications = SSHNotificationBridge()
 
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         guard !hasVisibleWindows, let model else { return true }
@@ -389,9 +391,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        UNUserNotificationCenter.current().delegate = sshNotifications
+        NotificationCenter.default.addObserver(self, selector: #selector(revealSSHApproval),
+                                               name: .sshApprovalReveal, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(revealInbox),
+                                               name: .inboxReveal, object: nil)
         // The last window closing: with "Keep running in the menu bar" on, Triwarden leaves the Dock.
         NotificationCenter.default.addObserver(self, selector: #selector(windowWillClose(_:)),
                                                name: NSWindow.willCloseNotification, object: nil)
+    }
+
+    @objc private func revealSSHApproval() {
+        model?.sshAgent.reveal()
+    }
+
+    @objc private func revealInbox() {
+        model?.revealInbox()
     }
 
     @objc private func windowWillClose(_ note: Notification) {

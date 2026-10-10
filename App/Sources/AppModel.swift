@@ -4,6 +4,7 @@ import LocalAuthentication
 import Foundation
 import Observation
 import SwiftUI
+import UserNotifications
 import VaultwardenAPI
 
 /// Drives the create/edit sheet.
@@ -787,6 +788,86 @@ final class AppModel {
         for session in sessions where session.lastSynced.map({ Date.now.timeIntervalSince($0) > 60 }) ?? true {
             session.scheduleSync()
         }
+        announceInbox()
+    }
+
+    /// The bell should open. A system notification tap sets this; the header button consumes it.
+    var presentInbox = false
+
+    /// Brings the vault forward and opens the bell.
+    func revealInbox() {
+        bringToFront()
+        presentInbox = true
+    }
+
+    private var inboxAnnounce: Task<Void, Never>?
+
+    /// Posts a system banner for each new thing waiting in the bell. SSH signatures keep their own banner.
+    func announceInbox() {
+        inboxAnnounce?.cancel()
+        inboxAnnounce = Task { await announceInboxNow() }
+    }
+
+    private func announceInboxNow() async {
+        guard isUnlocked else { return }
+        var banners: [InboxBanner] = []
+        if sessions.contains(where: { $0.lastSyncError != nil }) {
+            banners.append(InboxBanner(id: "sync", title: String(localized: "Couldn't sync"),
+                                       body: String(localized: "The vault on this Mac is unchanged."), sound: true))
+        }
+        if let version = updates.availableVersion {
+            banners.append(InboxBanner(id: "update-\(version)", title: String(localized: "Update \(version) is ready"),
+                                       body: String(localized: "Install when you're ready.")))
+        }
+        let report = WatchtowerReport(items: items, breaches: breachCounts)
+        let breached = report.issues[.breached]?.count ?? 0
+        if breached > 0 {
+            let body = breached == 1
+                ? String(localized: "A password was found in a data breach.")
+                : String(localized: "\(breached) passwords were found in data breaches.")
+            banners.append(InboxBanner(id: "breached-\(breached)", title: String(localized: "Watchtower"), body: body))
+        }
+        let cards = report.issues[.cardExpiring]?.count ?? 0
+        if cards > 0 {
+            let body = cards == 1
+                ? String(localized: "A card expires soon.")
+                : String(localized: "\(cards) cards expire soon.")
+            banners.append(InboxBanner(id: "cards-\(cards)", title: String(localized: "Watchtower"), body: body))
+        }
+        let soon = Date.now.addingTimeInterval(48 * 60 * 60)
+        for send in sends.prefix(3) where !send.disabled && !send.isExpired {
+            guard let date = send.expirationDate ?? send.deletionDate, date > .now, date < soon else { continue }
+            banners.append(InboxBanner(id: "send-\(send.id)", title: send.name, body: String(localized: "Send expires soon")))
+        }
+        if !Task.isCancelled {
+            for session in sessions {
+                guard let trusted = try? await session.emergencyContacts(granted: false),
+                      let granted = try? await session.emergencyContacts(granted: true) else { continue }
+                for contact in trusted where contact.status == .recoveryInitiated {
+                    let person = contact.name ?? contact.email
+                    banners.append(InboxBanner(id: "emergency-\(contact.id)", title: person,
+                                               body: String(localized: "Asked for emergency access"), sound: true))
+                }
+                for contact in trusted where contact.status == .accepted {
+                    let person = contact.name ?? contact.email
+                    banners.append(InboxBanner(id: "emergency-confirm-\(contact.id)", title: person,
+                                               body: String(localized: "Needs confirming")))
+                }
+                for contact in granted where contact.status == .recoveryApproved {
+                    let person = contact.name ?? contact.email
+                    banners.append(InboxBanner(id: "emergency-granted-\(contact.id)", title: person,
+                                               body: String(localized: "Emergency access granted"), sound: true))
+                }
+            }
+        }
+        guard !Task.isCancelled else { return }
+        let center = UNUserNotificationCenter.current()
+        let settings = await center.notificationSettings()
+        if settings.authorizationStatus == .notDetermined, !banners.isEmpty {
+            _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        }
+        guard !Task.isCancelled else { return }
+        InboxAnnouncer.deliver(banners)
     }
 
     /// Drop the cached client so new headers / certificates take effect on the next request.

@@ -2,6 +2,7 @@ import AppKit
 import AuthenticationServices
 import ServiceManagement
 import SwiftUI
+import SSHAgent
 import UniformTypeIdentifiers
 
 /// Settings with a sidebar, like System Settings: sections on the left, the chosen page on the right.
@@ -364,7 +365,6 @@ private struct SecuritySettings: View {
 private struct DeveloperSettings: View {
     @Environment(AppModel.self) private var model
     @AppStorage(Pref.sshAgent) private var enabled = false
-    @AppStorage(Pref.sshApprovalSeconds) private var approvalSeconds = 0
     @AppStorage(Pref.cli) private var cliEnabled = false
     @AppStorage(Pref.cliApprovalSeconds) private var cliApprovalSeconds = 0
     @AppStorage(Pref.browser) private var browserEnabled = false
@@ -378,19 +378,20 @@ private struct DeveloperSettings: View {
         Form {
             Section {
                 Toggle("Use Triwarden as SSH agent", isOn: $enabled)
-                    .onChange(of: enabled) { _, on in on ? agent.start() : agent.stop() }
-                Picker("Ask before signing", selection: $approvalSeconds) {
-                    Text("Every time").tag(0)
-                    Text("Once per minute, per app").tag(60)
-                    Text("Once per 10 minutes, per app").tag(600)
-                }
+                    .onChange(of: enabled) { _, on in
+                        if on {
+                            agent.start()
+                        } else {
+                            agent.stop()
+                        }
+                    }
                 if let error = agent.lastError {
                     Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(.caption)
                 }
             } header: {
                 Text("SSH agent")
             } footer: {
-                Text("SSH key items from unlocked accounts are offered to ssh and git. Every signature needs Touch ID or your Mac password; keys never leave the app.")
+                Text("SSH key items from unlocked accounts are offered to ssh and git. Each signature asks you, then asks macOS for Touch ID or your Mac login password. Keys never leave the app.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -452,21 +453,62 @@ private struct DeveloperSettings: View {
                     .font(.caption).foregroundStyle(.secondary)
             }
 
-            if !agent.recent.isEmpty {
-                Section("Recent SSH requests") {
-                    ForEach(Array(agent.recent.enumerated()), id: \.offset) { _, entry in
+            Section {
+                if agent.trustedUntilLock.isEmpty {
+                    Text("Trust an app from the prompt when it asks to sign. Trust lasts until the vault locks.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(agent.trustedUntilLock) { trust in
                         HStack {
-                            Image(systemName: entry.allowed ? "checkmark.circle" : "xmark.circle")
-                                .foregroundStyle(entry.allowed ? .green : .red)
-                            Text(verbatim: "\(entry.program) → \(entry.key)")
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(verbatim: trust.displayName).font(.system(size: 13))
+                                Text(verbatim: trust.keyName).font(.system(size: 11)).foregroundStyle(.secondary)
+                            }
                             Spacer()
-                            Text(entry.date, style: .relative).foregroundStyle(.secondary).font(.caption)
+                            Button("Remove") { agent.revokeTrust(id: trust.id) }
                         }
                     }
                 }
+            } header: {
+                Text("Trusted until the vault locks")
+            }
+
+            Section {
+                if agent.accessLog.events.isEmpty {
+                    Text("No SSH requests yet.")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    ForEach(agent.accessLog.events) { event in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(verbatim: "\(event.appName) · \(event.via) → \(event.keyName)")
+                                    .font(.system(size: 13)).lineLimit(1)
+                                Text(Self.outcome(event.outcome))
+                                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text(event.date, style: .relative).foregroundStyle(.secondary).font(.caption)
+                        }
+                    }
+                    Button("Clear Log") { agent.clearAccessLog() }
+                }
+            } header: {
+                Text("SSH access")
             }
         }
         .formStyle(.grouped)
+    }
+
+    private static func outcome(_ outcome: SSHAccessOutcome) -> LocalizedStringKey {
+        switch outcome {
+        case .allowedOnce: "Allowed once"
+        case .allowedForTenMinutes: "Allowed for 10 minutes"
+        case .allowedUntilLock: "Trusted until lock"
+        case .denied: "Denied"
+        case .timedOut: "Timed out"
+        case .locked: "Vault locked"
+        case .reusedTrust: "Used an existing grant"
+        }
     }
 }
 

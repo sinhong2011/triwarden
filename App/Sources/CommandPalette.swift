@@ -1,4 +1,5 @@
 import AppKit
+import SSHAgent
 import SwiftUI
 
 /// One runnable action in the palette.
@@ -43,11 +44,13 @@ struct CommandPalette: View {
         case item(VaultItem)
         case command(PaletteCommand)
         case generated(PaletteGenerate)
+        case ssh(SSHPaletteChoice)
         var id: String {
             switch self {
             case .item(let i): "i-" + i.id
             case .command(let c): "c-" + c.id
             case .generated: "generated"
+            case .ssh(let choice): choice.id
             }
         }
     }
@@ -169,7 +172,36 @@ struct CommandPalette: View {
             }
         }
         if !commands.isEmpty { out.append(Section(title: String(localized: "Commands"), entries: commands.map(Entry.command))) }
+        if let ssh = sshRequestSection { out.insert(ssh, at: 0) }
         return out
+    }
+
+    /// A waiting SSH signature stays above search results. Return runs the first choice.
+    private var sshRequestSection: Section? {
+        guard actionsFor == nil, let prompt = model.sshAgent?.pending, let agent = model.sshAgent else { return nil }
+        let q = parsed.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let blob = "\(prompt.displayName) \(prompt.via) \(prompt.keyName) ssh sign request"
+        guard q.isEmpty || blob.localizedCaseInsensitiveContains(q) else { return nil }
+        let lead = agent.pendingLeadsWithUntilLock ? SSHGrant.untilLock : SSHGrant.once
+        var grants: [(SSHGrant, LocalizedStringKey, String)] = [
+            (.once, "Allow Once", "checkmark.circle"),
+            (.tenMinutes, "Allow for 10 Minutes", "clock"),
+            (.untilLock, "Trust Until Lock", "lock.open"),
+        ]
+        if let first = grants.firstIndex(where: { $0.0 == lead }) {
+            grants.insert(grants.remove(at: first), at: 0)
+        }
+        var choices = grants.enumerated().map { index, grant in
+            SSHPaletteChoice(id: "ssh-\(index)", prompt: prompt, title: grant.1, symbol: grant.2, showsIdentity: index == 0) {
+                agent.choose(.allow(grant.0))
+                close()
+            }
+        }
+        choices.append(SSHPaletteChoice(id: "ssh-deny", prompt: prompt, title: "Deny", symbol: "xmark.circle", showsIdentity: false) {
+            agent.choose(.deny)
+            close()
+        })
+        return Section(title: String(localized: "SSH request"), entries: choices.map(Entry.ssh))
     }
 
     private var entries: [Entry] { sections.flatMap(\.entries) }
@@ -310,6 +342,8 @@ struct CommandPalette: View {
                         CommandLine(command: command, selected: i == index)
                     case .generated(let request):
                         GeneratedLine(request: request, value: generated, selected: i == index)
+                    case .ssh(let choice):
+                        SSHPaletteLine(choice: choice, selected: i == index)
                     }
                 }
                 .opacity(appeared ? 1 : 0)
@@ -397,6 +431,8 @@ struct CommandPalette: View {
         case .command?:
             footerHint("↵", actionsFor != nil ? "Run" : "Open")
             if actionsFor != nil { footerHint("←", "Back") }
+        case .ssh(let choice)?:
+            footerHint("↵", choice.title)
         case nil:
             EmptyView()
         }
@@ -459,6 +495,8 @@ struct CommandPalette: View {
             // An item's action decides itself when to close (a copy lingers a moment to say so).
             if actionsFor == nil { close() }
             command.run()
+        case .ssh(let choice):
+            choice.run()
         case .generated:
             let value = generated
             guard !value.isEmpty else { return }
@@ -850,6 +888,80 @@ struct Keycap: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 5).frame(minWidth: 20, minHeight: 18)
             .background(Color.primary.opacity(scheme == .dark ? 0.10 : 0.05), in: .rect(cornerRadius: 5, style: .continuous))
+    }
+}
+
+/// One way to answer a waiting SSH signature. The first row carries who asked and which key.
+struct SSHPaletteChoice: Identifiable {
+    let id: String
+    let prompt: SSHPrompt
+    let title: LocalizedStringKey
+    let symbol: String
+    /// The asking app, the tool, and the key. Only the recommended choice shows them.
+    let showsIdentity: Bool
+    let run: () -> Void
+}
+
+/// The asking app on the first choice; the other choices stay short and line up under its name.
+private struct SSHPaletteLine: View {
+    let choice: SSHPaletteChoice
+    let selected: Bool
+
+    var body: some View {
+        HStack(spacing: 12) {
+            if choice.showsIdentity {
+                icon
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("\(choice.prompt.displayName) wants to sign")
+                        .font(.system(size: 14, weight: .medium))
+                        .lineLimit(1)
+                    Text("via \(choice.prompt.via) · \(choice.prompt.keyName)")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                    if choice.prompt.appPath == nil, let path = choice.prompt.path {
+                        Text(verbatim: path)
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                }
+            } else {
+                Image(systemName: choice.symbol)
+                    .font(.system(size: 13))
+                    .foregroundStyle(selected ? Color.primary : .secondary)
+                    .frame(width: 32, height: 32)
+                Text(choice.title)
+                    .font(.system(size: 14))
+            }
+            Spacer(minLength: 8)
+            if choice.showsIdentity {
+                Text(choice.title)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(selected ? Color.primary : .secondary)
+                    .padding(.horizontal, 8)
+                    .frame(height: 24)
+                    .background(Color.primary.opacity(0.08), in: .capsule)
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(minHeight: choice.showsIdentity ? 56 : 36)
+        .modifier(RowHighlight(selected: selected))
+    }
+
+    @ViewBuilder private var icon: some View {
+        if let path = choice.prompt.appPath {
+            Image(nsImage: NSWorkspace.shared.icon(forFile: path))
+                .resizable()
+                .frame(width: 32, height: 32)
+        } else {
+            Image(systemName: "terminal")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 32, height: 32)
+                .background(Color.primary.opacity(0.06), in: .rect(cornerRadius: 8, style: .continuous))
+        }
     }
 }
 
