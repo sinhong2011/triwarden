@@ -200,8 +200,11 @@ struct EditItemSheet: View {
         }
     }
 
-    /// Secrets on cards, identities and SSH keys hide until asked for.
-    private var hasHiddenValues: Bool { kind == .card || kind == .identity || kind == .sshKey }
+    /// Hidden item values or custom fields hide until asked for.
+    private var hasHiddenValues: Bool {
+        kind == .card || kind == .identity || kind == .sshKey
+            || customFields.contains { $0.kind == .hidden }
+    }
 
     var body: some View {
         Group {
