@@ -377,7 +377,7 @@ struct EditItemSheet: View {
                     Button { showGenerator = true } label: {
                         Image(systemName: "dice").font(.system(size: 14, weight: .medium))
                             .frame(width: 38, height: 38)
-                            .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 9, style: .continuous))
+                            .background(Color.formInputFill, in: .rect(cornerRadius: 9, style: .continuous))
                             .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
                             .contentShape(.rect)
                     }
@@ -405,7 +405,7 @@ struct EditItemSheet: View {
                         }
                         .font(.system(size: 14, weight: .medium))
                         .frame(width: 38, height: 38)
-                        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 9, style: .continuous))
+                        .background(Color.formInputFill, in: .rect(cornerRadius: 9, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
                         .contentShape(.rect)
                     }
@@ -634,7 +634,7 @@ struct EditItemSheet: View {
                     Text(verbatim: "•••••••• OpenSSH private key ••••••••")
                         .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
                         .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
-                        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 9, style: .continuous))
+                        .background(Color.formInputFill, in: .rect(cornerRadius: 9, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
                 }
                 Button("Import SSH Key…", systemImage: "square.and.arrow.down") { choosingSSHKey = true }
