@@ -34,17 +34,6 @@ struct SendsPane: View {
         return words.allSatisfy { haystack.contains($0.lowercased()) }
     }
 
-    private func sendActions(_ send: SendItem) -> [ActionMenuEntry] {
-        var rows: [ActionMenuEntry] = []
-        if let link = model.sendLink(send) {
-            rows.append(ActionMenuEntry(title: String(localized: "Copy Link"), symbol: "link") { model.copyPlain(link.absoluteString) })
-            rows.append(ActionMenuEntry(title: String(localized: "Open Link"), symbol: "safari") { NSWorkspace.shared.open(link) })
-        }
-        rows.append(ActionMenuEntry(title: String(localized: "Edit…"), symbol: "pencil", separatorBefore: !rows.isEmpty) { model.editingSend = send })
-        rows.append(ActionMenuEntry(title: String(localized: "Delete…"), symbol: "trash", destructive: true) { model.confirmDeleteSend(send) })
-        return rows
-    }
-
     var body: some View {
         HStack(spacing: 8) {
             VStack(spacing: 10) {
@@ -84,7 +73,7 @@ struct SendsPane: View {
                                 .accessibilityAddTraits(send.id == model.selectedSendID ? [.isButton, .isSelected] : .isButton)
                                 .accessibilityAction { model.composingSend = false; model.selectedSendID = send.id }
                                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                                .appContextMenu(sendActions(send))
+                                .appContextMenu(model.sendContextActions(send))
                         }
                     }
                     .padding(6)
@@ -594,6 +583,8 @@ private struct SendDetail: View {
             .frame(maxWidth: 680).frame(maxWidth: .infinity)
         }
         .thinScroller()
+        // The same menu its row in the list has: the vault gives an item one in both places too.
+        .appContextMenu(model.sendContextActions(send))
         .confirmationDialog("Delete “\(send.name)”?", isPresented: $confirmDelete) {
             Button("Delete Send", role: .destructive) { Task { await model.deleteSend(send) } }
         } message: {
