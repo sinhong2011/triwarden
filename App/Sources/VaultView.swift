@@ -2568,6 +2568,7 @@ struct ItemDetail: View {
                 }
                     .foregroundStyle(item.favorite ? .yellow : .primary)
                     .overlay { Burst(trigger: starBurst) }
+                toolbarButton("paperplane", help: "Share by Link…", spoken: "Share by Link") { model.shareItemByLink(item) }
                 toolbarButton("pencil", help: "Edit (⌘E)", spoken: "Edit", effect: .wiggle) { model.guarded(item) { model.beginEditing(EditRequest(mode: .edit(item))) } }
                 toolbarButton("trash", help: "Move to Trash… (⌘⌫)", spoken: "Move to Trash", effect: .bounce) { model.confirmTrash(item) }
             }

@@ -1,4 +1,5 @@
 import SwiftUI
+import TriCrypto
 import UniformTypeIdentifiers
 import VaultwardenAPI
 
@@ -84,9 +85,106 @@ struct SendsPane: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.snappy(duration: 0.25), value: model.composingSend)
         }
+        .sheet(item: Bindable(model).createdSend) { created in SendCreatedSheet(created: created) }
     }
 
     private func compose() { withAnimation(.snappy(duration: 0.25)) { model.composingSend = true } }
+}
+
+/// Shown once, right after a Send is made: its link and — for a password-protected Send — the passphrase, which the
+/// server only ever stores as a one-way hash. Closing it discards both from memory; nothing is copied automatically,
+/// because the link is useless without the passphrase and a single clipboard slot can't hold a choice.
+struct SendCreatedSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let created: AppModel.CreatedSend
+    @State private var revealed = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 16) {
+                FormHeader(symbol: "paperplane.fill", title: "Send created",
+                           subtitle: "Copy what you need now — this is the only time the passphrase can be shown.")
+
+                FormCard {
+                    FormField(label: "Link") {
+                        HStack(spacing: 6) {
+                            Text(verbatim: created.link)
+                                .font(.system(size: 11, design: .monospaced))
+                                .lineLimit(1).truncationMode(.middle)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            CreatedCopyButton(value: created.link, label: "Link", plain: true)
+                        }
+                    }
+                    if let passphrase = created.passphrase {
+                        FormField(label: "Passphrase",
+                                  note: "Send it to the recipient another way, not in the same message as the link.") {
+                            HStack(spacing: 6) {
+                                Text(verbatim: revealed ? passphrase : String(repeating: "•", count: min(passphrase.count, 28)))
+                                    .font(.system(size: 12, design: revealed ? .monospaced : .default))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Button { revealed.toggle() } label: {
+                                    Image(systemName: revealed ? "eye.slash" : "eye")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 28, height: 28)
+                                        .contentShape(.rect)
+                                }
+                                .buttonStyle(.plain)
+                                .help(revealed ? "Hide passphrase" : "Show passphrase")
+                                .accessibilityLabel(revealed ? "Hide passphrase" : "Show passphrase")
+                                CreatedCopyButton(value: passphrase, label: "Passphrase")
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(20)
+            // One action only: a Cancel beside Done would read as "discard", but the Send already exists on the server.
+            HStack {
+                Spacer()
+                Button("Done", action: { dismiss() })
+                    .buttonStyle(.appPrimary).keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 12)
+            .background(alignment: .top) { Divider().opacity(0.5) }
+        }
+        .frame(width: 520)
+        .background(Color.windowBase)
+        .interactiveDismissDisabled()
+        .onDisappear { model.createdSend = nil }
+    }
+}
+
+/// A copy button that reports back for a moment, for the one-time sheet.
+private struct CreatedCopyButton: View {
+    let value: String
+    let label: LocalizedStringKey
+    var plain = false
+    @Environment(AppModel.self) private var model
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            model.copyPlain(value)
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.4))
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(copied ? .primary : .secondary)
+                .frame(width: 28, height: 28)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .help(copied ? Text("Copied") : Text("Copy \(label)"))
+        .accessibilityLabel(Text("Copy \(label)"))
+    }
 }
 
 private struct SendRow: View {
@@ -312,6 +410,7 @@ struct SendComposer: View {
         withAnimation(.snappy(duration: 0.25)) {
             model.composingSend = false
             model.editingSend = nil
+            model.newSendPrefill = nil
         }
     }
 
@@ -320,6 +419,17 @@ struct SendComposer: View {
             kind = model.newSendKind
             if let ids = model.sendContextAccountIDs { accountId = ids.count == 1 ? ids.first : nil }
             else { accountId = model.defaultAccountId }
+            // "Share by Link…" from an item: its name and fields, hidden until the recipient reveals them.
+            if let prefill = model.newSendPrefill {
+                kind = .text
+                name = prefill.name
+                text = prefill.text
+                hideText = true
+                // The link is a bearer token for a real password, so it starts locked: the recipient needs this
+                // passphrase too, which travels by another route (say it, text it). Cleared, the link alone opens it.
+                password = PassphraseGenerator().generate()
+                if let id = prefill.accountId, destinationSessions.contains(where: { $0.id == id }) { accountId = id }
+            }
             return
         }
         kind = send.kind == .file ? .file : .text
@@ -409,7 +519,10 @@ struct SendComposer: View {
                     }
 
                     FormCard(title: "Protection") {
-                        FormField(label: "Password") {
+                        FormField(label: "Password",
+                                  note: model.newSendPrefill != nil
+                                        ? "Send this passphrase to the recipient another way. Without it, the link won't open."
+                                        : nil) {
                             PasswordField(title: "Password", text: $password,
                                           prompt: editing?.hasPassword == true ? "Leave blank to keep the current one" : "Optional")
                                 .disabled(removePassword)
@@ -422,18 +535,31 @@ struct SendComposer: View {
                             TextField("Private notes", text: $notes, prompt: Text("Only you see these")).textFieldStyle(SoftFieldStyle())
                         }
                     }
+                    // The actions sit with the form, not in a pinned bar: a pinned bar was covered by the window's
+                    // floating Sync/Lock pill and cut off the panels' rounded bottoms beneath it.
+                    HStack(spacing: 10) {
+                        Label("The link holds the key; the server never sees your content.", systemImage: "lock.shield")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                        Spacer(minLength: 12)
+                        Button("Cancel", action: dismiss).buttonStyle(.appSecondary).keyboardShortcut(.cancelAction)
+                        Button(action: { Task { await create() } }) {
+                            HStack(spacing: 6) {
+                                if saving { ProgressView().controlSize(.small).tint(.white) }
+                                Text(editing == nil ? "Create Send" : "Save")
+                            }
+                        }
+                        .buttonStyle(.appPrimary).keyboardShortcut(.defaultAction)
+                        .disabled(!ready || saving)
+                    }
+                    .padding(.top, 2)
                 }
                 .padding(18)
+                // Room for the floating Sync/Lock pill over this page's bottom-right corner.
+                .padding(.bottom, 40)
                 .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity)
             }
             .thinScroller()
-
-            FormFooter(action: editing == nil ? "Create & Copy Link" : "Save", busy: saving, disabled: !ready, cancel: dismiss,
-                       submit: { Task { await create() } }) {
-                Label("The link holds the key; the server never sees your content.", systemImage: "lock.shield")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-            }
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item]) { result in
             if case .success(let url) = result { choose(url) }

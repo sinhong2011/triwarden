@@ -702,6 +702,8 @@ final class AppModel {
     var sendContextAccountIDs: [String]?
     var newSendKind = SendComposer.Kind.text
     var newSendNonce = UUID()
+    /// "Share by Link…": the composer opens already filled in from an item; cleared when it dismisses.
+    var newSendPrefill: SendPrefill?
     var expiredSendsOnly = false
     var generatorRequest = UUID()
     var watchtowerIssueFilter: WatchtowerReport.Issue?
@@ -1894,12 +1896,28 @@ final class AppModel {
         guard let session = accountId.flatMap({ session(for: $0) }) ?? sessions.first else { return offline() }
         do {
             let link = try await session.createSend(draft)
-            if let link { copyPlain(link.absoluteString) }
             selectedSendID = sends.first { $0.name == draft.name && link?.absoluteString.contains($0.accessId) == true }?.id
-            flash(String(localized: "Send created — link copied"))
+            // Nothing is copied here: a password-protected Send's passphrase can never be shown again (the server
+            // keeps a one-way hash), so both it and the link are shown once, in a sheet, for the sender to copy
+            // deliberately. Copying the link alone would leave a link nobody can open.
+            if let link {
+                createdSend = CreatedSend(link: link.absoluteString,
+                                          passphrase: draft.password?.isEmpty == false ? draft.password : nil,
+                                          name: draft.name)
+            }
             return true
         } catch { return failed(error) }
     }
+
+    /// What to show once after a Send is made: its link, and the passphrase if it has one. Held only until the
+    /// sender closes the sheet — never kept, so the passphrase dies with that window.
+    struct CreatedSend: Identifiable {
+        let id = UUID()
+        let link: String
+        let passphrase: String?
+        let name: String
+    }
+    var createdSend: CreatedSend?
 
     func deleteSend(_ send: SendItem) async {
         guard let session = session(for: send.accountId) else { _ = offline(); return }
