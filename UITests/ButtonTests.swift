@@ -118,14 +118,36 @@ final class ButtonTests: XCTestCase {
         }
     }
 
-    /// The shortcuts are discoverable: an item's actions list shows them, like ⌘↵ / ⌥↵ today.
+    /// The shortcuts are discoverable: an item's actions list shows them, like ⌘↵ / ⌥↵ today. GitHub carries every one
+    /// of them — username, password, code, notes and a website — while Cloudflare has no notes at all.
     func testPaletteActionsListTheCopyShortcuts() {
-        openPalette("cloudflare")
+        openPalette("github")
         paletteField.typeKey(.tab, modifierFlags: [])
-        for keycap in ["⇧⌘C", "⌥⌘C", "⌃⌘C"] {
+        for keycap in ["⇧⌘C", "⌥⌘C", "⌃⌘C", "⌃⌘N", "⌥⌘U"] {
             XCTAssertTrue(app.staticTexts[keycap].firstMatch.waitForExistence(timeout: 5),
                           "the actions list does not show \(keycap)")
         }
+    }
+
+    /// ⌃⌘N copies the notes and ⌥⌘U the website — the two rows that used to carry no keycap at all, because neither
+    /// action had a shortcut. Both now exist on the Item menu too, so these keys do the same thing in the vault window.
+    func testPaletteCopiesNotesAndWebsite() {
+        NSPasteboard.general.clearContents()
+        openPalette("cloudflare")
+        paletteField.typeKey("u", modifierFlags: [.command, .option])
+        let websiteDeadline = Date.now.addingTimeInterval(4)
+        while Date.now < websiteDeadline, (clipboard() ?? "").isEmpty { usleep(50_000) }
+        XCTAssertEqual(clipboard(), "https://dash.cloudflare.com", "⌥⌘U did not copy the highlighted item's website")
+        XCTAssertTrue(paletteField.waitForNonExistence(timeout: 5), "the palette stayed open after copying the website")
+
+        NSPasteboard.general.clearContents()
+        openPalette("github")
+        paletteField.typeKey("n", modifierFlags: [.command, .control])
+        let notesDeadline = Date.now.addingTimeInterval(4)
+        while Date.now < notesDeadline, (clipboard() ?? "").isEmpty { usleep(50_000) }
+        XCTAssertTrue(clipboard()?.contains("Recovery codes are in") == true,
+                      "⌃⌘N did not copy the highlighted item's notes, got \(clipboard() ?? "nothing")")
+        XCTAssertTrue(paletteField.waitForNonExistence(timeout: 5), "the palette stayed open after copying the notes")
     }
 
     // MARK: Header

@@ -30,12 +30,13 @@ private final class ControlReturnMonitor: @unchecked Sendable {
     }
 }
 
-/// The vault window's copy keys (⇧⌘C, ⌥⌘C, ⌃⌘C) are menu key equivalents on the Item menu, and AppKit matches those
-/// before the palette's field sees the key — so over another app nothing was copied, and inside the vault window the
-/// menu copied the window's selected item instead of the highlighted result. Catch them for the palette's own panel.
+/// The vault window's copy keys (⇧⌘C, ⌥⌘C, ⌃⌘C, ⌃⌘N, ⌥⌘U) are menu key equivalents on the Item menu, and AppKit
+/// matches those before the palette's field sees the key — so over another app nothing was copied, and inside the vault
+/// window the menu copied the window's selected item instead of the highlighted result. Catch them for the palette's
+/// own panel.
 private final class PaletteCopyMonitor: @unchecked Sendable {
     /// What the keys copy; the palette decides from its highlighted row.
-    enum Target { case username, password, code }
+    enum Target { case username, password, code, notes, website }
     var onFire: (Target) -> Void = { _ in }
     private var token: Any?
 
@@ -43,15 +44,17 @@ private final class PaletteCopyMonitor: @unchecked Sendable {
         guard token == nil else { return }
         token = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard event.window is QuickSearchPanel else { return event }
-            // "c" (ANSI, layout-independent) with ⌘ and exactly one of ⇧ / ⌥ / ⌃.
-            guard event.charactersIgnoringModifiers?.lowercased() == "c" else { return event }
             let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
             guard flags.contains(.command) else { return event }
+            // Layout-independent: the character the key makes without modifiers, and the modifiers beside ⌘.
             let target: Target
-            switch (flags.contains(.shift), flags.contains(.option), flags.contains(.control)) {
-            case (true, false, false): target = .username
-            case (false, true, false): target = .password
-            case (false, false, true): target = .code
+            switch (event.charactersIgnoringModifiers?.lowercased(),
+                    flags.contains(.shift), flags.contains(.option), flags.contains(.control)) {
+            case ("c", true, false, false): target = .username
+            case ("c", false, true, false): target = .password
+            case ("c", false, false, true): target = .code
+            case ("n", false, false, true): target = .notes
+            case ("u", false, true, false): target = .website
             default: return event
             }
             if event.isARepeat { return nil }
@@ -662,9 +665,10 @@ struct CommandPalette: View {
 
     // MARK: Running
 
-    /// ⇧⌘C / ⌥⌘C / ⌃⌘C on the highlighted row: the vault window's copy keys, working here too (#88). The key is
-    /// always taken: left to AppKit it reaches the Item menu and copies the *window's* selection, which is not what
-    /// the palette is showing. A row with nothing of that kind copies nothing, like the menu's disabled command.
+    /// ⇧⌘C / ⌥⌘C / ⌃⌘C / ⌃⌘N / ⌥⌘U on the highlighted row: the vault window's copy keys, working here too (#88).
+    /// The key is always taken: left to AppKit it reaches the Item menu and copies the *window's* selection, which is
+    /// not what the palette is showing. A row with nothing of that kind copies nothing, like the menu's disabled
+    /// command.
     private func copyHighlighted(_ target: PaletteCopyMonitor.Target) {
         // An item's actions are open: they are all about that item, whichever row is highlighted.
         let item: VaultItem
@@ -683,6 +687,16 @@ struct CommandPalette: View {
             guard let totp = item.totp else { return }
             let label = String(localized: "Code")
             finish(item, flash: String(localized: "\(label) copied")) { model.copy(totp.code(), label: label) }
+        case .notes:
+            guard let notes = item.notes, !notes.isEmpty else { return }
+            let label = String(localized: "Notes")
+            finish(item, flash: String(localized: "\(label) copied")) { model.copy(notes, label: label) }
+        case .website:
+            guard let url = item.websiteURL else { return }
+            // A website is public: the plain pasteboard, no clipboard timer, and no reprompt.
+            PaletteRecents.note(item.id)
+            model.copyPlain(url.absoluteString)
+            flashThenClose(String(localized: "Website copied"))
         }
     }
 
@@ -713,7 +727,7 @@ struct CommandPalette: View {
                 fill(item, into: context, modifiers)
                 return
             }
-            if modifiers.contains(.shift), let url = websiteURL(item) {
+            if modifiers.contains(.shift), let url = item.websiteURL {
                 finish(item, flash: nil) { NSWorkspace.shared.open(url) }
             } else if modifiers.contains(.option), let totp = item.totp {
                 finish(item, flash: String(localized: "Code copied")) { model.copy(totp.code(), label: String(localized: "Code")) }
@@ -776,11 +790,6 @@ struct CommandPalette: View {
         }
     }
 
-    private func websiteURL(_ item: VaultItem) -> URL? {
-        guard let address = item.uri ?? item.host, !address.isEmpty else { return nil }
-        return URL(string: address.contains("://") ? address : "https://" + address)
-    }
-
     /// Everything that can be done with one item, for its type: fill, copy each part, open, edit, favorite, trash.
     private func itemActions(_ item: VaultItem) -> [PaletteCommand] {
         var list: [PaletteCommand] = []
@@ -812,13 +821,13 @@ struct CommandPalette: View {
             copy("field-" + field.label, String(localized: "Copy \(field.label)"), field.secret ? "lock" : "doc.on.doc", label: field.label) { field.value }
         }
         if let notes = item.notes, !notes.isEmpty {
-            copy("notes", String(localized: "Copy Notes"), "note.text", label: String(localized: "Notes")) { notes }
+            copy("notes", String(localized: "Copy Notes"), "note.text", shortcut: "⌃⌘N", label: String(localized: "Notes")) { notes }
         }
-        if let url = websiteURL(item) {
+        if let url = item.websiteURL {
             list.append(PaletteCommand(id: "open-site", title: String(localized: "Open Website"), symbol: "safari", shortcut: "⇧↵") {
                 finish(item, flash: nil) { NSWorkspace.shared.open(url) }
             })
-            list.append(PaletteCommand(id: "copy-site", title: String(localized: "Copy Website"), symbol: "link") {
+            list.append(PaletteCommand(id: "copy-site", title: String(localized: "Copy Website"), symbol: "link", shortcut: "⌥⌘U") {
                 PaletteRecents.note(item.id)
                 model.copyPlain(url.absoluteString)
                 flashThenClose(String(localized: "Website copied"))
