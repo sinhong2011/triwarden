@@ -37,15 +37,8 @@ extension AppModel {
         // The text carries real secrets, so a reprompt-protected item asks for the password again first.
         guarded(item) {
             self.leaveNewItemForm {
-                self.newSendPrefill = SendPrefill(name: item.name, text: text, accountId: item.accountId)
-                // The item's own account wins over whatever the sidebar had selected.
-                self.sendContextAccountIDs = nil
-                self.newSendKind = .text
-                self.newSendNonce = UUID()
-                self.editingSend = nil
-                self.composingSend = true
-                self.expiredSendsOnly = false
-                self.requestedSection = .sends
+                // The item's own account wins over whatever the sidebar had selected, so no context IDs.
+                self.composeNewSend(prefill: SendPrefill(name: item.name, text: text, accountId: item.accountId))
             }
         }
     }

@@ -1275,7 +1275,7 @@ private struct NewItemButton: View {
             ActionMenuEntry(title: String(localized: "New Card"), symbol: "creditcard") { model.beginEditing(EditRequest(mode: .create(.card))) },
             ActionMenuEntry(title: String(localized: "New Identity"), symbol: "person.crop.rectangle") { model.beginEditing(EditRequest(mode: .create(.identity))) },
             ActionMenuEntry(title: String(localized: "New SSH Key"), symbol: "terminal") { model.beginEditing(EditRequest(mode: .create(.sshKey))) },
-            ActionMenuEntry(title: String(localized: "New Send"), symbol: "paperplane") { model.requestedSection = .sends; model.composingSend = true },
+            ActionMenuEntry(title: String(localized: "New Send"), symbol: "paperplane") { model.composeNewSend() },
             ActionMenuEntry(title: String(localized: "New Folder…"), symbol: "folder.badge.plus", shortcut: "⌥⌘N") { model.promptNewFolder() },
             ActionMenuEntry(title: String(localized: "Import…"), symbol: "square.and.arrow.down", shortcut: "⇧⌘I", enabled: !model.sessions.isEmpty) { model.beginImport() }
         ]) {

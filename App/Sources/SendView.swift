@@ -19,7 +19,7 @@ struct SendsPane: View {
             rows.append(ActionMenuEntry(title: String(localized: "Copy Link"), symbol: "link") { model.copyPlain(link.absoluteString) })
             rows.append(ActionMenuEntry(title: String(localized: "Open Link"), symbol: "safari") { NSWorkspace.shared.open(link) })
         }
-        rows.append(ActionMenuEntry(title: String(localized: "Edit…"), symbol: "pencil", separatorBefore: !rows.isEmpty) { model.editingSend = send })
+        rows.append(ActionMenuEntry(title: String(localized: "Edit…"), symbol: "pencil", separatorBefore: !rows.isEmpty) { model.editSend(send) })
         rows.append(ActionMenuEntry(title: String(localized: "Delete…"), symbol: "trash", destructive: true) { model.confirmDeleteSend(send) })
         return rows
     }
@@ -38,10 +38,10 @@ struct SendsPane: View {
                     LazyVStack(spacing: 2) {
                         ForEach(scopedSends) { send in
                             SendRow(send: send, selected: send.id == model.selectedSendID && !model.composingSend && model.editingSend == nil)
-                                .onTapGesture { model.composingSend = false; model.editingSend = nil; model.selectedSendID = send.id }
+                                .onTapGesture { model.closeSendComposer(); model.selectedSendID = send.id }
                                 .accessibilityElement(children: .combine)
                                 .accessibilityAddTraits(send.id == model.selectedSendID ? [.isButton, .isSelected] : .isButton)
-                                .accessibilityAction { model.composingSend = false; model.selectedSendID = send.id }
+                                .accessibilityAction { model.closeSendComposer(); model.selectedSendID = send.id }
                                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
                                 .appContextMenu(sendActions(send))
                         }
@@ -88,7 +88,7 @@ struct SendsPane: View {
         .sheet(item: Bindable(model).createdSend) { created in SendCreatedSheet(created: created) }
     }
 
-    private func compose() { withAnimation(.snappy(duration: 0.25)) { model.composingSend = true } }
+    private func compose() { withAnimation(.snappy(duration: 0.25)) { model.composeNewSend() } }
 }
 
 /// Shown once, right after a Send is made: its link and — for a password-protected Send — the passphrase, which the
@@ -104,7 +104,9 @@ struct SendCreatedSheet: View {
         VStack(spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
                 FormHeader(symbol: "paperplane.fill", title: "Send created",
-                           subtitle: "Copy what you need now — this is the only time the passphrase can be shown.")
+                           subtitle: created.passphrase == nil
+                                   ? "Copy the link now — you can also find it again on the Send."
+                                   : "Copy what you need now — this is the only time the passphrase can be shown.")
 
                 FormCard {
                     FormField(label: "Link") {
@@ -114,7 +116,7 @@ struct SendCreatedSheet: View {
                                 .lineLimit(1).truncationMode(.middle)
                                 .textSelection(.enabled)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                            CreatedCopyButton(value: created.link, label: "Link", plain: true)
+                            CreatedCopyButton(value: created.link, label: String(localized: "Link"), secret: false)
                         }
                     }
                     if let passphrase = created.passphrase {
@@ -135,7 +137,7 @@ struct SendCreatedSheet: View {
                                 .buttonStyle(.plain)
                                 .help(revealed ? "Hide passphrase" : "Show passphrase")
                                 .accessibilityLabel(revealed ? "Hide passphrase" : "Show passphrase")
-                                CreatedCopyButton(value: passphrase, label: "Passphrase")
+                                CreatedCopyButton(value: passphrase, label: String(localized: "Passphrase"))
                             }
                         }
                     }
@@ -161,14 +163,22 @@ struct SendCreatedSheet: View {
 /// A copy button that reports back for a moment, for the one-time sheet.
 private struct CreatedCopyButton: View {
     let value: String
-    let label: LocalizedStringKey
-    var plain = false
+    /// The resolved name ("Link", "Passphrase"): the copy toast takes a plain string, and a catalog key must not be
+    /// looked up twice.
+    let label: String
+    /// The passphrase is a secret: it goes through `copy`, which hides it from clipboard managers and clears it
+    /// after the configured delay, like every other secret in the app. The link is not secret on its own.
+    var secret = true
     @Environment(AppModel.self) private var model
     @State private var copied = false
 
     var body: some View {
         Button {
-            model.copyPlain(value)
+            if secret {
+                model.copy(value, label: label)
+            } else {
+                model.copyPlain(value)
+            }
             copied = true
             Task {
                 try? await Task.sleep(for: .seconds(1.4))
@@ -183,7 +193,7 @@ private struct CreatedCopyButton: View {
         }
         .buttonStyle(.plain)
         .help(copied ? Text("Copied") : Text("Copy \(label)"))
-        .accessibilityLabel(Text("Copy \(label)"))
+        .accessibilityLabel(Text(copied ? "Copied" : "Copy \(label)"))
     }
 }
 
@@ -355,7 +365,7 @@ private struct SendDetail: View {
 
                 HStack(spacing: 8) {
                     Spacer()
-                    Button("Edit", systemImage: "pencil") { withAnimation(.snappy(duration: 0.25)) { model.editingSend = send } }
+                    Button("Edit", systemImage: "pencil") { withAnimation(.snappy(duration: 0.25)) { model.editSend(send) } }
                         .buttonStyle(.appSecondary)
                     Button("Delete Send", systemImage: "trash", role: .destructive) { confirmDelete = true }
                         .buttonStyle(.appSecondary)
@@ -407,11 +417,7 @@ struct SendComposer: View {
     }
 
     private func dismiss() {
-        withAnimation(.snappy(duration: 0.25)) {
-            model.composingSend = false
-            model.editingSend = nil
-            model.newSendPrefill = nil
-        }
+        withAnimation(.snappy(duration: 0.25)) { model.closeSendComposer() }
     }
 
     private func prefill() {
