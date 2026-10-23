@@ -96,14 +96,18 @@ so the passphrase can never be read back. That shapes the whole flow:
 - **Detail toolbar** — `HeroCard.actions`: a `paperplane` button next to Edit, same `toolbarButton`
   helper, `.help("Share by Link…")`.
 - Both call one `AppModel.shareItemByLink(_ item:)` (in `ItemContextMenu.swift`, next to the other
-  item actions) that does: `leaveNewItemForm` → set prefill → `newSendKind = .text` → new nonce →
-  `editingSend = nil` → `composingSend = true` → `requestedSection = .sends`.
+  item actions) that does: `leaveNewItemForm` → `composeNewSend(prefill:)` (new nonce, text kind,
+  `editingSend = nil`, `composingSend = true`, `requestedSection = .sends`).
+
+`composeNewSend` is the **only** way into a new Send — the sidebar's New Text/File Send, the header's
+＋ menu, the palette, the menu bar and the empty state all call it too, which is what keeps the
+prefill from surviving into the next one. `closeSendComposer` is the only way out.
 
 ### 5. Localization
 
 New user-facing strings go into `App/Resources/Localizable.xcstrings` (hand-maintained, sorted by
 key): "Share by Link…", "Create Send", "Passphrase", "Show/Hide passphrase", "Link", "Done", the
-two passphrase notes, the sheet subtitle, and "This item has nothing to share." Each is translated
+two passphrase notes, both sheet subtitles, and "This item has nothing to share." Each is translated
 for all nine locales the catalog carries (en, ja, zh-Hans, zh-Hant, zh-HK, ko, fr, es, th).
 
 ## Scope / non-goals
@@ -129,13 +133,25 @@ for all nine locales the catalog carries (en, ja, zh-Hans, zh-Hant, zh-HK, ko, f
    - Reopening the Send shows `Password: Required` — no way back to the passphrase, by design.
    - Reprompt-protected item asks for the master password first.
    - Deleted / unsupported items do not offer it; archived ones do.
-   - Cancel → nothing created, next New Send is blank again.
+   - **The prefill never outlives its composer.** After opening Share by Link…, leave it each way —
+     Cancel, tapping a Send in the list, the sidebar's New Text/File Send, the header's ＋ › New
+     Send, the palette's New Send, the menu bar's New Send — and check the next New Send is blank:
+     empty Name and Text, password `Optional`, no passphrase.
+   - Lock the vault while a Share by Link… composer or a Send-created sheet is open: neither comes
+     back after unlocking.
+   - A Send made **without** a password shows the plain link subtitle, not the passphrase warning.
+   - Copying the passphrase from the sheet hides it from a clipboard manager and clears it after the
+     clipboard delay; the toast says so.
 
 ## Risks
 
 - **Secret exposure in shared text** — mitigated by `guarded()`, hide-text default, a generated
-  passphrase the link alone cannot open, and never retaining that passphrase past the sheet. The
-  remaining exposure is the clipboard itself: the sheet uses `copyPlain`, so a pasted passphrase
-  is visible to clipboard managers and is not auto-cleared. Worth a review decision.
+  passphrase the link alone cannot open, and never retaining that passphrase past the sheet. Both
+  sheet copy buttons now use the app's secret-aware paths: the passphrase goes through `copy`
+  (concealed, cleared on the clipboard timer), the link through `copyPlain`.
 - The composer keys on `newSendNonce`; if the prefill changes without a new nonce the form keeps
-  the old `@State`. The single launch helper always mints a nonce, so this stays correct.
+  the old `@State`. `composeNewSend` always mints a nonce, and it is the only way in, so this stays
+  correct.
+- **Prefill lifetime** — `newSendPrefill` holds decrypted fields, so every exit clears it:
+  `closeSendComposer` (cancel, save, tapping a Send), `composeNewSend` (any New Send),
+  `editSend`, and `clearVaultContents` on lock. Nothing assigns it directly.
