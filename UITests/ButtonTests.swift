@@ -62,6 +62,72 @@ final class ButtonTests: XCTestCase {
         cancel.click()
     }
 
+    // MARK: Palette copy shortcuts (#88)
+
+    /// The palette's field, looked up fresh: the panel is torn down and rebuilt between copies, so a held
+    /// element handle goes stale and Xcode 27 throws instead of reporting a miss.
+    private var paletteField: XCUIElement {
+        app.textFields.matching(NSPredicate(format: "placeholderValue == %@", "Search or run a command")).firstMatch
+    }
+
+    /// Opens the palette with `query` typed into its field. The text is pasted rather than typed: a Chinese input
+    /// method (this Mac runs Cangjie/Quick) would treat the letters as composition and open a candidate window over
+    /// the palette, which no assertion here can get past. The paste lands asynchronously, so wait for the field to
+    /// show the query before emptying the pasteboard — otherwise the query itself can be what a copy assertion reads.
+    private func openPalette(_ query: String) {
+        button("Search or run a command").click()
+        XCTAssertTrue(paletteField.waitForExistence(timeout: 5), "palette did not open")
+        paletteField.click()
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(query, forType: .string)
+        paletteField.typeKey("v", modifierFlags: .command)
+        let landed = Date.now.addingTimeInterval(5)
+        while Date.now < landed, (paletteField.value as? String) != query { usleep(50_000) }
+        XCTAssertEqual(paletteField.value as? String, query, "the query did not reach the palette's field")
+        NSPasteboard.general.clearContents()
+        let emptied = Date.now.addingTimeInterval(2)
+        while Date.now < emptied, !(clipboard() ?? "").isEmpty { usleep(20_000) }
+    }
+
+    /// Issue #88: with an item highlighted in the palette, ⇧⌘C / ⌥⌘C / ⌃⌘C copy that item's username, password
+    /// and one-time code — the same keys as the main window. The vault's selection is GitHub while the palette's
+    /// is Cloudflare, so a copy that falls through to the Item menu picks the wrong item and fails here.
+    func testPaletteCopyShortcutsCopyTheHighlightedItem() {
+        let cases: [(XCUIElement.KeyModifierFlags, String?, String)] = [
+            (.shift, "ops@northwind.example", "username"),
+            (.option, "cf-9xQ!m2Lp#Vt7", "password"),
+            (.control, nil, "one-time code"),
+        ]
+        for (modifier, expected, what) in cases {
+            NSPasteboard.general.clearContents()
+            openPalette("cloudflare")
+            paletteField.typeKey("c", modifierFlags: [.command, modifier])
+            // The palette says what it copied for a moment, then closes.
+            let deadline = Date.now.addingTimeInterval(4)
+            while Date.now < deadline, (clipboard() ?? "").isEmpty { usleep(50_000) }
+            let value = clipboard()
+            if let expected {
+                XCTAssertEqual(value, expected, "the palette's \(what) shortcut did not copy the highlighted item")
+            } else {
+                XCTAssertEqual(value?.count, 6, "the palette's \(what) shortcut did not copy a one-time code")
+                XCTAssertTrue(value?.allSatisfy(\.isNumber) == true, "the palette's \(what) shortcut copied no digits")
+            }
+            // Back to the vault, ready for the next key.
+            let closed = paletteField.waitForNonExistence(timeout: 5)
+            XCTAssertTrue(closed, "the palette stayed open after copying the \(what)")
+        }
+    }
+
+    /// The shortcuts are discoverable: an item's actions list shows them, like ⌘↵ / ⌥↵ today.
+    func testPaletteActionsListTheCopyShortcuts() {
+        openPalette("cloudflare")
+        paletteField.typeKey(.tab, modifierFlags: [])
+        for keycap in ["⇧⌘C", "⌥⌘C", "⌃⌘C"] {
+            XCTAssertTrue(app.staticTexts[keycap].firstMatch.waitForExistence(timeout: 5),
+                          "the actions list does not show \(keycap)")
+        }
+    }
+
     // MARK: Header
 
     func testCommandPaletteOpensAndCloses() {

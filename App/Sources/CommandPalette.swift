@@ -30,6 +30,42 @@ private final class ControlReturnMonitor: @unchecked Sendable {
     }
 }
 
+/// The vault window's copy keys (⇧⌘C, ⌥⌘C, ⌃⌘C) are menu key equivalents on the Item menu, and AppKit matches those
+/// before the palette's field sees the key — so over another app nothing was copied, and inside the vault window the
+/// menu copied the window's selected item instead of the highlighted result. Catch them for the palette's own panel.
+private final class PaletteCopyMonitor: @unchecked Sendable {
+    /// What the keys copy; the palette decides from its highlighted row.
+    enum Target { case username, password, code }
+    var onFire: (Target) -> Void = { _ in }
+    private var token: Any?
+
+    func start() {
+        guard token == nil else { return }
+        token = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard event.window is QuickSearchPanel else { return event }
+            // "c" (ANSI, layout-independent) with ⌘ and exactly one of ⇧ / ⌥ / ⌃.
+            guard event.charactersIgnoringModifiers?.lowercased() == "c" else { return event }
+            let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            guard flags.contains(.command) else { return event }
+            let target: Target
+            switch (flags.contains(.shift), flags.contains(.option), flags.contains(.control)) {
+            case (true, false, false): target = .username
+            case (false, true, false): target = .password
+            case (false, false, true): target = .code
+            default: return event
+            }
+            if event.isARepeat { return nil }
+            MainActor.assumeIsolated { self?.onFire(target) }
+            return nil
+        }
+    }
+
+    func stop() {
+        if let token { NSEvent.removeMonitor(token) }
+        token = nil
+    }
+}
+
 /// Sample the desktop behind the floating panel. Light mode uses a lighter material plus a white wash,
 /// so the card stays light when it floats over another app.
 private struct PaletteBackdrop: NSViewRepresentable {
@@ -126,6 +162,8 @@ struct CommandPalette: View {
     @State private var flash: String?
     /// Control+Return never reaches the field's key handler: macOS opens the text menu (Cut, Copy, Paste) instead.
     @State private var controlReturn = ControlReturnMonitor()
+    /// ⇧⌘C / ⌥⌘C / ⌃⌘C are the Item menu's keys, matched before the field sees them; copy the highlighted row instead.
+    @State private var copyKeys = PaletteCopyMonitor()
 
     enum Entry: Identifiable {
         case item(VaultItem)
@@ -362,8 +400,13 @@ struct CommandPalette: View {
         .onAppear {
             controlReturn.onFire = { run($0) }
             controlReturn.start()
+            copyKeys.onFire = { copyHighlighted($0) }
+            copyKeys.start()
         }
-        .onDisappear { controlReturn.stop() }
+        .onDisappear {
+            controlReturn.stop()
+            copyKeys.stop()
+        }
     }
 
     // MARK: Pieces
@@ -619,6 +662,30 @@ struct CommandPalette: View {
 
     // MARK: Running
 
+    /// ⇧⌘C / ⌥⌘C / ⌃⌘C on the highlighted row: the vault window's copy keys, working here too (#88). The key is
+    /// always taken: left to AppKit it reaches the Item menu and copies the *window's* selection, which is not what
+    /// the palette is showing. A row with nothing of that kind copies nothing, like the menu's disabled command.
+    private func copyHighlighted(_ target: PaletteCopyMonitor.Target) {
+        // An item's actions are open: they are all about that item, whichever row is highlighted.
+        let item: VaultItem
+        if let actionsFor { item = actionsFor }
+        else if entries.indices.contains(index), case .item(let highlighted) = entries[index] { item = highlighted }
+        else { return }
+        switch target {
+        case .username:
+            guard let username = item.username, !username.isEmpty, item.kind == .login else { return }
+            let label = String(localized: "Username")
+            finish(item, flash: String(localized: "\(label) copied")) { model.copy(username, label: label) }
+        case .password:
+            guard item.password?.isEmpty == false else { return }
+            finish(item, flash: String(localized: "Password copied")) { model.copyPassword(item) }
+        case .code:
+            guard let totp = item.totp else { return }
+            let label = String(localized: "Code")
+            finish(item, flash: String(localized: "\(label) copied")) { model.copy(totp.code(), label: label) }
+        }
+    }
+
     private func run(_ modifiers: SwiftUI.EventModifiers) {
         guard entries.indices.contains(index) else { return }
         switch entries[index] {
@@ -731,15 +798,15 @@ struct CommandPalette: View {
             })
         }
         if let username = item.username, !username.isEmpty, item.kind == .login {
-            copy("username", String(localized: "Copy Username"), "person", label: String(localized: "Username")) { username }
+            copy("username", String(localized: "Copy Username"), "person", shortcut: "⇧⌘C", label: String(localized: "Username")) { username }
         }
         if item.password?.isEmpty == false {
-            list.append(PaletteCommand(id: "password", title: String(localized: "Copy Password"), symbol: "key", shortcut: "⌘↵") {
+            list.append(PaletteCommand(id: "password", title: String(localized: "Copy Password"), symbol: "key", shortcut: "⌥⌘C") {
                 finish(item, flash: String(localized: "Password copied")) { model.copyPassword(item) }
             })
         }
         if let totp = item.totp {
-            copy("code", String(localized: "Copy One-Time Code"), "clock", shortcut: "⌥↵", label: String(localized: "Code")) { totp.code() }
+            copy("code", String(localized: "Copy One-Time Code"), "clock", shortcut: "⌃⌘C", label: String(localized: "Code")) { totp.code() }
         }
         for field in item.fields where !field.value.isEmpty {
             copy("field-" + field.label, String(localized: "Copy \(field.label)"), field.secret ? "lock" : "doc.on.doc", label: field.label) { field.value }
