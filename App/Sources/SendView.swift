@@ -488,8 +488,11 @@ private struct SendDetail: View {
                             Spacer(minLength: 0)
                         }
                         .padding(.horizontal, 12).frame(height: 38)
-                        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 9, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
+                        // The app's own translucent tint, not AppKit's controlBackgroundColor: on a dark card the
+                        // latter is nearly black and read as a hole punched through the panel.
+                        .background(Color.primary.opacity(0.06), in: .rect(cornerRadius: 9, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .strokeBorder(Color.primary.opacity(0.09)))
                         HStack(spacing: 8) {
                             Button {
                                 model.copyPlain(link.absoluteString)
