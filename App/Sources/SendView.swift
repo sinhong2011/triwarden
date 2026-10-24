@@ -272,7 +272,9 @@ private struct SendDetail: View {
                             Spacer(minLength: 0)
                         }
                         .padding(.horizontal, 12).frame(height: 38)
-                        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 9, style: .continuous))
+                        // `controlBackgroundColor` is near-black in dark mode, which read as a hole punched in the
+                        // card; the app's own input fill keeps the row on the same surface as every other field.
+                        .background(Color.formInputFill, in: .rect(cornerRadius: 9, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
                         HStack(spacing: 8) {
                             Button {
