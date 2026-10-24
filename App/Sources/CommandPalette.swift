@@ -575,6 +575,10 @@ struct CommandPalette: View {
                     footerHint("↵", "Open")
                 }
                 Spacer(minLength: 12)
+                // The copy keys, in the open space before "More": they work here (#88), so they have to be visible
+                // here — the actions list is somewhere you only look once you already know they exist. Fixed size, so
+                // a long app name on the left gives way (it truncates) rather than these disappearing.
+                HStack(spacing: 16) { copyShortcutHints(item) }.fixedSize()
                 footerHint("→", "More")
             }
             ViewThatFits(in: .horizontal) {
@@ -611,6 +615,20 @@ struct CommandPalette: View {
             if item.password != nil { footerHint("⌘↵", "Copy password") }
             if item.totp != nil { footerHint("⌥↵", "Copy code") }
             if item.host != nil { footerHint("⇧↵", "Open website") }
+        }
+    }
+
+    /// The copy keys this row answers to, next to "More". Only the ones the row has something for, so a note shows
+    /// no username or password key, and a keycap never promises a copy that would do nothing.
+    @ViewBuilder private func copyShortcutHints(_ item: VaultItem) -> some View {
+        if item.kind == .login, item.username?.isEmpty == false {
+            footerHint("⇧⌘C", "Username")
+        }
+        if item.password?.isEmpty == false {
+            footerHint("⌥⌘C", "Password")
+        }
+        if item.totp != nil {
+            footerHint("⌃⌘C", "Code")
         }
     }
 

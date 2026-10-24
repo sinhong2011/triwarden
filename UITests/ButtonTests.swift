@@ -129,6 +129,28 @@ final class ButtonTests: XCTestCase {
         }
     }
 
+    /// The palette's footer shows the copy keys for the highlighted row, without opening anything: the review on #88
+    /// asked for them next to ↵ / More, since the actions list is only reached once you already know they exist.
+    func testPaletteFooterShowsTheCopyShortcuts() {
+        openPalette("github")
+        for keycap in ["⇧⌘C", "⌥⌘C", "⌃⌘C"] {
+            XCTAssertTrue(app.staticTexts[keycap].firstMatch.waitForExistence(timeout: 5),
+                          "the palette's footer does not show \(keycap)")
+        }
+        // Each one names what it copies, so the keycap is not left to be guessed.
+        for label in ["Username", "Password", "Code"] {
+            XCTAssertTrue(app.staticTexts[label].firstMatch.exists, "the footer's \(label) hint lost its name")
+        }
+        // A card has neither a username nor a password, so its footer shows no copy keys. (Escape first: the
+        // window's palette button toggles, so clicking it again would close the palette instead of reopening it.)
+        paletteField.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(paletteField.waitForNonExistence(timeout: 5), "the palette did not close for the second search")
+        openPalette("visa")
+        XCTAssertTrue(app.staticTexts["Open"].firstMatch.waitForExistence(timeout: 5), "the palette did not show the card")
+        XCTAssertFalse(app.staticTexts["⇧⌘C"].firstMatch.exists, "a card's footer offered Copy Username")
+        XCTAssertFalse(app.staticTexts["⌥⌘C"].firstMatch.exists, "a card's footer offered Copy Password")
+    }
+
     /// ⌃⌘N copies the notes and ⌥⌘U the website — the two rows that used to carry no keycap at all, because neither
     /// action had a shortcut. Both now exist on the Item menu too, so these keys do the same thing in the vault window.
     func testPaletteCopiesNotesAndWebsite() {
