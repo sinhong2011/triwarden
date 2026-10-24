@@ -119,11 +119,11 @@ final class ButtonTests: XCTestCase {
     }
 
     /// The shortcuts are discoverable: an item's actions list shows them, like ⌘↵ / ⌥↵ today. GitHub carries every one
-    /// of them — username, password, code, notes and a website — while Cloudflare has no notes at all.
+    /// of them — username, password, code and notes — while Cloudflare has no notes at all.
     func testPaletteActionsListTheCopyShortcuts() {
         openPalette("github")
         paletteField.typeKey(.tab, modifierFlags: [])
-        for keycap in ["⇧⌘C", "⌥⌘C", "⌃⌘C", "⌃⌘N", "⌥⌘U"] {
+        for keycap in ["⇧⌘C", "⌥⌘C", "⌃⌘C", "⌃⌘N"] {
             XCTAssertTrue(app.staticTexts[keycap].firstMatch.waitForExistence(timeout: 5),
                           "the actions list does not show \(keycap)")
         }
@@ -151,17 +151,9 @@ final class ButtonTests: XCTestCase {
         XCTAssertFalse(app.staticTexts["⌥⌘C"].firstMatch.exists, "a card's footer offered Copy Password")
     }
 
-    /// ⌃⌘N copies the notes and ⌥⌘U the website — the two rows that used to carry no keycap at all, because neither
-    /// action had a shortcut. Both now exist on the Item menu too, so these keys do the same thing in the vault window.
-    func testPaletteCopiesNotesAndWebsite() {
-        NSPasteboard.general.clearContents()
-        openPalette("cloudflare")
-        paletteField.typeKey("u", modifierFlags: [.command, .option])
-        let websiteDeadline = Date.now.addingTimeInterval(4)
-        while Date.now < websiteDeadline, (clipboard() ?? "").isEmpty { usleep(50_000) }
-        XCTAssertEqual(clipboard(), "https://dash.cloudflare.com", "⌥⌘U did not copy the highlighted item's website")
-        XCTAssertTrue(paletteField.waitForNonExistence(timeout: 5), "the palette stayed open after copying the website")
-
+    /// ⌃⌘N copies the notes — a row that used to carry no keycap at all, because the action had no shortcut. It now
+    /// exists on the Item menu too, so the key does the same thing in the vault window.
+    func testPaletteCopiesNotes() {
         NSPasteboard.general.clearContents()
         openPalette("github")
         paletteField.typeKey("n", modifierFlags: [.command, .control])
