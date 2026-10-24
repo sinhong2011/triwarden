@@ -1,5 +1,4 @@
 import SwiftUI
-import TriCrypto
 import UniformTypeIdentifiers
 import VaultwardenAPI
 
@@ -408,6 +407,7 @@ struct SendComposer: View {
     @State private var accountId: String?
     @State private var picking = false
     @State private var saving = false
+    @State private var showGenerator = false
     @State private var dropTargeted = false
 
     private var destinationSessions: [AccountSession] { model.sessions.filter { model.sendContextAccountIDs?.contains($0.id) ?? true } }
@@ -425,15 +425,14 @@ struct SendComposer: View {
             kind = model.newSendKind
             if let ids = model.sendContextAccountIDs { accountId = ids.count == 1 ? ids.first : nil }
             else { accountId = model.defaultAccountId }
-            // "Share by Link…" from an item: its name and fields, hidden until the recipient reveals them.
+            // "Share by Link…" from an item: its name and fields, hidden until the recipient reveals them. No
+            // password: the link is a bearer token for a real secret, but pre-filling one would be a decision the
+            // sender has to undo, and the dice beside the field is one click away for whoever wants it (issue #85).
             if let prefill = model.newSendPrefill {
                 kind = .text
                 name = prefill.name
                 text = prefill.text
                 hideText = true
-                // The link is a bearer token for a real password, so it starts locked: the recipient needs this
-                // passphrase too, which travels by another route (say it, text it). Cleared, the link alone opens it.
-                password = PassphraseGenerator().generate()
                 if let id = prefill.accountId, destinationSessions.contains(where: { $0.id == id }) { accountId = id }
             }
             return
@@ -526,12 +525,35 @@ struct SendComposer: View {
 
                     FormCard(title: "Protection") {
                         FormField(label: "Password",
-                                  note: model.newSendPrefill != nil
+                                  // Only worth saying once there is a passphrase to hand over: Share by Link… starts
+                                  // without one, and the sender may leave it that way.
+                                  note: model.newSendPrefill != nil && !password.isEmpty
                                         ? "Send this passphrase to the recipient another way. Without it, the link won't open."
                                         : nil) {
-                            PasswordField(title: "Password", text: $password,
-                                          prompt: editing?.hasPassword == true ? "Leave blank to keep the current one" : "Optional")
+                            HStack(spacing: 8) {
+                                PasswordField(title: "Password", text: $password,
+                                              prompt: editing?.hasPassword == true ? "Leave blank to keep the current one" : "Optional")
+                                    .disabled(removePassword)
+                                // The same dice as the edit form's password field: a Send made from an item carries
+                                // real secrets, and this is the one click that puts a passphrase in front of them.
+                                Button { showGenerator = true } label: {
+                                    Image(systemName: "dice").font(.system(size: 14, weight: .medium))
+                                        .frame(width: 38, height: 38)
+                                        .background(Color.formInputFill, in: .rect(cornerRadius: 9, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
+                                        .contentShape(.rect)
+                                }
+                                .buttonStyle(.plain)
+                                .help(Text("Generate password"))
+                                .accessibilityLabel(Text("Generate password"))
                                 .disabled(removePassword)
+                                .popover(isPresented: $showGenerator, arrowEdge: .trailing) {
+                                    GeneratorView(modes: [.password, .passphrase], compact: true) { generated in
+                                        password = generated
+                                        showGenerator = false
+                                    }
+                                }
+                            }
                         }
                         if editing?.hasPassword == true {
                             Toggle("Remove the password", isOn: $removePassword).toggleStyle(.trailingSwitch)

@@ -69,24 +69,37 @@ extension VaultItem {
 Because real secrets go into the shared text, every call site goes through
 `model.guarded(item) { … }` so reprompt-protected items ask for the master password first.
 
-### 3. Protection: a passphrase, and one chance to copy it
+### 3. Protection: an optional passphrase, and one chance to copy it
 
 A prefilled Send carries a **real password**, and a Send link is a bearer token: anyone who
-receives the link can read it. So the prefill also generates a 6-word passphrase
-(`PassphraseGenerator`, EFF wordlist) as the Send's own password. The link alone then opens
-nothing; the recipient needs the passphrase too, which travels by another route.
+receives the link can read it. A passphrase in front of it fixes that — but the first version
+generated one automatically, and the reporter pushed back on it (issue #85, after testing): a
+pre-filled passphrase is a decision the sender has to undo for the common case (sharing with a
+relative), it makes them deliver a second thing through a second channel, and it disagrees with
+both the app's own Send form and Bitwarden/1Password, which all start without a password.
+
+So the prefill leaves the password **empty**, and a **dice button** beside the field opens the
+same compact `GeneratorView` the edit form uses — one click for whoever wants a passphrase, with
+the generator's own password/passphrase choice. The note explaining that the passphrase must
+travel separately appears only once there is one to send.
+
+The trade-off is deliberate and fail-open: a link with no passphrase can be read by anyone who
+holds it until it is viewed out or deleted. Expiry and max-views are what bound that window, and
+they stay editable. A "Generate a password for Share by Link" preference (off by default) was
+suggested as a follow-up; it is not in this PR.
 
 The server stores only `SendCrypto.passwordHash` — **PBKDF2-SHA256, 100 000 rounds, one-way** —
-so the passphrase can never be read back. That shapes the whole flow:
+so a passphrase can never be read back. That shapes the rest of the flow:
 
 - **Nothing is copied automatically.** The old `copyPlain(link)` on create would silently throw
   away a passphrase the sender had just copied.
 - **Create Send** (not "Create & Copy Link") makes the Send and opens a one-time sheet
-  (`SendCreatedSheet`) showing the link and the passphrase, each with its own copy button. The
-  passphrase is masked until revealed, and the sheet says to send it separately from the link.
+  (`SendCreatedSheet`) showing the link and, when there is one, the passphrase, each with its own
+  copy button. The passphrase is masked until revealed, and the sheet says to send it separately
+  from the link.
 - **Done** closes it and drops both: `AppModel.createdSend` is cleared in `onDisappear`, so the
   plaintext lives only as long as that window — the same rule `generatorHistory` follows.
-- The composer's password field has **no** copy button; before creating is the only place the
+- The composer's password field has **no** copy button; before creating is the only place a
   passphrase exists, and the sheet is where it is handed over.
 
 ### 4. Entry points
@@ -108,7 +121,8 @@ prefill from surviving into the next one. `closeSendComposer` is the only way ou
 New user-facing strings go into `App/Resources/Localizable.xcstrings` (hand-maintained, sorted by
 key): "Share by Link…", "Create Send", "Passphrase", "Show/Hide passphrase", "Link", "Done", the
 two passphrase notes, both sheet subtitles, and "This item has nothing to share." Each is translated
-for all nine locales the catalog carries (en, ja, zh-Hans, zh-Hant, zh-HK, ko, fr, es, th).
+for all nine locales the catalog carries (en, ja, zh-Hans, zh-Hant, zh-HK, ko, fr, es, th). The
+dice reuses the existing "Generate password" key, so the passphrase default added no new strings.
 
 ## Scope / non-goals
 
@@ -120,17 +134,23 @@ for all nine locales the catalog carries (en, ja, zh-Hans, zh-Hant, zh-HK, ko, f
 ## Test plan
 
 1. `make build` in the worktree (xcodegen + Debug build) — **passing**.
-2. `make test` / `swift test --filter VaultwardenAPITests` — 80 tests in 15 suites, **all passing**.
-   (`SSHAgentTests` hangs waiting on a socket in this environment; unrelated to this change.)
+2. `swift test` in `Packages/VaultCore` — 83 + 28 + 19 tests across 16 + 8 + 1 suites, **all passing**.
 3. `--snapshot` renders for review, since the app container is TCC-protected and Screen Recording
-   is off: `send-share-by-link-{light,dark}`, `send-created-{light,dark}`.
+   is off: `send-share-by-link-{light,dark}`, `send-created-{light,dark}`, plus
+   `send-compose-{light,dark}` to confirm a plain New Send is still blank.
+   (Offscreen rendering draws `.switch` toggles in their off appearance regardless of state — a
+   known artifact of `cacheDisplay`, not a state bug; verify toggles in the running app.)
 4. Manual (`needs manual test` label):
    - Login → right-click → Share by Link… → composer opens in Send: Name = item name, Text = the
-     fields, Hide-text on, passphrase filled in.
+     fields, Hide-text on, **password empty** with the dice beside it.
+   - The dice opens the generator; using a value fills the field and shows the "send it another
+     way" note.
    - Same from the detail toolbar button.
-   - **Create Send** → one-time sheet with link + passphrase; passphrase masked until revealed;
-     each copies on its own; Done closes and nothing is left behind.
-   - Reopening the Send shows `Password: Required` — no way back to the passphrase, by design.
+   - **Create Send** → one-time sheet with the link (and the passphrase, if one was set);
+     passphrase masked until revealed; each copies on its own; Done closes and nothing is left
+     behind.
+   - Reopening a password-protected Send shows `Password: Required` — no way back to the
+     passphrase, by design.
    - Reprompt-protected item asks for the master password first.
    - Deleted / unsupported items do not offer it; archived ones do.
    - **The prefill never outlives its composer.** After opening Share by Link…, leave it each way —
@@ -145,10 +165,12 @@ for all nine locales the catalog carries (en, ja, zh-Hans, zh-Hant, zh-HK, ko, f
 
 ## Risks
 
-- **Secret exposure in shared text** — mitigated by `guarded()`, hide-text default, a generated
-  passphrase the link alone cannot open, and never retaining that passphrase past the sheet. Both
-  sheet copy buttons now use the app's secret-aware paths: the passphrase goes through `copy`
-  (concealed, cleared on the clipboard timer), the link through `copyPlain`.
+- **Secret exposure in shared text** — the prefill puts a real password into a link. Mitigated by
+  `guarded()` and hide-text default; **not** by a password, which is now opt-in (see §3). Anyone
+  holding a link with no passphrase can read it until it expires or reaches its view limit, so
+  expiry and max-views are the real bound. Never retaining a passphrase past the sheet still
+  holds. Both sheet copy buttons use the app's secret-aware paths: the passphrase goes through
+  `copy` (concealed, cleared on the clipboard timer), the link through `copyPlain`.
 - The composer keys on `newSendNonce`; if the prefill changes without a new nonce the form keeps
   the old `@State`. `composeNewSend` always mints a nonce, and it is the only way in, so this stays
   correct.
