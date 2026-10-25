@@ -53,6 +53,7 @@ struct VaultView: View {
     @AppStorage("itemSortAscending") private var ascending = true
     /// Window width, to adapt from three columns down to a single phone-width column.
     @State private var width: CGFloat = 1120
+    @State private var windowMidY: CGFloat?
     @State private var columns = NavigationSplitViewVisibility.all
     /// Where the detail column (and so the header's leading slot) starts in the window.
     @State private var detailX: CGFloat = 0
@@ -114,13 +115,22 @@ struct VaultView: View {
     }
 
     var body: some View {
-        // Measure the space the window offers (not the content, which may refuse to shrink) and lay out for it.
-        GeometryReader { geo in
-            newItemFormHandling(content)
-                .frame(width: geo.size.width, height: geo.size.height)
-                .onChange(of: geo.size.width, initial: true) { old, new in resized(from: initialMeasure ? 1120 : old, to: new) }
-                .environment(\.windowMidY, geo.frame(in: .global).midY)
-        }
+        // Measure the window without rebuilding the vault from a GeometryReader closure every drag frame:
+        // the reading only feeds `width`/`windowMidY`, so a modifier that reports it is enough.
+        newItemFormHandling(content)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onGeometryChange(for: WindowGeometry.self) { geo in
+                WindowGeometry(width: geo.size.width, midY: geo.frame(in: .global).midY)
+            } action: { geometry in
+                resized(from: initialMeasure ? 1120 : width, to: geometry.width)
+                windowMidY = geometry.midY
+            }
+            .environment(\.windowMidY, windowMidY)
+    }
+
+    private struct WindowGeometry: Equatable {
+        let width: CGFloat
+        let midY: CGFloat
     }
 
     /// An item form opens in the detail panel: from a tool page, go to the items; on a narrow window, slide to
