@@ -177,4 +177,3 @@ final class IconStore {
         try? sealed.write(to: fileURL(host), options: .atomic)
     }
 }
-
