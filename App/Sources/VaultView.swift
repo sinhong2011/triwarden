@@ -132,6 +132,7 @@ struct VaultView: View {
                 metrics.midY = geometry.midY
                 resized(from: old, to: geometry.width)
             }
+            .background { WindowModeObserver(metrics: metrics) }
             .environment(metrics)
     }
 
@@ -178,9 +179,11 @@ struct VaultView: View {
         if compact != (new < Self.compactWidth) { compact = new < Self.compactWidth }
         if narrowHeader != (new < 560) { narrowHeader = new < 560 }
         if phoneDetail != (new < PaneStrip.pairWidth) { phoneDetail = new < PaneStrip.pairWidth }
-        // Fold the sidebar away as the window narrows; bring it back when it widens again.
-        if new < 900, old >= 900 { columns = .detailOnly }
-        if new >= 900, old < 900 { columns = .all }
+        // The system sidebar and the compact pane strip hand off at the same breakpoint. Using a lower threshold
+        // here lets the compact-mode `onChange` fold the sidebar away again between 900 and `compactWidth`, with no
+        // later crossing left to restore it when the window becomes wide.
+        if new < Self.compactWidth, old >= Self.compactWidth { columns = .detailOnly }
+        if new >= Self.compactWidth, old < Self.compactWidth { columns = .all }
     }
 
     // MARK: Panes
@@ -2560,12 +2563,77 @@ final class WindowMetrics {
     var width: CGFloat = 1120
     /// The window's vertical middle: empty states line up on it across columns.
     var midY: CGFloat?
-    /// Where the detail column starts, so the header's leading slot can be centred on the window.
+    /// Where the detail column starts. The maximized/full-screen header uses it to center the palette on the window.
     var detailX: CGFloat = 0
+    /// True only for the system's zoomed or full-screen window states, not merely for a manually wide window.
+    var expanded = false
 }
 
-/// The window's header: back (narrow windows), new item, the palette's trigger centred on the window, and the SSH
-/// requests. Its own view so that the width it centres on can change without rebuilding the vault around it.
+/// Tracks the two system window states that center the palette. Repeated resize notifications are harmless: the
+/// observable value is written only when the state actually changes, so a live resize does not rebuild the header.
+private struct WindowModeObserver: NSViewRepresentable {
+    let metrics: WindowMetrics
+
+    func makeCoordinator() -> Coordinator { Coordinator(metrics: metrics) }
+
+    func makeNSView(context: Context) -> WindowView {
+        let view = WindowView()
+        view.windowChanged = { [weak coordinator = context.coordinator] window in coordinator?.attach(to: window) }
+        return view
+    }
+
+    func updateNSView(_ view: WindowView, context: Context) {
+        context.coordinator.attach(to: view.window)
+    }
+
+    static func dismantleNSView(_ view: WindowView, coordinator: Coordinator) {
+        view.windowChanged = nil
+        coordinator.attach(to: nil)
+    }
+
+    @MainActor final class Coordinator {
+        private let metrics: WindowMetrics
+        private weak var window: NSWindow?
+        private var notifications: [NSObjectProtocol] = []
+
+        init(metrics: WindowMetrics) { self.metrics = metrics }
+
+        func attach(to window: NSWindow?) {
+            guard self.window !== window else { return }
+            notifications.forEach(NotificationCenter.default.removeObserver)
+            notifications.removeAll()
+            self.window = window
+            guard let window else { update(nil); return }
+            let names: [Notification.Name] = [
+                NSWindow.didResizeNotification,
+                NSWindow.didEnterFullScreenNotification,
+                NSWindow.didExitFullScreenNotification,
+            ]
+            notifications = names.map { name in
+                NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] note in
+                    let changedWindow = note.object as? NSWindow
+                    MainActor.assumeIsolated { self?.update(changedWindow) }
+                }
+            }
+            update(window)
+        }
+
+        private func update(_ window: NSWindow?) {
+            let expanded = window.map { $0.isZoomed || $0.styleMask.contains(.fullScreen) } ?? false
+            if metrics.expanded != expanded { metrics.expanded = expanded }
+        }
+    }
+
+    final class WindowView: NSView {
+        var windowChanged: ((NSWindow?) -> Void)?
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            windowChanged?(window)
+        }
+    }
+}
+
+/// The window's header: back (narrow windows), new item, the palette's trigger, and the SSH requests.
 private struct VaultHeader: View {
     @Environment(WindowMetrics.self) private var metrics
     let compact: Bool
@@ -2575,9 +2643,19 @@ private struct VaultHeader: View {
     let open: Bool
     let back: () -> Void
 
-    /// The palette's trigger width: narrower on a narrow window, so the header's controls keep their room.
+    /// The palette's trigger width. It changes only at the header's breakpoints (compact, and narrow within that) —
+    /// never continuously with the window — so nothing in the header moves while the window is being dragged.
     private var searchWidth: CGFloat {
-        compact ? (narrow ? 150 : 228) : min(320, max(280, metrics.width * 0.24))
+        compact ? (narrow ? 150 : 228) : 300
+    }
+
+    private var searchLeadingPadding: CGFloat {
+        guard !compact else { return 0 }
+        guard metrics.expanded else {
+            return VaultView.listWidth + ItemDetail.detailInset - VaultView.plusInset - NewItemButton.size
+        }
+        return max(0, metrics.width / 2 - metrics.detailX - VaultView.headerSlotInset - searchWidth / 2
+                   - VaultView.plusInset - NewItemButton.size - 8)
     }
 
     var body: some View {
@@ -2596,16 +2674,13 @@ private struct VaultHeader: View {
             }
             // On a phone-width detail, the header belongs to the item's actions (search and + are the list's).
             if !(compact && phoneDetail && depth == 2) {
-                // New items of every kind, first in the header (beside the sidebar's toggle).
+                // The + belongs over the list. In a wide item layout, the trigger starts exactly where the detail
+                // cards start below it: after the list, the pane gap, and the detail's own leading inset.
                 NewItemButton()
                     .padding(.leading, VaultView.plusInset) // its edge over the list's
-                // Wide windows: centred on the window (`.principal` isn't honoured in a split view's header, so this
-                // leading slot is inset to the middle, less the + before it).
                 PaletteTrigger(compactLabel: searchWidth < 260)
                     .frame(width: searchWidth)
-                    .padding(.leading, compact ? 0
-                             : max(0, metrics.width / 2 - metrics.detailX - VaultView.headerSlotInset - searchWidth / 2
-                                   - VaultView.plusInset - NewItemButton.size - 8))
+                    .padding(.leading, searchLeadingPadding)
                 SSHRequestsButton()
                 // A slot holding a single view lays it out at zero size; a zero-width sibling keeps it measured.
                 Text(verbatim: " ").frame(width: 0).accessibilityHidden(true)
