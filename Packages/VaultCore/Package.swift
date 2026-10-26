@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "VaultCore",
-    platforms: [.macOS(.v26)],
+    platforms: [.macOS(.v15)],
     products: [
         .library(name: "TriCrypto", targets: ["TriCrypto"]),
         .library(name: "VaultwardenAPI", targets: ["VaultwardenAPI"]),

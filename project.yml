@@ -2,7 +2,7 @@ name: Triwarden
 options:
   bundleIdPrefix: io.github.sinhong2011
   deploymentTarget:
-    macOS: "26.0"
+    macOS: "15.0"
   createIntermediateGroups: true
 settings:
   base:
