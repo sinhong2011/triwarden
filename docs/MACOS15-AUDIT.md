@@ -1,6 +1,6 @@
 # macOS 15 compatibility feasibility note
 
-Date: 2026-10-25. Replaces the note of 2026-10-10.
+Date: 2026-10-26. Replaces the note of 2026-10-10.
 
 Issue: [#112](https://github.com/sinhong2011/triwarden/issues/112). Parent: [#105](https://github.com/sinhong2011/triwarden/issues/105).
 
@@ -9,29 +9,39 @@ Issue: [#112](https://github.com/sinhong2011/triwarden/issues/112). Parent: [#10
 This note answers one question. Can Triwarden lower the official minimum from macOS 26 to macOS 15 (Sequoia)?
 It covers the API surface, the product surfaces, the build and CI options, and the release process.
 
-This note does not certify macOS 15. It reports compile-time evidence and one gap in runtime evidence.
+This note now includes macOS 15 runtime evidence. A Sequoia 15.6.1 VM ran the build.
+Section 8 lists what the run proved and what it did not prove.
 
 ## Conclusion
 
-**Recommendation: staged go.**
+**Recommendation: staged go, with the first runtime gate passed.**
 
-The code change is small. Two macOS 26 APIs remain, at three call sites. All have a working fallback that compiles.
-The larger problem is evidence. No one has run the app on Sequoia yet.
+The code change is small. Two macOS 26 APIs remain, at three call sites. All have a working fallback.
+The fallback build ran on macOS 15.6.1 without a crash.
 
-Do not change the public minimum in this change. Do these steps in order:
+Do not change the public minimum yet. These steps remain:
 
 1. Merge the code fallbacks and lower the deployment target. Keep the public minimum at 26.
-2. Add a `macos-15` CI job. This gives automatic Sequoia runtime coverage for launch, lock, sync and editing.
-3. Send a notarized test build to the [#105](https://github.com/sinhong2011/triwarden/issues/105) requester.
-4. After the requester reports a pass, change the public minimum to 15.
+2. Add a `macos-15` CI job. This gives automatic Sequoia coverage on every change.
+3. Test the signed build surfaces that an unsigned build cannot cover. See section 8.
+4. After those pass, change the public minimum to 15.
 
 Section 7 gives the go/no-go criteria.
 
 ## Test method and environment
 
+Compile-time checks:
+
 - Host: macOS 27.0.1. Xcode 27.1 (27A9275). SDK macOS 27.0.
-- Base commit: `b768927`.
+- Base commit: `b768927`. The fallback code was uncommitted work in the worktree.
 - Method: copy the tracked tree. Lower both minimums to 15. Build. Record every error.
+
+Runtime checks:
+
+- Guest: UTM virtual machine, macOS 15.6.1 (24G90), arm64, 98 GB free.
+- Build: Debug, arm64, `MACOSX_DEPLOYMENT_TARGET=15.0`, unsigned.
+- Transfer: `scp` of the 75 MB app bundle. The VirtioFS share was not available. See section 8.
+- The guest ran the app, its self-test, and its snapshot renderer. The guest has no Xcode.
 
 The build uses the current SDK. It does not use an older SDK. The deployment target is the only change.
 
@@ -114,24 +124,28 @@ No capability must be removed to target macOS 15.
 
 A claim of support needs evidence for each surface below.
 The "CI" column shows whether a `macos-15` runner can cover the item without a person.
+The "VM" column shows the result of the 2026-10-26 run in section 8.
 
-| Surface | CI | What must pass |
-| --- | --- | --- |
-| Launch and first run | Yes | Window opens. Menu bar item appears. No crash. |
-| Sign in and sync | Yes | Sign in. Initial sync. Incremental sync. Offline error path. |
-| Unlock and lock | Partly | Master password unlock. Auto-lock. Keychain persistence across a relaunch. |
-| Touch ID unlock | No | Enrolment prompt. Unlock. Fallback to password. |
-| Item work | Yes | Create, edit, delete, search, Command Palette. |
-| Clipboard | Partly | Copy. Expiry timer. Clear. |
-| AutoFill, password | No | Enable in System Settings. Fill. Save. |
-| AutoFill, one-time code | No | Fill a code from an item. |
-| AutoFill, passkey | No | Register and sign in with a passkey. |
-| Safari extension | No | Enable. Fill. Save. |
-| Auto-Type helper | No | Grant Accessibility. Type into another app. |
-| SSH agent | No | Approval card. Signature by `ssh`. |
-| Updates | No | Sparkle check, download, install, relaunch. |
-| Appearance | Partly | Light and dark. Narrow window. Toolbar layout from section 1. |
-| Upgrade path | No | Install a 26 build, then update to a 15 build. Confirm settings and vault survive. |
+| Surface | CI | VM | What must pass |
+| --- | --- | --- | --- |
+| Launch and first run | Yes | Pass | Window opens. Menu bar item appears. No crash. |
+| Sign in and sync | Yes | Not run | Sign in. Initial sync. Incremental sync. Offline error path. |
+| Unlock and lock | Partly | Not run | Master password unlock. Auto-lock. Keychain persistence across a relaunch. |
+| Touch ID unlock | No | Not run | Enrolment prompt. Unlock. Fallback to password. |
+| Item work | Yes | Render only | Create, edit, delete, search, Command Palette. |
+| Clipboard | Partly | Not run | Copy. Expiry timer. Clear. |
+| AutoFill, password | No | Blocked | Enable in System Settings. Fill. Save. |
+| AutoFill, one-time code | No | Blocked | Fill a code from an item. |
+| AutoFill, passkey | No | Blocked | Register and sign in with a passkey. |
+| Safari extension | No | Blocked | Enable. Fill. Save. |
+| Auto-Type helper | No | Not run | Grant Accessibility. Type into another app. |
+| SSH agent | No | Not run | Approval card. Signature by `ssh`. |
+| Updates | No | Partial | Sparkle loads. No update ran. |
+| Appearance | Partly | Pass | Light and dark. Narrow window. Toolbar layout from section 1. |
+| Upgrade path | No | Not run | Install a 26 build, then update to a 15 build. Confirm settings and vault survive. |
+
+"Blocked" means an unsigned build cannot test the surface. Section 8 gives the cause.
+"Render only" means the screen renders, but no one used the control.
 
 The last row matters. A user on macOS 26 will receive a build with a lower minimum.
 That direction is safe, but test it once.
@@ -208,17 +222,18 @@ and writes `sparkle:minimumSystemVersion` into the appcast. A correct build prod
 
 ## 6. Risks
 
-1. **No runtime evidence.** This is the main risk. Compilation cannot show a crash, a blank window, or a wrong layout.
-2. **Toolbar layout on Sequoia.** The fallback changes the placement of the item actions. Nobody has looked at it.
-3. **App icon at large sizes.** `AppIcon.icns` has four representations: 16x16, 16@2x, 128x128, and 128@2x.
-   It has no 32, 256, 512, or 1024 representation. `Assets.car` has renditions from 32 to 1024 pixels.
-   The macOS 26 build produces the same files, so the lower target does not cause this.
-   However, macOS 15 may draw a large icon from the small `.icns` entries and show it soft.
-   Check the Dock and the Finder at a large icon size. If it is soft, add a full iconset.
-4. **Extension activation.** System Settings paths and prompts differ between macOS versions.
-   The AutoFill and Safari extensions may need a different enable flow on Sequoia.
-5. **A second minimum to maintain.** You must check every new API against 15 from now on.
+1. **Toolbar layout on Sequoia.** Confirmed correct. The snapshot render shows the item actions at the trailing
+   edge, in light and dark. See section 8.
+2. **App icon at large sizes.** `AppIcon.icns` has four representations: 16x16, 16@2x, 128x128, and 128@2x.
+   It has no 32, 256, 512, or 1024 representation. The macOS 26 build produces the same files, so the lower
+   target does not cause this. On Sequoia, `sips` reports a maximum of 256 pixels for the `.icns`.
+   This is a real gap. It is not new, and it does not block launch. Fix it before the public claim.
+3. **Extension activation.** Not yet tested. The AutoFill and Safari extensions need a signed build.
+   System Settings paths and prompts differ between macOS versions. See section 8.
+4. **A second minimum to maintain.** You must check every new API against 15 from now on.
    The `macos-15` CI job makes a mistake fail the build, which limits this risk.
+5. **Unsigned builds cannot register extensions.** An ad-hoc signature strips the entitlements that
+   `pluginkit` needs. This limits what a local QA build can prove. It is not a macOS 15 defect.
 
 ## 7. Recommendation and go/no-go criteria
 
@@ -235,18 +250,20 @@ Do these together:
 
 **Go to stage 2 when:** the `macos-15` job passes on `main` for three consecutive runs.
 
-### Stage 2: Sequoia test build
+### Stage 2: signed build checks
 
-Build, sign, and notarize a release candidate. Send it to the [#105](https://github.com/sinhong2011/triwarden/issues/105)
-requester with the section 3 list.
+Build, sign, and notarize a release candidate. Test the surfaces that an unsigned build cannot reach:
 
-**Go to stage 3 when** the requester reports a pass on these, with no crash:
-
-- Launch, sign in, sync, and unlock.
+- Sign in, sync, and unlock on a real Sequoia Mac.
 - AutoFill fills a password and a one-time code.
 - The Safari extension fills a login.
-- The toolbar actions appear at the trailing edge and the layout is correct.
 - The app icon is sharp in the Dock.
+- The upgrade path from a 26 build.
+
+**Go to stage 3 when** these pass with no crash.
+
+The VM run already passed these: launch, no crash, window and menu bar item, offline self-test,
+light and dark render, toolbar layout, and Sparkle load.
 
 ### Stage 3: public claim
 
@@ -261,11 +278,63 @@ Change README, the site in all locales, and the cask to macOS 15. Release.
 
 ### What this note does not prove
 
-- macOS 15 runtime behaviour of any kind.
 - Intel runtime behaviour. The universal build compiles, but no one ran it on Intel.
 - The signed and notarized release on macOS 15.
-- The updater on macOS 15.
-- The app icon appearance on macOS 15.
+- The updater on macOS 15. The Sparkle framework loads, but no update ran.
+- Extension activation. An unsigned build cannot register the extensions. See section 8.
+
+## 8. macOS 15 runtime results
+
+Date: 2026-10-26. Guest: macOS 15.6.1 (24G90), arm64, UTM.
+
+### What passed
+
+| Check | Result |
+| --- | --- |
+| App launches | Pass. Process starts and stays up. |
+| No crash | Pass. No crash report. Main thread active after 44 seconds. |
+| Window and menu bar item | Pass. Main window 1369x994 on screen, alpha 1.0. Menu bar item present. |
+| Offline compatibility self-test | Pass. 24 checks, 0 failures. |
+| UI render, light | Pass. 27 screens render. |
+| UI render, dark | Pass. 25 screens render. |
+| Toolbar fallback layout | Pass. Item actions sit at the trailing edge. |
+| Sparkle loads | Pass. Framework and both XPC services load. Minimum 12.0. |
+| Memory | 205 MB resident with the demo vault. |
+
+The self-test covers the shared decoder and the app's mutation boundaries.
+It is the same test that CI runs with `--selftest-compatibility`.
+
+The UI render uses the app's own `--snapshot` mode. That mode draws SwiftUI views directly to an image.
+It does not use the window server. This was necessary because the VM does not composite windows into a
+screen capture. A control test with System Settings showed the same blank capture. The cause is the VM
+display, not Triwarden.
+
+The snapshot images show the full vault window: sidebar, item list, item detail, one-time code, passkey row,
+watchtower row, attachments, and the toolbar.
+
+The same `--snapshot` run on the host gave a reference image. The host runs macOS 27.0.1, so this is not a
+clean macOS 26 against macOS 15 pair. Both images put the toolbar actions at the trailing edge, in the same
+order. The section order and the spacing match. The images are not byte-identical for two reasons that do
+not come from the deployment target:
+
+- The host render shows cached site icons. The guest render shows letter placeholders.
+- The host image is 28 pixels taller. The window frame measurement differs.
+
+Treat the toolbar placement as confirmed. Do not use the images as a pixel comparison.
+
+### What did not pass, and why
+
+**Extension registration.** `pluginkit` does not list the AutoFill or Safari extension for this build.
+The cause is the signature. An unsigned or ad-hoc build has no provisioning profile, and `codesign --deep`
+with an ad-hoc identity strips the entitlements that the extensions need. This is a property of local QA
+builds. It is not a macOS 15 behaviour. Test extension activation with a Developer ID build.
+
+**Screen capture of a live window.** The VM returns a desktop-only image. This affects every app in the
+guest, including System Settings. Do not use screen capture to judge this VM.
+
+**VirtioFS share.** The share stopped serving new content after a directory replace. A force unmount made
+it unreachable, and remounting needs `sudo` in the guest. The app was copied with `scp` instead. Fix the
+share before the next QA run, or expect to use `scp`.
 
 ## References
 
