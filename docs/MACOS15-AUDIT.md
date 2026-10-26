@@ -116,6 +116,14 @@ A flexible spacer in the same toolbar group moves the group to the trailing edge
 Measured in a live window at 1617 points wide: the gap falls from 365 points to 11 points.
 The 11 points match the window's own trailing inset, so the group now sits at the edge.
 
+![Full window before and after the spacer fix](images/macos15/toolbar-full.png)
+
+![The trailing edge before and after](images/macos15/toolbar-right-edge.png)
+
+Both windows are 1617 by 1006 points. The only difference between them is the toolbar code above.
+The screenshots come from a Debug build with `MACOSX_DEPLOYMENT_TARGET=15.0` and
+`CODE_SIGNING_ALLOWED=NO`, on a macOS 15.6.1 guest.
+
 This changes the cost of the fallback. The code is small, but each fallback needs its own visual
 check on the older system. Compiling and passing tests is not sufficient.
 
