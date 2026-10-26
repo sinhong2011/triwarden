@@ -71,6 +71,8 @@ struct TriwardenApp: App {
                 }
                 // Soft pastel wash from the Liquid design under every screen.
                 .containerBackground(for: .window) { WindowBackdrop() }
+                // No text field takes focus just because the window was restored (macOS would offer AutoFill there).
+                .noAutomaticFirstResponder()
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1120, height: 720)
