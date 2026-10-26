@@ -3,15 +3,14 @@ import LocalAuthentication
 import LocalAuthenticationEmbeddedUI
 import SwiftUI
 
-/// Signed in, vault locked: a vault door fills the window, the master password goes in at its hub, and the
-/// account pill sits below with Touch ID beside it. Works offline.
+/// Signed in, vault locked: a vault door fills the window, the master password goes in at its hub (Touch ID just
+/// under it), and the account pill sits below. Works offline.
 struct UnlockView: View {
     /// Where the door sits in a window of this size (shared with the gate's plates, so they match it exactly).
-    static func doorLayout(_ size: CGSize, touchID: Bool) -> (radius: CGFloat, center: CGPoint) {
+    static func doorLayout(_ size: CGSize) -> (radius: CGFloat, center: CGPoint) {
         let top: CGFloat = 40
-        // Bottom strip: "Not you? Log out" above the account pill; Touch ID sits beside the pill.
+        // Bottom strip: "Not you? Log out" above the account pill.
         let bottom: CGFloat = 100
-        _ = touchID
         let outer = max(130, min((size.width - 32) / 2, (size.height - top - bottom) / 2))
         return (outer / DoorGeometry.frameOuter, CGPoint(x: size.width / 2, y: top + (size.height - top - bottom) / 2))
     }
@@ -30,7 +29,7 @@ struct UnlockView: View {
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
-            let (radius, center) = Self.doorLayout(size, touchID: model.touchIDEnabled)
+            let (radius, center) = Self.doorLayout(size)
             let opening = model.unlockOpening || frozen?.opened != nil
             let hubHidden = opening || assembling || (frozen?.closed ?? 1) < 0.5
 
@@ -62,12 +61,9 @@ struct UnlockView: View {
                         }
                         .font(.system(size: 11))
                     }
-                    // Account pill; Touch ID hugs its trailing edge as an icon that names itself on hover.
-                    HStack(spacing: 8) {
-                        AccountLine()
-                        if model.touchIDEnabled { InlineTouchID() }
-                    }
-                    .padding(.horizontal, 24)
+                    // Account pill.
+                    AccountLine()
+                        .padding(.horizontal, 24)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, 20)
@@ -163,6 +159,9 @@ private struct DoorCore: View {
                 .accessibilityHidden(true)
 
             UnlockCapsuleField(pinMode: pinMode, password: $password, focused: focused.wrappedBinding, submit: submit)
+
+            // Touch ID just under the field: an icon that names itself on hover, or while it prompts.
+            if model.touchIDEnabled { InlineTouchID() }
 
             Group {
                 if let message = model.errorMessage {
@@ -336,7 +335,7 @@ private struct InlineTouchID: View {
         HStack(spacing: 0) {
             ZStack {
                 // The system glyph only draws during a prompt; show ours otherwise.
-                Image(systemName: "touchid").font(.system(size: 17)).foregroundStyle(.primary)
+                Image(systemName: "touchid").font(.system(size: 17)).foregroundStyle(.secondary)
                     .opacity(prompting ? 0 : 1)
                 TouchIDGlyph(context: context).opacity(prompting ? 1 : 0)
             }
@@ -353,8 +352,10 @@ private struct InlineTouchID: View {
         }
         .padding(.trailing, 8)
         .frame(height: 36, alignment: .leading)
-        .background(dark ? Color.white.opacity(0.06) : Color.white.opacity(0.7), in: .capsule)
-        .overlay(Capsule().strokeBorder(Color.primary.opacity(dark ? 0.1 : 0.08)))
+        // Closed, it's just the glyph; hovering wraps it in the pill that names it.
+        .background(open ? AnyShapeStyle(dark ? Color.white.opacity(0.06) : Color.white.opacity(0.7)) : AnyShapeStyle(.clear),
+                    in: .capsule)
+        .overlay(Capsule().strokeBorder(open ? Color.primary.opacity(dark ? 0.1 : 0.08) : .clear))
         .clipShape(.capsule)
         .contentShape(.capsule)
         .onHover { h in withAnimation(.snappy(duration: 0.28, extraBounce: 0)) { hovering = h } }
