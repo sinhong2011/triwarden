@@ -3,13 +3,15 @@ import LocalAuthentication
 import LocalAuthenticationEmbeddedUI
 import SwiftUI
 
-/// Signed in, vault locked: a vault door fills the window, the master password goes in at its hub, and Touch ID
-/// waits below. Works offline.
+/// Signed in, vault locked: a vault door fills the window, the master password goes in at its hub, and the
+/// account pill sits below with Touch ID beside it. Works offline.
 struct UnlockView: View {
     /// Where the door sits in a window of this size (shared with the gate's plates, so they match it exactly).
     static func doorLayout(_ size: CGSize, touchID: Bool) -> (radius: CGFloat, center: CGPoint) {
         let top: CGFloat = 40
-        let bottom: CGFloat = touchID ? 124 : 74
+        // Bottom strip: "Not you? Log out" above the account pill; Touch ID sits beside the pill.
+        let bottom: CGFloat = 100
+        _ = touchID
         let outer = max(130, min((size.width - 32) / 2, (size.height - top - bottom) / 2))
         return (outer / DoorGeometry.frameOuter, CGPoint(x: size.width / 2, y: top + (size.height - top - bottom) / 2))
     }
@@ -50,11 +52,22 @@ struct UnlockView: View {
                     .blur(radius: hubHidden ? 6 : 0)
                     .animation(.easeOut(duration: 0.25), value: assembling)
 
-                VStack(spacing: 14) {
-                    if model.touchIDEnabled { InlineTouchID() }
-                    // Whose vault this is.
-                    AccountLine()
-                        .padding(.horizontal, 24)
+                VStack(spacing: 10) {
+                    // Above the account pill (was under the hub).
+                    if model.accountDoor == nil {
+                        HStack(spacing: 4) {
+                            Text("Not you?").foregroundStyle(.secondary)
+                            Button("Log out") { model.confirmLogOut(model.unlockTarget?.id) }
+                                .buttonStyle(.plain).foregroundStyle(.primary).underline()
+                        }
+                        .font(.system(size: 11))
+                    }
+                    // Account pill; Touch ID hugs its trailing edge as an icon that names itself on hover.
+                    HStack(spacing: 8) {
+                        AccountLine()
+                        if model.touchIDEnabled { InlineTouchID() }
+                    }
+                    .padding(.horizontal, 24)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, 20)
@@ -166,24 +179,22 @@ private struct DoorCore: View {
             .animation(.easeOut(duration: 0.2), value: model.errorMessage)
             .animation(.easeOut(duration: 0.2), value: model.isBusy)
 
-            HStack(spacing: 4) {
-                if hasPIN {
-                    Button(pinMode ? "Use master password" : "Use PIN", action: switchMode)
-                        .buttonStyle(.plain).foregroundStyle(.primary).underline()
-                    Text(verbatim: "·").foregroundStyle(.tertiary)
+            if hasPIN || accountDoor {
+                HStack(spacing: 4) {
+                    if hasPIN {
+                        Button(pinMode ? "Use master password" : "Use PIN", action: switchMode)
+                            .buttonStyle(.plain).foregroundStyle(.primary).underline()
+                        if accountDoor { Text(verbatim: "·").foregroundStyle(.tertiary) }
+                    }
+                    if accountDoor {
+                        Button("Show all accounts") { model.accountFocus = nil }
+                            .buttonStyle(.plain).foregroundStyle(.primary).underline()
+                            .help(Text("Back to the open accounts (Esc)"))
+                    }
                 }
-                if accountDoor {
-                    Button("Show all accounts") { model.accountFocus = nil }
-                        .buttonStyle(.plain).foregroundStyle(.primary).underline()
-                        .help(Text("Back to the open accounts (Esc)"))
-                } else {
-                    Text("Not you?").foregroundStyle(.secondary)
-                    Button("Log out") { model.confirmLogOut(model.unlockTarget?.id) }
-                        .buttonStyle(.plain).foregroundStyle(.primary).underline()
-                }
+                .font(.system(size: 11))
+                .padding(.top, -4)
             }
-            .font(.system(size: 11))
-            .padding(.top, -4)
         }
     }
 }
@@ -314,12 +325,15 @@ private struct InlineTouchID: View {
     @State private var context = LAContext()
     @State private var attempt = 0
     @State private var prompting = false
+    @State private var hovering = false
+    @State private var labelWidth: CGFloat = 0
 
     @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let dark = scheme == .dark
-        HStack(spacing: 8) {
+        let open = hovering || prompting
+        HStack(spacing: 0) {
             ZStack {
                 // The system glyph only draws during a prompt; show ours otherwise.
                 Image(systemName: "touchid").font(.system(size: 17)).foregroundStyle(.primary)
@@ -327,26 +341,37 @@ private struct InlineTouchID: View {
                 TouchIDGlyph(context: context).opacity(prompting ? 1 : 0)
             }
             .frame(width: 24, height: 24)
+            .padding(.leading, 8)
+
             Text("Touch ID to unlock").font(.system(size: 12, weight: .semibold))
-            Button { attempt += 1 } label: {
-                Image(systemName: "arrow.clockwise").font(.system(size: 10, weight: .semibold))
-                    .accessibilityLabel(Text("Try Touch ID again"))
-            }
-            .buttonStyle(.borderless)
-            .help(Text("Try Touch ID again"))
+                .fixedSize()
+                .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { labelWidth = $0 }
+                .padding(.leading, 8).padding(.trailing, 10)
+                .opacity(open ? 1 : 0)
+                .frame(width: open ? labelWidth + 18 : 0, alignment: .leading)
+                .clipped()
         }
-        .padding(.leading, 10).padding(.trailing, 12)
-        .frame(height: 36)
+        .padding(.trailing, 8)
+        .frame(height: 36, alignment: .leading)
         .background(dark ? Color.white.opacity(0.06) : Color.white.opacity(0.7), in: .capsule)
         .overlay(Capsule().strokeBorder(Color.primary.opacity(dark ? 0.1 : 0.08)))
+        .clipShape(.capsule)
+        .contentShape(.capsule)
+        .onHover { h in withAnimation(.snappy(duration: 0.28, extraBounce: 0)) { hovering = h } }
+        .onTapGesture { if !prompting { attempt += 1 } }
+        .help(open ? Text("Try Touch ID again") : Text("Touch ID to unlock"))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Touch ID to unlock"))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction { if !prompting { attempt += 1 } }
         .task(id: attempt) {
             // A fresh context per attempt; the embedded view shows its prompt inline.
             let fresh = LAContext()
             context = fresh
             try? await Task.sleep(for: .milliseconds(150)) // let the view attach to the new context
-            prompting = true
+            withAnimation(.snappy(duration: 0.28, extraBounce: 0)) { prompting = true }
             await model.unlockWithTouchID(context: fresh)
-            prompting = false
+            withAnimation(.snappy(duration: 0.28, extraBounce: 0)) { prompting = false }
         }
     }
 }
