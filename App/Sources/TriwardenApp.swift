@@ -115,10 +115,16 @@ struct TriwardenApp: App {
                     .disabled(!model.isUnlocked)
                 Menu("New Other Item") {
                     Button("Card") { model.beginEditing(EditRequest(mode: .create(.card))) }
+                        .keyboardShortcut("b", modifiers: [.command, .option])
                     Button("Identity") { model.beginEditing(EditRequest(mode: .create(.identity))) }
+                        .keyboardShortcut("i", modifiers: [.command, .option])
                     Button("SSH Key") { model.beginEditing(EditRequest(mode: .create(.sshKey))) }
+                        .keyboardShortcut("k", modifiers: [.command, .option])
                 }
                 .disabled(!model.isUnlocked)
+                Button("New Send") { model.composeNewSend() }
+                    .keyboardShortcut("s", modifiers: [.command, .option])
+                    .disabled(!model.isUnlocked)
                 Button("New Folder…") { model.promptNewFolder() }
                     .keyboardShortcut("n", modifiers: [.command, .option])
                     .disabled(!model.isUnlocked)

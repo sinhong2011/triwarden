@@ -1264,10 +1264,10 @@ private struct NewItemButton: View {
         ActionMenu(entries: [
             ActionMenuEntry(title: String(localized: "New Login"), symbol: "key", shortcut: "⌘N") { model.beginEditing(EditRequest(mode: .create(.login))) },
             ActionMenuEntry(title: String(localized: "New Secure Note"), symbol: "note.text", shortcut: "⇧⌘N") { model.beginEditing(EditRequest(mode: .create(.secureNote))) },
-            ActionMenuEntry(title: String(localized: "New Card"), symbol: "creditcard") { model.beginEditing(EditRequest(mode: .create(.card))) },
-            ActionMenuEntry(title: String(localized: "New Identity"), symbol: "person.crop.rectangle") { model.beginEditing(EditRequest(mode: .create(.identity))) },
-            ActionMenuEntry(title: String(localized: "New SSH Key"), symbol: "terminal") { model.beginEditing(EditRequest(mode: .create(.sshKey))) },
-            ActionMenuEntry(title: String(localized: "New Send"), symbol: "paperplane") { model.composeNewSend() },
+            ActionMenuEntry(title: String(localized: "New Card"), symbol: "creditcard", shortcut: "⌥⌘B") { model.beginEditing(EditRequest(mode: .create(.card))) },
+            ActionMenuEntry(title: String(localized: "New Identity"), symbol: "person.crop.rectangle", shortcut: "⌥⌘I") { model.beginEditing(EditRequest(mode: .create(.identity))) },
+            ActionMenuEntry(title: String(localized: "New SSH Key"), symbol: "terminal", shortcut: "⌥⌘K") { model.beginEditing(EditRequest(mode: .create(.sshKey))) },
+            ActionMenuEntry(title: String(localized: "New Send"), symbol: "paperplane", shortcut: "⌥⌘S") { model.composeNewSend() },
             ActionMenuEntry(title: String(localized: "New Folder…"), symbol: "folder.badge.plus", shortcut: "⌥⌘N") { model.promptNewFolder() },
             ActionMenuEntry(title: String(localized: "Import…"), symbol: "square.and.arrow.down", shortcut: "⇧⌘I", enabled: !model.sessions.isEmpty) { model.beginImport() }
         ]) {
