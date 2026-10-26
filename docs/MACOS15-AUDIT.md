@@ -78,23 +78,51 @@ This design compiles for Debug, Release, and universal Release. It is an experim
 ### The macOS 15 layout is wrong
 
 The fallback builds and runs, but its layout does not match macOS 26. A live window on the guest
-shows three differences:
+shows two differences:
 
 1. **No top gap.** The toolbar starts at the window's top edge. The controls sit at y=51 in a window
    that starts at y=48. On macOS 26 the header floats below a gap.
-2. **The item actions do not reach the right edge.** The action group ends about 440 points before
-   the window's right edge. Without `ToolbarSpacer(.flexible)`, `placement: .primaryAction` does not
+2. **The item actions do not reach the right edge.** The action group ends 365 points before the
+   window's right edge. Without `ToolbarSpacer(.flexible)`, `placement: .primaryAction` does not
    push the group to the trailing edge.
-3. **A tinted bar remains.** `.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)` does not
-   clear the toolbar's own background on macOS 15. A dark rounded band runs across the top, over the
-   sidebar and the detail column. The sidebar is transparent; the detail column is not.
 
-**Correction.** An earlier draft of this note reported the toolbar layout as "Pass. Item actions sit
-at the trailing edge." That was wrong. The test used the app's `--snapshot` mode, which does not draw
-the real toolbar chrome. Measure the layout in a live window, not from a snapshot render.
+**Correction 1.** An earlier draft reported the toolbar layout as "Pass. Item actions sit at the
+trailing edge." That was wrong. The test used the app's `--snapshot` mode, which does not draw the
+real toolbar chrome. Measure the layout in a live window, not from a snapshot render.
+
+**Correction 2.** A later draft listed a third difference: "A tinted bar remains across the top."
+That was also wrong. Two live windows, measured at the same size, show the toolbar background and
+the content background differ by 1 to 2 colour levels out of 255. That is one surface, not two.
+The toolbar has no separate background to clear. `.toolbarBackgroundVisibility(.hidden, for:
+.windowToolbar)` already does its job on macOS 15.
+
+The tinted-bar claim came from looking at a screenshot, not from measuring pixels. A dark toolbar
+looks tinted next to a light sidebar. Compare the toolbar colour with the content colour directly
+before you report a background defect.
+
+### Fix for difference 2
+
+A flexible spacer in the same toolbar group moves the group to the trailing edge:
+
+```swift
+} else {
+    ToolbarItemGroup(placement: .primaryAction) {
+        Spacer()
+        actions
+    }
+}
+```
+
+Measured in a live window at 1617 points wide: the gap falls from 365 points to 11 points.
+The 11 points match the window's own trailing inset, so the group now sits at the edge.
 
 This changes the cost of the fallback. The code is small, but each fallback needs its own visual
 check on the older system. Compiling and passing tests is not sufficient.
+
+### Difference 1 has no fix without a redesign
+
+`ToolbarSpacer(.flexible)` is the only way to make the macOS 26 header float. macOS 15 has no
+equivalent. Difference 1 stays unless the header moves out of the toolbar on both systems.
 
 ### Correction to the earlier note
 
@@ -168,7 +196,7 @@ The "VM" column shows the result of the 2026-10-26 run in section 8.
 | Auto-Type helper | No | Pass | Grant Accessibility. Type into another app. |
 | SSH agent | No | Pass | Approval card. Signature by `ssh`. |
 | Updates | No | Partial | Sparkle loads. No update ran. |
-| Appearance | Partly | Fail | Light and dark. Narrow window. The toolbar layout is wrong. See section 1. |
+| Appearance | Partly | Fail | Light and dark. Narrow window. No top gap on the toolbar. See section 1. |
 | Upgrade path | No | Not run | Install a 26 build, then update to a 15 build. Confirm settings and vault survive. |
 
 "Blocked" means an unsigned build cannot test the surface. Section 8 gives the cause.
@@ -248,9 +276,9 @@ and writes `sparkle:minimumSystemVersion` into the appcast. A correct build prod
 
 ## 6. Risks
 
-1. **Toolbar layout on Sequoia.** Broken. A live window shows no top gap, actions short of the right
-   edge, and a tinted bar across the top. The fallback needs real layout work, not only an
-   availability branch. See sections 1 and 8.
+1. **Toolbar layout on Sequoia.** Partly broken. A live window shows no top gap, and the item actions
+   sit 365 points short of the right edge. A flexible spacer in the group closes the second defect
+   (365 points to 11). The top gap has no fix without a redesign. See sections 1 and 8.
 2. **App icon at large sizes.** `AppIcon.icns` has four representations: 16x16, 16@2x, 128x128, and 128@2x.
    It has no 32, 256, 512, or 1024 representation. This is not a defect on macOS 15.
    A check on the Sequoia guest asked `NSWorkspace` for the app icon. It returned a 2048-pixel
@@ -273,9 +301,9 @@ and writes `sparkle:minimumSystemVersion` into the appcast. A correct build prod
 
 ### Stage 1: fix the layout, then code and CI
 
-1. **Fix the toolbar on macOS 15 first.** Close the top gap, push the item actions to the right edge,
-   and clear the tinted bar. Section 1 lists the three defects. Do not continue until a live window
-   on Sequoia matches macOS 26.
+1. **Fix the toolbar on macOS 15 first.** Push the item actions to the right edge. Section 1 gives a
+   working fix. The top gap needs a design decision, because macOS 15 has no equivalent of
+   `ToolbarSpacer(.flexible)`. Do not continue until a live window on Sequoia is acceptable.
 2. Lower `project.yml` and `Packages/VaultCore/Package.swift` to 15.
 3. Add the `macos-15` CI job from section 4.
 4. Keep README, the site, and the cask at macOS 26.
@@ -334,7 +362,7 @@ Date: 2026-10-26. Guest: macOS 15.6.1 (24G90), arm64, UTM.
 | Offline compatibility self-test | Pass. 24 checks, 0 failures. |
 | UI render, light | Pass. 27 screens render. |
 | UI render, dark | Pass. 25 screens render. |
-| Toolbar fallback layout | Fail. No top gap, actions short of the right edge, a tinted bar remains. |
+| Toolbar fallback layout | Fail. No top gap. Actions short of the right edge; a spacer in the group fixes that. |
 | App icon | Pass. `NSWorkspace` returns a 2048 px representation and renders at 1024x1024. |
 | `tw` CLI | Pass. `--help` prints the command list. |
 | Auto-Type helper | Pass. Binary starts and stays resident. |

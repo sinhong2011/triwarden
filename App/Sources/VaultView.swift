@@ -2993,7 +2993,13 @@ struct ItemDetail: View {
                     ToolbarItem { actions }
                         .sharedBackgroundVisibility(.hidden)
                 } else {
-                    ToolbarItem(placement: .primaryAction) { actions }
+                    // macOS 15 has no `ToolbarSpacer(.flexible)`. `placement: .primaryAction` alone
+                    // leaves the group short of the trailing edge, so a spacer in the same group
+                    // pushes it there.
+                    ToolbarItemGroup(placement: .primaryAction) {
+                        Spacer()
+                        actions
+                    }
                 }
             }
         }
