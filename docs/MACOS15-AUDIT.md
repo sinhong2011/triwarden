@@ -14,18 +14,25 @@ Section 8 lists what the run proved and what it did not prove.
 
 ## Conclusion
 
-**Recommendation: staged go, with the runtime gate passed.**
+**Recommendation: no-go, unless macOS 15 becomes a product goal.**
 
-The code change is small. Two macOS 26 APIs remain, at three call sites. All have a working fallback.
-The fallback build ran on macOS 15.6.1 without a crash. It signed in to a live server, synced, and
-unlocked from the cache. Section 8 gives the evidence.
+The runtime evidence is strong. The fallback build ran on macOS 15.6.1 without a crash. It signed in
+to a live server, synced, and unlocked from the cache. Most features work. Section 8 gives the evidence.
 
-Do not change the public minimum yet. These steps remain:
+The cost is not in the code. It is in the visual work. The toolbar fallback compiles and runs, but its
+layout is wrong in three ways that no compiler or test reports. See section 1. Each macOS 26 API you
+use from now on needs a second design, and a person must look at it on an older Mac. That is a
+standing cost on a project whose target is macOS 26.
 
-1. Merge the code fallbacks and lower the deployment target. Keep the public minimum at 26.
-2. Add a `macos-15` CI job. This gives automatic Sequoia coverage on every change.
-3. Test the signed build surfaces that an unsigned build cannot cover. See section 8.
-4. After those pass, change the public minimum to 15.
+Decide by product need, not by technical feasibility:
+
+- **If macOS 15 users are a goal:** do the toolbar work first. Then add the `macos-15` CI job, then
+  test the signed surfaces. Keep the public minimum at 26 until all of that passes.
+- **If macOS 26 stays the target:** stop here. Keep this note as a record. Do not merge the fallback
+  branches, because they add a second layout path that nobody will maintain or test.
+
+The one thing not to do is merge the fallbacks and lower the deployment target while the layout is
+wrong. That ships a broken header to every Sequoia user.
 
 Section 7 gives the go/no-go criteria.
 
@@ -67,8 +74,27 @@ This note tested one fallback design:
   The other branch uses `ToolbarItem(placement: .primaryAction) { actions }`.
 
 This design compiles for Debug, Release, and universal Release. It is an experiment, not a finished design.
-The macOS 15 layout is not verified. Without `ToolbarSpacer`, the system places the actions at the trailing edge.
-Check the result on Sequoia before you merge.
+
+### The macOS 15 layout is wrong
+
+The fallback builds and runs, but its layout does not match macOS 26. A live window on the guest
+shows three differences:
+
+1. **No top gap.** The toolbar starts at the window's top edge. The controls sit at y=51 in a window
+   that starts at y=48. On macOS 26 the header floats below a gap.
+2. **The item actions do not reach the right edge.** The action group ends about 440 points before
+   the window's right edge. Without `ToolbarSpacer(.flexible)`, `placement: .primaryAction` does not
+   push the group to the trailing edge.
+3. **A tinted bar remains.** `.toolbarBackgroundVisibility(.hidden, for: .windowToolbar)` does not
+   clear the toolbar's own background on macOS 15. A dark rounded band runs across the top, over the
+   sidebar and the detail column. The sidebar is transparent; the detail column is not.
+
+**Correction.** An earlier draft of this note reported the toolbar layout as "Pass. Item actions sit
+at the trailing edge." That was wrong. The test used the app's `--snapshot` mode, which does not draw
+the real toolbar chrome. Measure the layout in a live window, not from a snapshot render.
+
+This changes the cost of the fallback. The code is small, but each fallback needs its own visual
+check on the older system. Compiling and passing tests is not sufficient.
 
 ### Correction to the earlier note
 
@@ -142,7 +168,7 @@ The "VM" column shows the result of the 2026-10-26 run in section 8.
 | Auto-Type helper | No | Pass | Grant Accessibility. Type into another app. |
 | SSH agent | No | Pass | Approval card. Signature by `ssh`. |
 | Updates | No | Partial | Sparkle loads. No update ran. |
-| Appearance | Partly | Pass | Light and dark. Narrow window. Toolbar layout from section 1. |
+| Appearance | Partly | Fail | Light and dark. Narrow window. The toolbar layout is wrong. See section 1. |
 | Upgrade path | No | Not run | Install a 26 build, then update to a 15 build. Confirm settings and vault survive. |
 
 "Blocked" means an unsigned build cannot test the surface. Section 8 gives the cause.
@@ -222,8 +248,9 @@ and writes `sparkle:minimumSystemVersion` into the appcast. A correct build prod
 
 ## 6. Risks
 
-1. **Toolbar layout on Sequoia.** Confirmed correct. The snapshot render shows the item actions at the trailing
-   edge, in light and dark. See section 8.
+1. **Toolbar layout on Sequoia.** Broken. A live window shows no top gap, actions short of the right
+   edge, and a tinted bar across the top. The fallback needs real layout work, not only an
+   availability branch. See sections 1 and 8.
 2. **App icon at large sizes.** `AppIcon.icns` has four representations: 16x16, 16@2x, 128x128, and 128@2x.
    It has no 32, 256, 512, or 1024 representation. This is not a defect on macOS 15.
    A check on the Sequoia guest asked `NSWorkspace` for the app icon. It returned a 2048-pixel
@@ -242,18 +269,19 @@ and writes `sparkle:minimumSystemVersion` into the appcast. A correct build prod
 
 ## 7. Recommendation and go/no-go criteria
 
-**Staged go.** Do not ship Sequoia support in one step.
+**No-go, unless macOS 15 becomes a product goal.** The steps below apply only if it does.
 
-### Stage 1: code and CI, no public claim
+### Stage 1: fix the layout, then code and CI
 
-Do these together:
-
-1. Add the availability branches from section 1. Check the layout on macOS 26 did not change.
+1. **Fix the toolbar on macOS 15 first.** Close the top gap, push the item actions to the right edge,
+   and clear the tinted bar. Section 1 lists the three defects. Do not continue until a live window
+   on Sequoia matches macOS 26.
 2. Lower `project.yml` and `Packages/VaultCore/Package.swift` to 15.
 3. Add the `macos-15` CI job from section 4.
 4. Keep README, the site, and the cask at macOS 26.
 
-**Go to stage 2 when:** the `macos-15` job passes on `main` for three consecutive runs.
+**Go to stage 2 when:** the layout matches on a live Sequoia window, and the `macos-15` job passes on
+`main` for three consecutive runs.
 
 ### Stage 2: signed build checks
 
@@ -268,9 +296,9 @@ Build, sign, and notarize a release candidate. Test the surfaces that an unsigne
 **Go to stage 3 when** these pass with no crash.
 
 The VM run already passed these: launch, no crash, window and menu bar item, offline self-test,
-light and dark render, toolbar layout, Sparkle load, and the account lifecycle against a live server.
+light and dark render, Sparkle load, and the account lifecycle against a live server.
 Sign in, sync, unlock from cache, item work, organizations, passkeys, the SSH agent, the `tw` CLI,
-browser fill, and two accounts all work on macOS 15. See section 8.
+browser fill, and two accounts all work on macOS 15. The toolbar layout does not. See section 8.
 
 ### Stage 3: public claim
 
@@ -306,7 +334,7 @@ Date: 2026-10-26. Guest: macOS 15.6.1 (24G90), arm64, UTM.
 | Offline compatibility self-test | Pass. 24 checks, 0 failures. |
 | UI render, light | Pass. 27 screens render. |
 | UI render, dark | Pass. 25 screens render. |
-| Toolbar fallback layout | Pass. Item actions sit at the trailing edge. |
+| Toolbar fallback layout | Fail. No top gap, actions short of the right edge, a tinted bar remains. |
 | App icon | Pass. `NSWorkspace` returns a 2048 px representation and renders at 1024x1024. |
 | `tw` CLI | Pass. `--help` prints the command list. |
 | Auto-Type helper | Pass. Binary starts and stays resident. |
@@ -334,14 +362,15 @@ The snapshot images show the full vault window: sidebar, item list, item detail,
 watchtower row, attachments, and the toolbar.
 
 The same `--snapshot` run on the host gave a reference image. The host runs macOS 27.0.1, so this is not a
-clean macOS 26 against macOS 15 pair. Both images put the toolbar actions at the trailing edge, in the same
-order. The section order and the spacing match. The images are not byte-identical for two reasons that do
-not come from the deployment target:
+clean macOS 26 against macOS 15 pair. The section order and the spacing match. The images are not
+byte-identical for two reasons that do not come from the deployment target:
 
 - The host render shows cached site icons. The guest render shows letter placeholders.
 - The host image is 28 pixels taller. The window frame measurement differs.
 
-Treat the toolbar placement as confirmed. Do not use the images as a pixel comparison.
+A snapshot render is not a layout test. It draws the SwiftUI views, not the window's toolbar chrome.
+Use a live window and measure the controls. The live window showed three layout defects that the
+snapshot render did not. See section 1.
 
 ### What did not pass, and why
 
