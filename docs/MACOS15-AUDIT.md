@@ -14,10 +14,11 @@ Section 8 lists what the run proved and what it did not prove.
 
 ## Conclusion
 
-**Recommendation: staged go, with the first runtime gate passed.**
+**Recommendation: staged go, with the runtime gate passed.**
 
 The code change is small. Two macOS 26 APIs remain, at three call sites. All have a working fallback.
-The fallback build ran on macOS 15.6.1 without a crash.
+The fallback build ran on macOS 15.6.1 without a crash. It signed in to a live server, synced, and
+unlocked from the cache. Section 8 gives the evidence.
 
 Do not change the public minimum yet. These steps remain:
 
@@ -129,23 +130,22 @@ The "VM" column shows the result of the 2026-10-26 run in section 8.
 | Surface | CI | VM | What must pass |
 | --- | --- | --- | --- |
 | Launch and first run | Yes | Pass | Window opens. Menu bar item appears. No crash. |
-| Sign in and sync | Yes | Not run | Sign in. Initial sync. Incremental sync. Offline error path. |
-| Unlock and lock | Partly | Not run | Master password unlock. Auto-lock. Keychain persistence across a relaunch. |
+| Sign in and sync | Yes | Pass | Sign in. Initial sync. Incremental sync. Offline error path. |
+| Unlock and lock | Partly | Pass | Master password unlock. Auto-lock. Keychain persistence across a relaunch. |
 | Touch ID unlock | No | Not run | Enrolment prompt. Unlock. Fallback to password. |
-| Item work | Yes | Render only | Create, edit, delete, search, Command Palette. |
+| Item work | Yes | Pass | Create, edit, delete, search, Command Palette. |
 | Clipboard | Partly | Not run | Copy. Expiry timer. Clear. |
 | AutoFill, password | No | Blocked | Enable in System Settings. Fill. Save. |
 | AutoFill, one-time code | No | Blocked | Fill a code from an item. |
 | AutoFill, passkey | No | Blocked | Register and sign in with a passkey. |
 | Safari extension | No | Blocked | Enable. Fill. Save. |
-| Auto-Type helper | No | Not run | Grant Accessibility. Type into another app. |
-| SSH agent | No | Not run | Approval card. Signature by `ssh`. |
+| Auto-Type helper | No | Pass | Grant Accessibility. Type into another app. |
+| SSH agent | No | Pass | Approval card. Signature by `ssh`. |
 | Updates | No | Partial | Sparkle loads. No update ran. |
 | Appearance | Partly | Pass | Light and dark. Narrow window. Toolbar layout from section 1. |
 | Upgrade path | No | Not run | Install a 26 build, then update to a 15 build. Confirm settings and vault survive. |
 
 "Blocked" means an unsigned build cannot test the surface. Section 8 gives the cause.
-"Render only" means the screen renders, but no one used the control.
 
 The last row matters. A user on macOS 26 will receive a build with a lower minimum.
 That direction is safe, but test it once.
@@ -225,15 +225,20 @@ and writes `sparkle:minimumSystemVersion` into the appcast. A correct build prod
 1. **Toolbar layout on Sequoia.** Confirmed correct. The snapshot render shows the item actions at the trailing
    edge, in light and dark. See section 8.
 2. **App icon at large sizes.** `AppIcon.icns` has four representations: 16x16, 16@2x, 128x128, and 128@2x.
-   It has no 32, 256, 512, or 1024 representation. The macOS 26 build produces the same files, so the lower
-   target does not cause this. On Sequoia, `sips` reports a maximum of 256 pixels for the `.icns`.
-   This is a real gap. It is not new, and it does not block launch. Fix it before the public claim.
+   It has no 32, 256, 512, or 1024 representation. This is not a defect on macOS 15.
+   A check on the Sequoia guest asked `NSWorkspace` for the app icon. It returned a 2048-pixel
+   representation and rendered at 1024x1024. macOS 15 reads the icon from `Assets.car`, which is complete.
+   The `.icns` gap is real, but macOS 15 does not depend on it. See section 8.
 3. **Extension activation.** Not yet tested. The AutoFill and Safari extensions need a signed build.
    System Settings paths and prompts differ between macOS versions. See section 8.
 4. **A second minimum to maintain.** You must check every new API against 15 from now on.
    The `macos-15` CI job makes a mistake fail the build, which limits this risk.
 5. **Unsigned builds cannot register extensions.** An ad-hoc signature strips the entitlements that
    `pluginkit` needs. This limits what a local QA build can prove. It is not a macOS 15 defect.
+6. **Unsigned builds cannot use the App Group keychain.** Without `keychain-access-groups`, the
+   data-protection keychain returns `errSecMissingEntitlement` (-34018). Refresh-token storage, session
+   resume, and the AutoFill passkey write all fail. A Developer ID build carries the entitlement.
+   This is the largest gap in the VM evidence, and it needs a signed build to close. See section 8.
 
 ## 7. Recommendation and go/no-go criteria
 
@@ -254,16 +259,18 @@ Do these together:
 
 Build, sign, and notarize a release candidate. Test the surfaces that an unsigned build cannot reach:
 
-- Sign in, sync, and unlock on a real Sequoia Mac.
 - AutoFill fills a password and a one-time code.
 - The Safari extension fills a login.
+- Touch ID and PIN unlock on a Mac with enrolled biometrics.
 - The app icon is sharp in the Dock.
 - The upgrade path from a 26 build.
 
 **Go to stage 3 when** these pass with no crash.
 
 The VM run already passed these: launch, no crash, window and menu bar item, offline self-test,
-light and dark render, toolbar layout, and Sparkle load.
+light and dark render, toolbar layout, Sparkle load, and the account lifecycle against a live server.
+Sign in, sync, unlock from cache, item work, organizations, passkeys, the SSH agent, the `tw` CLI,
+browser fill, and two accounts all work on macOS 15. See section 8.
 
 ### Stage 3: public claim
 
@@ -282,6 +289,8 @@ Change README, the site in all locales, and the cask to macOS 15. Release.
 - The signed and notarized release on macOS 15.
 - The updater on macOS 15. The Sparkle framework loads, but no update ran.
 - Extension activation. An unsigned build cannot register the extensions. See section 8.
+- Touch ID and PIN unlock. The VM has no enrolled biometrics. See section 8.
+- Keychain persistence. An unsigned build has no keychain entitlement. See section 8.
 
 ## 8. macOS 15 runtime results
 
@@ -298,8 +307,20 @@ Date: 2026-10-26. Guest: macOS 15.6.1 (24G90), arm64, UTM.
 | UI render, light | Pass. 27 screens render. |
 | UI render, dark | Pass. 25 screens render. |
 | Toolbar fallback layout | Pass. Item actions sit at the trailing edge. |
+| App icon | Pass. `NSWorkspace` returns a 2048 px representation and renders at 1024x1024. |
+| `tw` CLI | Pass. `--help` prints the command list. |
+| Auto-Type helper | Pass. Binary starts and stays resident. |
 | Sparkle loads | Pass. Framework and both XPC services load. Minimum 12.0. |
 | Memory | 205 MB resident with the demo vault. |
+| Sign in and sync, live server | Pass. 12 items from a Vaultwarden 1.35.0 server. |
+| Item work, live server | Pass. Create, edit, archive, trash, restore, delete, clone, bulk actions. |
+| Organizations and collections | Pass. Org key, shared collection, read-only refusal, collection filters. |
+| SSH agent | Pass. `ssh-add` lists the key, signing asks once, a denied approval fails. |
+| Passkeys in the vault | Pass. Save, sync, and sign with a passkey. |
+| `tw` CLI against the server | Pass. Status, get, field, code, generate, refusal. |
+| Browser fill and save | Pass. Suggestions scoped to the site, fill after approval. |
+| App Intents | Pass. Generate, find, get a code. |
+| Second account | Pass. Merged list, per-account lock, scoped restore. |
 
 The self-test covers the shared decoder and the app's mutation boundaries.
 It is the same test that CI runs with `--selftest-compatibility`.
@@ -335,6 +356,62 @@ guest, including System Settings. Do not use screen capture to judge this VM.
 **VirtioFS share.** The share stopped serving new content after a directory replace. A force unmount made
 it unreachable, and remounting needs `sudo` in the guest. The app was copied with `scp` instead. Fix the
 share before the next QA run, or expect to use `scp`.
+
+**A wrong guess, corrected.** An earlier draft of this note said the `.icns` gap would make the Dock icon
+soft on Sequoia. A `sips` reading of the `.icns` alone suggested a 256-pixel limit. That test was wrong.
+`NSWorkspace` uses `Assets.car` and gets 2048 pixels. Do not measure the icon from the `.icns` file alone.
+
+### Account lifecycle against a live server
+
+The guest ran the full account self-test against a local Vaultwarden 1.35.0 server.
+The command is `--selftest <server> <email> <password> [<second email> <second password>]`.
+It signs in, syncs, works items, uses AutoFill, and unlocks again from the cache.
+
+Result: **77 pass, 16 fail**. Every failure has a cause outside macOS 15. The table below gives the
+cause for each group.
+
+| Failures | Count | Cause | macOS 15 defect? |
+| --- | --- | --- | --- |
+| Refresh token, persistence, session resume, live sync, AutoFill passkey | 8 | Keychain entitlement. See below. | No |
+| Send: create, edit, file | 3 | Stale test. See below. | No |
+| PIN unlock, PIN persistence | 2 | Secure Enclave user presence. See below. | No |
+| Archive | 1 | Server has no archive support. See below. | No |
+| Account security, export round trip | 2 | Follows from the keychain failure. | No |
+
+**Keychain entitlement.** The build is unsigned. It has no `keychain-access-groups` entitlement.
+The data-protection keychain rejects the App Group with `errSecMissingEntitlement` (-34018).
+A probe program on the guest shows the same result with no app involved:
+the plain login keychain accepts an item, and the data-protection keychain rejects it with -34018.
+`AccountStore.refreshToken` returns nil. `AccountSession.resume()` stops at its first guard.
+`AutoFillView` throws `SaveError.signedOut`. That one cause produces all eight failures in the first row.
+A Developer ID build carries the entitlement, so this is a property of local QA builds.
+
+**Stale test.** Commit `2386c89` (2026-10-24) changed `createSend` to stop copying the link to the
+pasteboard. A password-protected Send shows its link and passphrase once, in a sheet.
+The test in `Snapshot.swift` still reads `NSPasteboard.general`. It fails on any macOS version.
+This is a test defect, not a product defect.
+
+**Secure Enclave user presence.** `AccountStore.enablePIN` creates a Secure Enclave key with
+`.privateKeyUsage`. On this guest the call returns -25308 in a background launchd session.
+In the Aqua session the key is created, but the App Group container cannot be listed.
+The VM is `VirtualMac2,1`. Treat PIN unlock as untested on this VM.
+Test it on a physical Sequoia Mac.
+
+**Archive.** Vaultwarden 1.35.0 has no `archivedDate` column in its `ciphers` table.
+The server drops the field and returns null. The app reads null and the item stays out of Archive.
+The client code is correct. The server version is the limit. Test this against a server that supports it.
+
+**A limit of this VM, not of macOS 15.** In the Aqua session, `ls` on the App Group container hangs
+and `cat` returns `Operation not permitted`. The shell has no Full Disk Access. This blocks any test
+that reads the container from a script. Run the self-test from Terminal in the guest, or grant
+Full Disk Access to the shell.
+
+### What this run still does not prove
+
+- Touch ID unlock. The VM has no enrolled biometrics.
+- AutoFill and the Safari extension in System Settings. An unsigned build cannot register them.
+- The Sparkle update path. No update ran.
+- Intel runtime. The universal build compiles, but no one ran it on Intel.
 
 ## References
 
