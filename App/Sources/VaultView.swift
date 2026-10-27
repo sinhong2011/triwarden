@@ -311,11 +311,17 @@ struct VaultView: View {
                                     depth: depth, open: vaultOpen) { depth = max(depth - 1, 0) }
                     }
                     .sharedBackgroundVisibility(.hidden)
-                } else {
-                    ToolbarItem(placement: .navigation) {
-                        VaultHeader(compact: compact, narrow: narrowHeader, phoneDetail: phoneDetail,
-                                    depth: depth, open: vaultOpen) { depth = max(depth - 1, 0) }
-                    }
+                }
+            }
+            .overlay(alignment: .topLeading) {
+                // macOS 15 draws a toolbar flush with the window's top edge, with no floating gap. Here the header
+                // is laid over the content instead, so it keeps the gap macOS 26 gives it.
+                if #unavailable(macOS 26) {
+                    VaultHeader(compact: compact, narrow: narrowHeader, phoneDetail: phoneDetail,
+                                depth: depth, open: vaultOpen) { depth = max(depth - 1, 0) }
+                        .padding(.leading, 8)
+                        .padding(.top, 8)
+                        .ignoresSafeArea(.container, edges: .top)
                 }
             }
             .background {
