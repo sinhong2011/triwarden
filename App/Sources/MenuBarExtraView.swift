@@ -631,32 +631,15 @@ private struct LockedCard: View {
                 VStack(spacing: 10) {
                     // Whose vault, centred: no avatar (the panel is one account's). The lock and email sit in one
                     // badge; hovering it swaps the email for the server, so the panel stays one line tall.
-                    // Touch ID stays a quiet glyph at the trailing edge, with room kept for it.
-                    ZStack(alignment: .trailing) {
-                        VStack(spacing: 6) {
-                            Text("Vault locked").font(.system(size: 13, weight: .semibold))
-                            identityBadge(account)
-                        }
-                        .padding(.horizontal, model.touchIDEnabled ? 34 : 0)
-                        .frame(maxWidth: .infinity)
-                        if model.touchIDEnabled {
-                            Button { Task { await model.unlockWithTouchID() } } label: {
-                                Image(systemName: "touchid").font(.system(size: 15))
-                                    .foregroundStyle(.secondary)
-                                    .frame(width: 28, height: 28)
-                                    .background(Color.primary.opacity(0.07), in: .circle)
-                                    .contentShape(.circle)
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(model.isBusy)
-                            .help(Text("Unlock with Touch ID"))
-                            .accessibilityLabel(Text("Unlock with Touch ID"))
-                        }
+                    VStack(spacing: 6) {
+                        Text("Vault locked").font(.system(size: 13, weight: .semibold))
+                        identityBadge(account)
                     }
+                    .frame(maxWidth: .infinity)
 
                     UnlockCapsuleField(pinMode: pinMode, password: $password, focused: $focused.wrappedBinding, submit: submit)
 
-                    // The status line is centred under the field; the PIN switch stays at the trailing edge.
+                    // Under the field: what's happening, centred. The PIN switch keeps the trailing edge.
                     ZStack {
                         Group {
                             if let message = model.errorMessage {
@@ -666,24 +649,26 @@ private struct LockedCard: View {
                                         : Color(red: 0.8, green: 0.2, blue: 0.2))
                             } else if model.isBusy {
                                 Text("Unlocking…").foregroundStyle(.secondary)
+                            } else if password.isEmpty, model.touchIDEnabled {
+                                // Nothing typed: just the quiet fingerprint, centred under the field.
+                                touchIDButton
                             } else {
-                                UnlockReturnHint(hasInput: !password.isEmpty)
+                                // The return hint and the fingerprint as one centred group.
+                                HStack(spacing: 8) {
+                                    UnlockReturnHint(hasInput: !password.isEmpty)
+                                    if model.touchIDEnabled { touchIDButton }
+                                }
                             }
                         }
                         .frame(maxWidth: .infinity)
                         if hasPIN {
                             HStack {
                                 Spacer(minLength: 0)
-                                Button(pinMode ? "Use master password" : "Use PIN") {
-                                    usePassword.toggle()
-                                    password = ""
-                                    model.errorMessage = nil
-                                    focused = true
-                                }
-                                .buttonStyle(.plain).foregroundStyle(.secondary)
+                                pinSwitch
                             }
                         }
                     }
+                    .frame(minHeight: 24)
                     .font(.system(size: 11, weight: .medium))
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
@@ -745,6 +730,33 @@ private struct LockedCard: View {
         .help(Text(verbatim: "\(account.email) · \(account.serverSummary)"))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(verbatim: "\(account.email), \(account.serverSummary)"))
+    }
+
+    /// The quiet fingerprint under the field: names itself on hover, and stays out of the way of an error or a
+    /// running unlock (the status line has that spot then).
+    private var touchIDButton: some View {
+        Button { Task { await model.unlockWithTouchID() } } label: {
+            Image(systemName: "touchid").font(.system(size: 15))
+                .foregroundStyle(.secondary)
+                .frame(width: 28, height: 28)
+                .background(Color.primary.opacity(0.07), in: .circle)
+                .contentShape(.circle)
+        }
+        .buttonStyle(.plain)
+        .disabled(model.isBusy)
+        .help(Text("Unlock with Touch ID"))
+        .accessibilityLabel(Text("Unlock with Touch ID"))
+        .transition(.opacity.combined(with: .scale(scale: 0.9)))
+    }
+
+    private var pinSwitch: some View {
+        Button(pinMode ? "Use master password" : "Use PIN") {
+            usePassword.toggle()
+            password = ""
+            model.errorMessage = nil
+            focused = true
+        }
+        .buttonStyle(.plain).foregroundStyle(.secondary)
     }
 
     private func submit() {
