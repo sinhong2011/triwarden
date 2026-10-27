@@ -204,6 +204,17 @@ jobs:
       - name: Install XcodeGen
         if: needs.changes.outputs.code == 'true'
         run: brew install xcodegen
+      # The Safari appex builds the web extension with WXT in an Xcode build phase.
+      - uses: pnpm/action-setup@v4
+        if: needs.changes.outputs.code == 'true'
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        if: needs.changes.outputs.code == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: BrowserExtension/WebExtension/pnpm-lock.yaml
       - name: Generate project
         if: needs.changes.outputs.code == 'true'
         run: xcodegen generate
@@ -281,11 +292,14 @@ jobs:
       - name: Verify install-chrome host path
         if: needs.changes.outputs.code == 'true'
         run: python3 scripts/test-install-chrome-path.py
-      - name: JavaScript syntax
+      - name: Web extension (type-check, Chrome and Firefox builds)
         if: needs.changes.outputs.code == 'true'
+        working-directory: BrowserExtension/WebExtension
         run: |
-          node --check BrowserExtension/WebExtension/content.js
-          node --check BrowserExtension/WebExtension/background.js
+          pnpm install --frozen-lockfile
+          pnpm compile
+          pnpm build
+          pnpm build:firefox
       - name: Upload test evidence
         if: always() && needs.changes.outputs.code == 'true'
         uses: actions/upload-artifact@v4

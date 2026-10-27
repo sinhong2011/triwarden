@@ -1,0 +1,83 @@
+:host {
+  all: initial;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* The key sits inside the field, so it stays neutral: brand blue is only ever a fill, never an icon or text. */
+.key {
+  position: fixed;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  color: GrayText;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0.85;
+  transition: background-color 120ms ease, opacity 120ms ease;
+}
+.key:hover,
+.key:focus-visible {
+  background: color-mix(in srgb, CanvasText 12%, transparent);
+  color: CanvasText;
+  opacity: 1;
+  outline: none;
+}
+
+.menu {
+  position: fixed;
+  min-width: 240px;
+  max-width: 340px;
+  padding: 6px;
+  border-radius: 12px;
+  font: 13px -apple-system, system-ui, sans-serif;
+  background: Canvas;
+  color: CanvasText;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18), 0 0 0 0.5px rgba(0, 0, 0, 0.15);
+  animation: pop 120ms ease-out;
+  transform-origin: top left;
+}
+@keyframes pop {
+  from { opacity: 0; transform: scale(0.97) translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu { animation: none; }
+  .key { transition: none; }
+}
+
+.head {
+  padding: 4px 10px 6px;
+  font-weight: 600;
+  opacity: 0.6;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.note {
+  padding: 8px 10px;
+  opacity: 0.75;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.row:hover,
+.row:focus {
+  background: #80c5ef;
+  color: #0b2a40;
+  outline: none;
+}
+.row small {
+  opacity: 0.7;
+}
