@@ -287,9 +287,9 @@ jobs:
       - name: Verify local command failure reporting
         if: needs.changes.outputs.code == 'true'
         run: python3 scripts/test-make-exit-codes.py
-      # tw is built as a dependency of the app; install-chrome must name the real binary when
+      # tw is built as a dependency of the app; install-chrome and install-firefox must name the real binary when
       # started through PATH, not the working directory plus "tw".
-      - name: Verify install-chrome host path
+      - name: Verify install-chrome and install-firefox host manifests
         if: needs.changes.outputs.code == 'true'
         run: python3 scripts/test-install-chrome-path.py
       - name: Web extension (type-check, Chrome and Firefox builds)

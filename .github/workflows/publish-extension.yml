@@ -1,0 +1,89 @@
+name: Publish browser extension
+
+# Submits the Chrome and Firefox builds of BrowserExtension/WebExtension to the Chrome Web Store and
+# Firefox Add-ons (AMO) for review. Run by hand: Actions › Publish browser extension › Run workflow.
+#
+# Not tied to app releases: the extension has its own version (BrowserExtension/WebExtension/package.json) and
+# each store reviews every upload, so publish only when the extension itself changed. A release-please release
+# cannot trigger this anyway, because events made with GITHUB_TOKEN do not start other workflows.
+# Safari needs nothing here: it ships inside Triwarden.app.
+#
+# Secrets (repo or environment "extension-store"):
+#   Chrome  CHROME_EXTENSION_ID, CHROME_PUBLISHER_ID, CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL, CHROME_SERVICE_ACCOUNT_PRIVATE_KEY
+#   Firefox FIREFOX_EXTENSION_ID, FIREFOX_JWT_ISSUER, FIREFOX_JWT_SECRET
+# FIREFOX_EXTENSION_ID is the gecko id in wxt.config.ts.
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Check the store credentials and the zips, but upload nothing
+        type: boolean
+        default: true
+      chrome:
+        description: Chrome Web Store
+        type: boolean
+        default: true
+      firefox:
+        description: Firefox Add-ons
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-extension
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build and submit
+    runs-on: ubuntu-latest
+    environment: extension-store # secrets live here, so only this job can read them
+    defaults:
+      run:
+        working-directory: BrowserExtension/WebExtension
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: BrowserExtension/WebExtension/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm compile
+
+      - name: Build the zips
+        run: |
+          pnpm zip
+          pnpm zip:firefox
+          ls -l .output/*.zip
+
+      - name: Submit
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          CHROME: ${{ inputs.chrome }}
+          FIREFOX: ${{ inputs.firefox }}
+          CHROME_API_VERSION: v2
+          CHROME_EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CHROME_PUBLISHER_ID: ${{ secrets.CHROME_PUBLISHER_ID }}
+          CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL: ${{ secrets.CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL }}
+          CHROME_SERVICE_ACCOUNT_PRIVATE_KEY: ${{ secrets.CHROME_SERVICE_ACCOUNT_PRIVATE_KEY }}
+          FIREFOX_EXTENSION_ID: ${{ secrets.FIREFOX_EXTENSION_ID }}
+          FIREFOX_JWT_ISSUER: ${{ secrets.FIREFOX_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.FIREFOX_JWT_SECRET }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          args=()
+          [[ $DRY_RUN == true ]] && args+=(--dry-run)
+          [[ $CHROME == true ]] && args+=(--chrome-zip ".output/triwarden-extension-${version}-chrome.zip")
+          if [[ $FIREFOX == true ]]; then
+            args+=(--firefox-zip ".output/triwarden-extension-${version}-firefox.zip"
+                   --firefox-sources-zip ".output/triwarden-extension-${version}-sources.zip")
+          fi
+          [[ ${#args[@]} -gt 0 ]] || { echo "Pick at least one store."; exit 1; }
+          pnpm exec wxt submit "${args[@]}"
