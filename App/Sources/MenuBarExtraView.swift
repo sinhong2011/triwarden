@@ -34,7 +34,8 @@ struct MenuBarContent: View {
             } else if model.isSignedOut {
                 SignedOutCard()
             } else {
-                LockedCard(account: model.focusedAccountID.flatMap { id in model.accounts.first { $0.id == id } })
+                // Locked: unlock in the panel (account + password / PIN / Touch ID). Don't force the main window.
+                LockedCard()
             }
             footer
         }
@@ -566,28 +567,128 @@ private struct SSHRow: View {
     }
 }
 
+/// Vault locked: show whose vault this is, and unlock here (master password, PIN or Touch ID).
+/// Stays in the menu bar on success — the main window is only a secondary path (footer Open Triwarden).
 private struct LockedCard: View {
     @Environment(AppModel.self) private var model
-    /// The account in focus, when it's the one that's locked (others may be open).
-    var account: SavedAccount?
+    @Environment(\.colorScheme) private var scheme
+    @State private var password = ""
+    /// With a PIN set, the field asks for it; this switches to the master password instead.
+    @State private var usePassword = false
+    @FocusState private var focused: Bool
+
+    /// Account unlock should hit: a focused locked account, else AppModel.unlockTarget (covers single-account
+    /// and All accounts, where focusedAccountID is nil).
+    private var account: SavedAccount? {
+        if let id = model.focusedAccountID,
+           let focused = model.accounts.first(where: { $0.id == id }),
+           !model.isUnlocked(id) {
+            return focused
+        }
+        return model.unlockTarget
+    }
+
+    private var hasPIN: Bool { account.map { model.isPINEnabled($0.id) } ?? false }
+    private var pinMode: Bool { hasPIN && !usePassword }
 
     var body: some View {
-        PanelCard {
-            VStack(spacing: 10) {
-                if let account {
-                    AccountAvatar(account: account, size: 44, showsLock: true)
-                    Text(verbatim: account.email).font(.system(size: 14, weight: .semibold)).lineLimit(1).truncationMode(.middle)
-                } else {
+        PanelCard(padding: 12) {
+            if let account {
+                VStack(spacing: 10) {
+                    HStack(spacing: 10) {
+                        AccountAvatar(account: account, size: 36, showsLock: true)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Vault locked").font(.system(size: 13, weight: .semibold))
+                            Text(verbatim: "\(account.email) · \(account.serverSummary)")
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
+                        }
+                        Spacer(minLength: 0)
+                        if model.touchIDEnabled {
+                            Button { Task { await model.unlockWithTouchID() } } label: {
+                                Label("Touch ID", systemImage: "touchid")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .padding(.horizontal, 10).frame(height: 28)
+                                    .background(Color.primary.opacity(0.07), in: .capsule)
+                                    .contentShape(.capsule)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(model.isBusy)
+                            .help(Text("Unlock with Touch ID"))
+                        }
+                    }
+
+                    UnlockCapsuleField(pinMode: pinMode, password: $password, focused: $focused.wrappedBinding, submit: submit)
+
+                    HStack(spacing: 8) {
+                        if let message = model.errorMessage {
+                            Text(verbatim: message)
+                                .foregroundStyle(scheme == .dark
+                                    ? Color(red: 1, green: 0.55, blue: 0.55)
+                                    : Color(red: 0.8, green: 0.2, blue: 0.2))
+                        } else if model.isBusy {
+                            Text("Unlocking…").foregroundStyle(.secondary)
+                        } else {
+                            UnlockReturnHint(hasInput: !password.isEmpty)
+                        }
+                        Spacer(minLength: 0)
+                        if hasPIN {
+                            Button(pinMode ? "Use master password" : "Use PIN") {
+                                usePassword.toggle()
+                                password = ""
+                                model.errorMessage = nil
+                                focused = true
+                            }
+                            .buttonStyle(.plain).foregroundStyle(.secondary)
+                        }
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                }
+                .onAppear {
+                    // Keep AppModel's unlock target on the account this card shows (password / PIN / Touch ID share it).
+                    if model.unlockTargetID != account.id { model.unlockTargetID = account.id }
+                    focused = true
+                }
+                .onChange(of: account.id) { _, id in
+                    model.unlockTargetID = id
+                    password = ""
+                    usePassword = false
+                    model.errorMessage = nil
+                    focused = true
+                }
+                .onChange(of: model.errorMessage) { _, message in
+                    guard message != nil else { return }
+                    password = ""
+                    Task { @MainActor in focused = true }
+                }
+                .onChange(of: password) { _, typed in
+                    if !typed.isEmpty, model.errorMessage != nil { model.errorMessage = nil }
+                }
+            } else {
+                // Signed-in state without a resolvable account shouldn't happen; keep a quiet fallback.
+                VStack(spacing: 10) {
                     Image(systemName: "lock.fill").font(.system(size: 20)).foregroundStyle(.secondary)
                         .frame(width: 44, height: 44)
                         .background(Color.primary.opacity(0.07), in: .rect(cornerRadius: 12, style: .continuous))
                     Text("Vault locked").font(.system(size: 14, weight: .semibold))
+                    Button("Open Triwarden") { model.bringToFront() }
+                        .buttonStyle(.appPrimarySmall)
                 }
-                Button("Unlock…") { model.bringToFront() }
-                    .buttonStyle(.appPrimarySmall)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
+        }
+    }
+
+    private func submit() {
+        guard let account, !password.isEmpty, !model.isBusy else { return }
+        let typed = password
+        let id = account.id
+        Task {
+            if pinMode { await model.unlockWithPIN(typed, accountId: id) }
+            else { await model.unlock(password: typed, accountId: id) }
         }
     }
 }
