@@ -450,6 +450,19 @@ final class AppModel {
     }
 
     var isUnlocked: Bool { phase.id == Phase.vault.id && (!sessions.isEmpty || previewUnlocked) }
+    /// A decrypted vault the menu bar can search and copy from: the open one, or one left open while another account
+    /// is being added (that puts the window on the login screen, but the other vault stays open behind it).
+    var hasOpenVault: Bool { !sessions.isEmpty || previewUnlocked }
+    /// Nothing signed in on this Mac: the main window is on the login screen (or part-way through signing in, on
+    /// two-step, device verification or SSO's master password), and no vault is open. There is nothing to unlock, so
+    /// the menu bar offers signing in rather than a lock.
+    var isSignedOut: Bool {
+        guard !hasOpenVault else { return false }
+        return switch phase {
+        case .login, .twoFactor, .deviceVerification, .ssoPassword: true
+        case .locked, .vault: false
+        }
+    }
     /// Snapshots and `--demo`: treat demo items as an unlocked vault.
     var previewUnlocked = false
 
@@ -538,7 +551,7 @@ final class AppModel {
     }
 
     /// Logins with any locally-detectable issue (sidebar badge).
-    var watchtowerIssueCount: Int { WatchtowerReport(items: items, breaches: breachCounts).problemCount }
+    var watchtowerIssueCount: Int { WatchtowerReport.countProblems(in: items, breaches: breachCounts) }
 
     #if DEBUG
     /// Snapshot/demo only: pretend these accounts are saved.
@@ -724,8 +737,12 @@ final class AppModel {
     var sidebarSearchScope: SidebarScope?
     var folderContextAccountIDs: [String]?
     var sendContextAccountIDs: [String]?
+    /// Asks the Sends page to focus its search field (sidebar's "Search Sends").
+    var sendSearchRequest = UUID()
     var newSendKind = SendComposer.Kind.text
     var newSendNonce = UUID()
+    /// "Share by Link…": the composer opens already filled in from an item; cleared when it dismisses.
+    var newSendPrefill: SendPrefill?
     var expiredSendsOnly = false
     var generatorRequest = UUID()
     var watchtowerIssueFilter: WatchtowerReport.Issue?
@@ -888,6 +905,14 @@ final class AppModel {
     /// The bell should open. A system notification tap sets this; the header button consumes it.
     var presentInbox = false
 
+    /// Bell rows swiped away this session. Only the bell hides them: the SSH access log keeps every record, and a
+    /// Watchtower card or a Send still shows wherever it lives. Cleared on lock, so a dismissal lasts one unlock.
+    var hiddenInbox: Set<String> = []
+
+    func hideInbox(_ id: String) {
+        hiddenInbox.insert(id)
+    }
+
     /// Brings the vault forward and opens the bell.
     func revealInbox() {
         bringToFront()
@@ -985,6 +1010,7 @@ final class AppModel {
         guard let id = accountId ?? unlockTarget?.id else { return }
         if let session = session(for: id) { session.close() }
         sessions.removeAll { $0.id == id }
+        ItemSort.forgetLetters()
         AccountStore.erase(id)
         if accountFilter == id { accountFilter = nil }
         unlockTargetID = nil
@@ -1627,6 +1653,8 @@ final class AppModel {
     /// Locks one account; the others stay open.
     func lock(_ accountId: String) {
         secrets?.reset()
+        IconStore.shared.clearMemory()
+        ItemSort.forgetLetters()
         session(for: accountId)?.close()
         sessions.removeAll { $0.id == accountId }
         if accountFilter == accountId { accountFilter = nil }
@@ -1901,6 +1929,32 @@ final class AppModel {
 
     // MARK: Send
 
+    /// Opens the composer for a new Send. Every "New Send" goes through here, and only "Share by Link…" passes a
+    /// `prefill`, so the previous item's fields and passphrase can never leak into the next blank Send.
+    func composeNewSend(kind: SendComposer.Kind = .text, accountIDs: [String]? = nil, prefill: SendPrefill? = nil) {
+        newSendPrefill = prefill
+        sendContextAccountIDs = accountIDs
+        newSendKind = kind
+        newSendNonce = UUID()
+        editingSend = nil
+        composingSend = true
+        expiredSendsOnly = false
+        requestedSection = .sends
+    }
+
+    /// Closes the composer and drops a "Share by Link…" prefill, so the item's secrets stop living in the model.
+    func closeSendComposer() {
+        composingSend = false
+        editingSend = nil
+        newSendPrefill = nil
+    }
+
+    /// Opens an existing Send in the composer (the same link). Drops any prefill, which belongs to a new Send.
+    func editSend(_ send: SendItem) {
+        newSendPrefill = nil
+        editingSend = send
+    }
+
     func updateSend(_ send: SendItem, draft: SendDraft, removePassword: Bool) async -> Bool {
         guard let session = session(for: send.accountId) else { return offline() }
         do {
@@ -1920,12 +1974,28 @@ final class AppModel {
         guard let session = accountId.flatMap({ session(for: $0) }) ?? sessions.first else { return offline() }
         do {
             let link = try await session.createSend(draft)
-            if let link { copyPlain(link.absoluteString) }
             selectedSendID = sends.first { $0.name == draft.name && link?.absoluteString.contains($0.accessId) == true }?.id
-            flash(String(localized: "Send created — link copied"))
+            // Nothing is copied here: a password-protected Send's passphrase can never be shown again (the server
+            // keeps a one-way hash), so both it and the link are shown once, in a sheet, for the sender to copy
+            // deliberately. Copying the link alone would leave a link nobody can open.
+            if let link {
+                createdSend = CreatedSend(link: link.absoluteString,
+                                          passphrase: draft.password?.isEmpty == false ? draft.password : nil,
+                                          name: draft.name)
+            }
             return true
         } catch { return failed(error) }
     }
+
+    /// What to show once after a Send is made: its link, and the passphrase if it has one. Held only until the
+    /// sender closes the sheet — never kept, so the passphrase dies with that window.
+    struct CreatedSend: Identifiable {
+        let id = UUID()
+        let link: String
+        let passphrase: String?
+        let name: String
+    }
+    var createdSend: CreatedSend?
 
     func deleteSend(_ send: SendItem) async {
         guard let session = session(for: send.accountId) else { _ = offline(); return }
@@ -2159,9 +2229,11 @@ final class AppModel {
 
     // MARK: Auto-lock
 
-    private var lastActivity = Date()
-    private var monitors: [Any] = []
-    private var autoLockTimer: Timer?
+    /// Written on every key press, click, scroll and mouse move; only the auto-lock timer reads it, so it stays out of
+    /// observation (and the event monitors and the timer with it).
+    @ObservationIgnored private var lastActivity = Date()
+    @ObservationIgnored private var monitors: [Any] = []
+    @ObservationIgnored private var autoLockTimer: Timer?
 
     func noteActivity() { lastActivity = .now }
 
@@ -2221,7 +2293,9 @@ final class AppModel {
         // Hold ⌥ to reveal masked fields (only ⌥, so ⌥-shortcuts don't flash secrets).
         if let m = NSEvent.addLocalMonitorForEvents(matching: .flagsChanged, handler: { [weak self] e in
             let flags = e.modifierFlags.intersection([.shift, .control, .option, .command])
-            self?.optionHeld = flags == .option
+            // Only a change: every Shift while typing comes through here, and the item's detail follows this.
+            let held = flags == .option
+            if self?.optionHeld != held { self?.optionHeld = held }
             return e
         }) { monitors.append(m) }
         let ws = NSWorkspace.shared.notificationCenter
@@ -2249,6 +2323,7 @@ final class AppModel {
     /// Locks every account. `animated` (a lock the user asked for): the keys go at once, but the vault's contents stay
     /// on screen a moment longer, so the door can close over them before they're cleared.
     func lock(animated: Bool = false) {
+        IconStore.shared.clearMemory()
         let transition = beginGateTransition()
         accountDoor = nil
         previewURL = nil
@@ -2259,6 +2334,7 @@ final class AppModel {
         sshAgent?.reset()
         cli?.reset()
         secrets?.reset()
+        hiddenInbox = []
         breachCounts = nil
         breachesCheckedAt = nil
         sessions.forEach { $0.close() }
@@ -2320,6 +2396,8 @@ final class AppModel {
     static let gateClose = 0.6
 
     private func clearVaultContents() {
+        IconStore.shared.clearMemory()
+        ItemSort.forgetLetters()
         selectedID = nil
         repromptPassed = [:]
         repromptRequest = nil
@@ -2329,6 +2407,10 @@ final class AppModel {
         selectedSendID = nil
         folders = []
         organizations = []
+        // The Send composer holds decrypted fields (a "Share by Link…" prefill) and the one-time passphrase of a
+        // Send just made; both must not outlive the lock.
+        closeSendComposer()
+        createdSend = nil
     }
 
     func cancelChallenge() {

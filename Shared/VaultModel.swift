@@ -65,6 +65,12 @@ struct VaultItem: Identifiable, Hashable {
         return []
     }
 
+    /// The item's website as a URL to open or copy, adding https:// to a bare host. Nil when it has none.
+    var websiteURL: URL? {
+        guard let address = uri ?? host, !address.isEmpty else { return nil }
+        return URL(string: address.contains("://") ? address : "https://" + address)
+    }
+
     /// Host of each website, for matching a page to this login.
     var hosts: [String] {
         var seen = Set<String>()
@@ -123,6 +129,15 @@ struct Grouping: Identifiable, Hashable {
     var accountId: String? = nil
     var canWrite = false
     var canManage = false
+}
+
+extension Array where Element == Grouping {
+    /// The folder a new item goes in when there is no real choice: the only one this account can write to.
+    /// Nil when there are several (the user picks) or none, which is when the checklist starts empty.
+    var soleWritableCollection: String? {
+        let writable = filter(\.canWrite)
+        return writable.count == 1 ? writable[0].id : nil
+    }
 }
 
 struct ItemField: Hashable, Identifiable {

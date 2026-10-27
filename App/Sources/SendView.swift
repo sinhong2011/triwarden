@@ -5,53 +5,88 @@ import VaultwardenAPI
 /// Sidebar › Send: share text or a file through an end-to-end encrypted link that expires.
 struct SendsPane: View {
     @Environment(AppModel.self) private var model
+    /// The list's own search, like the vault's item list.
+    @State private var query = ""
+    @FocusState private var searchFocused: Bool
+    @AppStorage("sendSort") private var sortRaw = SendSort.deletion.rawValue
+    @AppStorage("sendSortAscending") private var ascending = true
+    @AppStorage("sendFilter") private var filterRaw = SendFilter.all.rawValue
 
+    private var sort: SendSort { SendSort(rawValue: sortRaw) ?? .deletion }
+    private var filter: SendFilter { SendFilter(rawValue: filterRaw) ?? .all }
+
+    /// The account's Sends, narrowed by the search text, the filter and "expired only", then sorted.
     private var scopedSends: [SendItem] {
-        model.sends.filter { send in
-            (model.focusedAccountID == nil || send.accountId == model.focusedAccountID) && (!model.expiredSendsOnly || send.isExpired)
+        let matching = model.sends.filter { send in
+            (model.focusedAccountID == nil || send.accountId == model.focusedAccountID)
+                && (!model.expiredSendsOnly || send.isExpired)
+                && filter.matches(send)
+                && Self.matches(send, query)
         }
+        return sort.sorted(matching, ascending: ascending)
     }
 
-    private func sendActions(_ send: SendItem) -> [ActionMenuEntry] {
-        var rows: [ActionMenuEntry] = []
-        if let link = model.sendLink(send) {
-            rows.append(ActionMenuEntry(title: String(localized: "Copy Link"), symbol: "link") { model.copyPlain(link.absoluteString) })
-            rows.append(ActionMenuEntry(title: String(localized: "Open Link"), symbol: "safari") { NSWorkspace.shared.open(link) })
-        }
-        rows.append(ActionMenuEntry(title: String(localized: "Edit…"), symbol: "pencil", separatorBefore: !rows.isEmpty) { model.editingSend = send })
-        rows.append(ActionMenuEntry(title: String(localized: "Delete…"), symbol: "trash", destructive: true) { model.confirmDeleteSend(send) })
-        return rows
+    /// The name, the private notes and — for a text Send — its text, so a password typed there can be found.
+    static func matches(_ send: SendItem, _ query: String) -> Bool {
+        let words = query.split(whereSeparator: \.isWhitespace).map(String.init)
+        guard !words.isEmpty else { return true }
+        let haystack = [send.name, send.notes ?? "", send.text ?? "", send.fileName ?? ""].joined(separator: "\n").lowercased()
+        return words.allSatisfy { haystack.contains($0.lowercased()) }
     }
 
     var body: some View {
         HStack(spacing: 8) {
             VStack(spacing: 10) {
-                // Like the item list: a count (new Sends come from the header's + menu).
-                HStack {
-                    Text("\(scopedSends.count) sends").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
-                    Spacer()
+                // The same search and filter row the item list has, so the two lists work alike.
+                HStack(spacing: 6) {
+                    SendSearchField(query: $query, focused: $searchFocused)
+                    ActionMenu(entries: filterEntries) {
+                        Image(systemName: "line.3.horizontal.decrease")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(width: 32, height: 32)
+                            .modifier(HeaderChrome(shape: .circle))
+                            .contentShape(.circle)
+                    }
+                    .fixedSize()
+                    .help(Text("Filter"))
+                    .accessibilityLabel(Text("Filter"))
+                    ActionMenu(entries: sortEntries) {
+                        Image(systemName: "arrow.up.arrow.down")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(width: 32, height: 32)
+                            .modifier(HeaderChrome(shape: .circle))
+                            .contentShape(.circle)
+                    }
+                    .fixedSize()
+                    .help(Text("Sort"))
+                    .accessibilityLabel(Text("Sort"))
                 }
-                .padding(.leading, 6)
-                .frame(height: 32)
+                .zIndex(1)
+
                 ScrollView {
                     LazyVStack(spacing: 2) {
                         ForEach(scopedSends) { send in
-                            SendRow(send: send, selected: send.id == model.selectedSendID && !model.composingSend && model.editingSend == nil)
-                                .onTapGesture { model.composingSend = false; model.editingSend = nil; model.selectedSendID = send.id }
+                            SendRow(send: send, selected: send.id == model.selectedSendID && !model.composingSend && model.editingSend == nil,
+                                    highlight: query)
+                                .onTapGesture { model.closeSendComposer(); model.selectedSendID = send.id }
                                 .accessibilityElement(children: .combine)
                                 .accessibilityAddTraits(send.id == model.selectedSendID ? [.isButton, .isSelected] : .isButton)
-                                .accessibilityAction { model.composingSend = false; model.selectedSendID = send.id }
+                                .accessibilityAction { model.closeSendComposer(); model.selectedSendID = send.id }
                                 .transition(.opacity.combined(with: .scale(scale: 0.96)))
-                                .appContextMenu(sendActions(send))
+                                .appContextMenu(model.sendContextActions(send))
                         }
                     }
                     .padding(6)
                 }
                 .thinScroller()
                 .background(Color.panel, in: .rect(cornerRadius: 18, style: .continuous))
+                // The empty part of the list takes a right-click too: it offers the ways to make a Send, where a row's
+                // own menu (above, which wins over this one) offers what to do with that Send.
+                .appContextMenu(emptyAreaActions)
                 .overlay {
                     if scopedSends.isEmpty {
-                        Text("Your Sends appear here.").font(.system(size: 12)).foregroundStyle(.tertiary)
+                        Text(query.isEmpty && filter == .all ? "Your Sends appear here." : "No Sends match.")
+                            .font(.system(size: 12)).foregroundStyle(.tertiary)
                     }
                 }
             }
@@ -84,14 +119,330 @@ struct SendsPane: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .animation(.snappy(duration: 0.25), value: model.composingSend)
         }
+        // The Sends page is a tool, so VaultView lets it scroll to the window's bottom edge (a negative bottom inset
+        // cancels the column's 8 pt margin). Its two panels are cards, though, and they must keep that margin: the
+        // right column's detail keeps it too, and a card touching the window's edge looks cut off.
+        .padding(.bottom, 8)
+        .sheet(item: Bindable(model).createdSend) { created in SendCreatedSheet(created: created) }
+        // The sidebar's "Search Sends" puts the caret in the field, as the item list's "Search Here" does.
+        .onChange(of: model.sendSearchRequest) { searchFocused = true }
     }
 
-    private func compose() { withAnimation(.snappy(duration: 0.25)) { model.composingSend = true } }
+    private func compose() { withAnimation(.snappy(duration: 0.25)) { model.composeNewSend() } }
+
+    /// A right-click on the list's empty space: the ways to make a Send, and the two things that change what the list
+    /// shows. The same entries the sidebar's Sends section offers, so the two places agree.
+    private var emptyAreaActions: [ActionMenuEntry] {
+        func newSend(_ kind: SendComposer.Kind, _ title: String) -> ActionMenuEntry {
+            ActionMenuEntry(title: title, symbol: "paperplane", enabled: !model.composingSend && model.editingSend == nil) {
+                model.sendContextAccountIDs = nil
+                model.newSendKind = kind
+                model.newSendNonce = UUID()
+                model.editingSend = nil
+                model.composingSend = true
+                model.expiredSendsOnly = false
+            }
+        }
+        return [
+            newSend(.text, String(localized: "New Text Send")),
+            newSend(.file, String(localized: "New File Send")),
+            ActionMenuEntry(title: model.expiredSendsOnly ? String(localized: "Show All Sends") : String(localized: "Show Expired Sends"),
+                            symbol: "clock", separatorBefore: true) {
+                model.expiredSendsOnly.toggle()
+            },
+            ActionMenuEntry(title: String(localized: "Search Sends"), symbol: "magnifyingglass") { searchFocused = true }
+        ]
+    }
+
+    private var filterEntries: [ActionMenuEntry] {
+        [.heading(String(localized: "Show only"))] + SendFilter.allCases.map { choice in
+            ActionMenuEntry(title: choice.menuTitle, symbol: choice.symbol, checked: filter == choice) { filterRaw = choice.rawValue }
+        } + [
+            ActionMenuEntry(title: String(localized: "Clear Filter"), symbol: "xmark.circle",
+                            enabled: filter != .all || !query.isEmpty, separatorBefore: true) {
+                filterRaw = SendFilter.all.rawValue
+                query = ""
+            }
+        ]
+    }
+
+    private var sortEntries: [ActionMenuEntry] {
+        [.heading(String(localized: "Sort By"))] + SendSort.allCases.map { choice in
+            ActionMenuEntry(title: choice.menuTitle, symbol: choice.symbol, checked: sort == choice) { sortRaw = choice.rawValue }
+        } + [
+            .heading(String(localized: "Order")),
+            ActionMenuEntry(title: sort.menuOrderTitle(ascending: true), symbol: "arrow.up", checked: ascending) { self.ascending = true },
+            ActionMenuEntry(title: sort.menuOrderTitle(ascending: false), symbol: "arrow.down", checked: !ascending) { self.ascending = false }
+        ]
+    }
+}
+
+/// How the Sends list is ordered. There is no edited/created date on a Send, so the dates it does carry lead.
+enum SendSort: String, CaseIterable, Identifiable {
+    case deletion, name, views
+
+    var id: Self { self }
+
+    var title: LocalizedStringKey {
+        switch self {
+        case .deletion: "Deletes On"
+        case .name: "Name"
+        case .views: "Views"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .deletion: "trash"
+        case .name: "textformat"
+        case .views: "eye"
+        }
+    }
+
+    func orderTitle(ascending: Bool) -> LocalizedStringKey {
+        switch self {
+        case .name: ascending ? "A to Z" : "Z to A"
+        case .deletion, .views: ascending ? "Soonest First" : "Latest First"
+        }
+    }
+
+    var menuTitle: String {
+        switch self {
+        case .deletion: String(localized: "Deletes On")
+        case .name: String(localized: "Name")
+        case .views: String(localized: "Views")
+        }
+    }
+
+    func menuOrderTitle(ascending: Bool) -> String {
+        switch self {
+        case .name: ascending ? String(localized: "A to Z") : String(localized: "Z to A")
+        case .deletion, .views: ascending ? String(localized: "Soonest First") : String(localized: "Latest First")
+        }
+    }
+
+    func sorted(_ sends: [SendItem], ascending: Bool) -> [SendItem] {
+        let ordered: [SendItem]
+        switch self {
+        case .name:
+            ordered = sends.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        case .deletion:
+            // A Send with no deletion date is last either way: it never goes on its own.
+            ordered = sends.sorted { ($0.deletionDate ?? .distantFuture) < ($1.deletionDate ?? .distantFuture) }
+        case .views:
+            ordered = sends.sorted { $0.accessCount < $1.accessCount }
+        }
+        return ascending ? ordered : ordered.reversed()
+    }
+}
+
+/// What the Sends list shows, beyond the account it already narrows to.
+enum SendFilter: String, CaseIterable, Identifiable {
+    case all, text, file, password, expiring, expired
+
+    var id: Self { self }
+
+    var title: LocalizedStringKey {
+        switch self {
+        case .all: "All Sends"
+        case .text: "Text"
+        case .file: "Files"
+        case .password: "With a password"
+        case .expiring: "Not expired"
+        case .expired: "Expired"
+        }
+    }
+
+    var symbol: String {
+        switch self {
+        case .all: "square.grid.2x2"
+        case .text: "text.alignleft"
+        case .file: "doc"
+        case .password: "lock"
+        case .expiring: "clock"
+        case .expired: "clock.badge.xmark"
+        }
+    }
+
+    var menuTitle: String {
+        switch self {
+        case .all: String(localized: "All Sends")
+        case .text: String(localized: "Text")
+        case .file: String(localized: "Files")
+        case .password: String(localized: "With a password")
+        case .expiring: String(localized: "Not expired")
+        case .expired: String(localized: "Expired")
+        }
+    }
+
+    func matches(_ send: SendItem) -> Bool {
+        switch self {
+        case .all: true
+        case .text: send.kind != .file
+        case .file: send.kind == .file
+        case .password: send.hasPassword
+        case .expiring: !send.isExpired && !send.isUsedUp
+        case .expired: send.isExpired || send.isUsedUp
+        }
+    }
+}
+
+/// The Sends list's search field. The vault's `VaultSearchField` can't be reused: it is wired to the vault's own
+/// suggestions, chips and `SearchFilters`. This keeps its exact look — the same 32 pt capsule and `HeaderChrome`
+/// glass — so the two lists' rows read as one control, without carrying the vault's machinery.
+struct SendSearchField: View {
+    @Binding var query: String
+    var focused: FocusState<Bool>.Binding
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+            TextField("Search", text: $query, prompt: Text("Search sends"))
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .focused(focused)
+                // Esc clears the text first, then gives up focus — the vault field's first two steps.
+                .onKeyPress(.escape) {
+                    if !query.isEmpty { query = ""; return .handled }
+                    focused.wrappedValue = false
+                    return .handled
+                }
+                .onSubmit { focused.wrappedValue = false }
+            if !query.isEmpty {
+                Button { query = ""; focused.wrappedValue = true } label: {
+                    Image(systemName: "xmark.circle.fill").font(.system(size: 12)).foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .help(Text("Clear Search"))
+                .accessibilityLabel(Text("Clear Search"))
+                .transition(.opacity.combined(with: .scale(scale: 0.6)))
+            }
+        }
+        .padding(.horizontal, 12)
+        .frame(height: 32)
+        .modifier(HeaderChrome(shape: .capsule, hovering: hovering || focused.wrappedValue))
+        .contentShape(.capsule)
+        .onTapGesture { focused.wrappedValue = true }
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: query.isEmpty)
+        .help(Text("Search sends by name, private notes, text or file name."))
+    }
+}
+
+/// Shown once, right after a Send is made: its link and — for a password-protected Send — the passphrase, which the
+/// server only ever stores as a one-way hash. Closing it discards both from memory; nothing is copied automatically,
+/// because the link is useless without the passphrase and a single clipboard slot can't hold a choice.
+struct SendCreatedSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    let created: AppModel.CreatedSend
+    @State private var revealed = false
+
+    var body: some View {
+        VStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 16) {
+                FormHeader(symbol: "paperplane.fill", title: "Send created",
+                           subtitle: created.passphrase == nil
+                                   ? "Copy the link now — you can also find it again on the Send."
+                                   : "Copy what you need now — this is the only time the passphrase can be shown.")
+
+                FormCard {
+                    FormField(label: "Link") {
+                        HStack(spacing: 6) {
+                            Text(verbatim: created.link)
+                                .font(.system(size: 11, design: .monospaced))
+                                .lineLimit(1).truncationMode(.middle)
+                                .textSelection(.enabled)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                            CreatedCopyButton(value: created.link, label: String(localized: "Link"), secret: false)
+                        }
+                    }
+                    if let passphrase = created.passphrase {
+                        FormField(label: "Passphrase",
+                                  note: "Send it to the recipient another way, not in the same message as the link.") {
+                            HStack(spacing: 6) {
+                                Text(verbatim: revealed ? passphrase : String(repeating: "•", count: min(passphrase.count, 28)))
+                                    .font(.system(size: 12, design: revealed ? .monospaced : .default))
+                                    .textSelection(.enabled)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Button { revealed.toggle() } label: {
+                                    Image(systemName: revealed ? "eye.slash" : "eye")
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundStyle(.secondary)
+                                        .frame(width: 28, height: 28)
+                                        .contentShape(.rect)
+                                }
+                                .buttonStyle(.plain)
+                                .help(revealed ? "Hide passphrase" : "Show passphrase")
+                                .accessibilityLabel(revealed ? "Hide passphrase" : "Show passphrase")
+                                CreatedCopyButton(value: passphrase, label: String(localized: "Passphrase"))
+                            }
+                        }
+                    }
+                }
+            }
+            .padding(20)
+            // One action only: a Cancel beside Done would read as "discard", but the Send already exists on the server.
+            HStack {
+                Spacer()
+                Button("Done", action: { dismiss() })
+                    .buttonStyle(.appPrimary).keyboardShortcut(.defaultAction)
+            }
+            .padding(.horizontal, 20).padding(.vertical, 12)
+            .background(alignment: .top) { Divider().opacity(0.5) }
+        }
+        .frame(width: 520)
+        .background(Color.windowBase)
+        .interactiveDismissDisabled()
+        .onDisappear { model.createdSend = nil }
+    }
+}
+
+/// A copy button that reports back for a moment, for the one-time sheet.
+private struct CreatedCopyButton: View {
+    let value: String
+    /// The resolved name ("Link", "Passphrase"): the copy toast takes a plain string, and a catalog key must not be
+    /// looked up twice.
+    let label: String
+    /// The passphrase is a secret: it goes through `copy`, which hides it from clipboard managers and clears it
+    /// after the configured delay, like every other secret in the app. The link is not secret on its own.
+    var secret = true
+    @Environment(AppModel.self) private var model
+    @State private var copied = false
+
+    var body: some View {
+        Button {
+            if secret {
+                model.copy(value, label: label)
+            } else {
+                model.copyPlain(value)
+            }
+            copied = true
+            Task {
+                try? await Task.sleep(for: .seconds(1.4))
+                copied = false
+            }
+        } label: {
+            Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(copied ? .primary : .secondary)
+                .frame(width: 28, height: 28)
+                .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .help(copied ? Text("Copied") : Text("Copy \(label)"))
+        .accessibilityLabel(Text(copied ? "Copied" : "Copy \(label)"))
+    }
 }
 
 private struct SendRow: View {
     let send: SendItem
     let selected: Bool
+    /// Search text to mark in the name.
+    var highlight = ""
 
     var body: some View {
         HStack(spacing: 10) {
@@ -100,7 +451,7 @@ private struct SendRow: View {
                 .frame(width: 30, height: 30)
                 .background(Color.primary.opacity(0.06), in: .rect(cornerRadius: 8, style: .continuous))
             VStack(alignment: .leading, spacing: 1) {
-                Text(send.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+                Text(Highlight.marked(send.name, highlight)).font(.system(size: 13, weight: .semibold)).lineLimit(1)
                 Text(status(send)).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
@@ -165,7 +516,9 @@ private struct SendDetail: View {
                             Spacer(minLength: 0)
                         }
                         .padding(.horizontal, 12).frame(height: 38)
-                        .background(Color(nsColor: .controlBackgroundColor), in: .rect(cornerRadius: 9, style: .continuous))
+                        // `controlBackgroundColor` is near-black in dark mode, which read as a hole punched in the
+                        // card; the app's own input fill keeps the row on the same surface as every other field.
+                        .background(Color.formInputFill, in: .rect(cornerRadius: 9, style: .continuous))
                         .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
                         HStack(spacing: 8) {
                             Button {
@@ -257,7 +610,7 @@ private struct SendDetail: View {
 
                 HStack(spacing: 8) {
                     Spacer()
-                    Button("Edit", systemImage: "pencil") { withAnimation(.snappy(duration: 0.25)) { model.editingSend = send } }
+                    Button("Edit", systemImage: "pencil") { withAnimation(.snappy(duration: 0.25)) { model.editSend(send) } }
                         .buttonStyle(.appSecondary)
                     Button("Delete Send", systemImage: "trash", role: .destructive) { confirmDelete = true }
                         .buttonStyle(.appSecondary)
@@ -268,6 +621,8 @@ private struct SendDetail: View {
             .frame(maxWidth: 680).frame(maxWidth: .infinity)
         }
         .thinScroller()
+        // The same menu its row in the list has: the vault gives an item one in both places too.
+        .appContextMenu(model.sendContextActions(send))
         .confirmationDialog("Delete “\(send.name)”?", isPresented: $confirmDelete) {
             Button("Delete Send", role: .destructive) { Task { await model.deleteSend(send) } }
         } message: {
@@ -281,6 +636,9 @@ struct SendComposer: View {
     @Environment(AppModel.self) private var model
     /// Set to change an existing Send (same link) instead of making a new one.
     var editing: SendItem?
+    /// Snapshots only: open a new Send with the expiry controls already unfolded, so their date field is in the
+    /// render.
+    var opensExpiry = false
     enum Kind: Hashable { case text, file }
     @State private var deletionDate = Date.now.addingTimeInterval(7 * 86_400)
     @State private var removePassword = false
@@ -291,6 +649,9 @@ struct SendComposer: View {
     @State private var file: URL?
     @State private var deleteAfterDays = 7
     @State private var expires = false
+    /// Whether the "Advanced" disclosure shows its expiry controls. Presentation only: folding it leaves what is
+    /// set alone, and the row says what that is while it is closed.
+    @State private var showExpiry = false
     @State private var expiration = Date.now.addingTimeInterval(86_400)
     @State private var limitViews = false
     @State private var maxViews = 1
@@ -300,19 +661,48 @@ struct SendComposer: View {
     @State private var accountId: String?
     @State private var picking = false
     @State private var saving = false
+    @State private var showGenerator = false
     @State private var dropTargeted = false
 
     private var destinationSessions: [AccountSession] { model.sessions.filter { model.sendContextAccountIDs?.contains($0.id) ?? true } }
+
+    /// What the closed disclosure says: the date the link stops working, in the app's own words.
+    private var expirationSummary: String {
+        String(localized: "Expires \(expiration.formatted(date: .abbreviated, time: .shortened))")
+    }
+
+    /// The Send's own end, in the New Send form: the deletion window counted from now.
+    private var expiryLimit: Date {
+        Date.now.addingTimeInterval(Double(deleteAfterDays) * 86_400)
+    }
+
+    /// The last moment the link can work: the Send's deletion. Editing a Send edits that date directly; a new one
+    /// counts it from the deletion window. A Send already past its deletion keeps a minute of room, so the field's
+    /// range is never empty.
+    private var expiryEnd: Date {
+        max(editing != nil ? deletionDate : expiryLimit, Date.now.addingTimeInterval(60))
+    }
+
+    /// The expiry field's window. A Send that already expired keeps the date it has — opening the form must not
+    /// quietly move it to now.
+    private var expiryRange: ClosedRange<Date> {
+        let start = min(Date.now, expiration)
+        return start...max(expiryEnd, start.addingTimeInterval(60))
+    }
+
+    /// Pulls the expiry back when it is now later than the Send's own deletion: a shorter deletion window must move
+    /// it, so "Expire earlier" keeps meaning earlier. A date that is already inside the window is left alone — an
+    /// expired Send keeps the date it has.
+    private func clampExpiration() {
+        if expiration > expiryEnd { expiration = expiryEnd }
+    }
 
     private var ready: Bool {
         accountId != nil && !name.trimmingCharacters(in: .whitespaces).isEmpty && (kind == .text ? !text.isEmpty : (file != nil || editing != nil))
     }
 
     private func dismiss() {
-        withAnimation(.snappy(duration: 0.25)) {
-            model.composingSend = false
-            model.editingSend = nil
-        }
+        withAnimation(.snappy(duration: 0.25)) { model.closeSendComposer() }
     }
 
     private func prefill() {
@@ -320,6 +710,17 @@ struct SendComposer: View {
             kind = model.newSendKind
             if let ids = model.sendContextAccountIDs { accountId = ids.count == 1 ? ids.first : nil }
             else { accountId = model.defaultAccountId }
+            if opensExpiry { expires = true; showExpiry = true }
+            // "Share by Link…" from an item: its name and fields, hidden until the recipient reveals them. No
+            // password: the link is a bearer token for a real secret, but pre-filling one would be a decision the
+            // sender has to undo, and the dice beside the field is one click away for whoever wants it (issue #85).
+            if let prefill = model.newSendPrefill {
+                kind = .text
+                name = prefill.name
+                text = prefill.text
+                hideText = true
+                if let id = prefill.accountId, destinationSessions.contains(where: { $0.id == id }) { accountId = id }
+            }
             return
         }
         kind = send.kind == .file ? .file : .text
@@ -329,7 +730,7 @@ struct SendComposer: View {
         notes = send.notes ?? ""
         hideEmail = send.hideEmail
         deletionDate = send.deletionDate ?? deletionDate
-        if let expiration = send.expirationDate { expires = true; self.expiration = expiration }
+        if let expiration = send.expirationDate { expires = true; showExpiry = true; self.expiration = expiration }
         if let max = send.maxAccessCount { limitViews = true; maxViews = max }
         accountId = send.accountId
     }
@@ -380,8 +781,12 @@ struct SendComposer: View {
 
                     FormCard(title: "Availability") {
                         if editing != nil {
-                            DatePicker("Deletes on", selection: $deletionDate, in: Date.now...Date.now.addingTimeInterval(31 * 86_400))
-                                .font(.system(size: 13))
+                            FormField(label: "Deletes on") {
+                                // A Send past its deletion date, or one set further out than the form's own month,
+                                // keeps that date in the field rather than jumping: the range grows to include it.
+                                SoftDateField(label: "Deletes on", date: $deletionDate,
+                                              range: min(Date.now, deletionDate)...max(Date.now.addingTimeInterval(31 * 86_400), deletionDate))
+                            }
                         } else {
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Delete after").font(.system(size: 13))
@@ -392,12 +797,25 @@ struct SendComposer: View {
                             .accessibilityLabel(Text("Delete after"))
                         }
                         }
-                        Toggle("Expire earlier", isOn: $expires).toggleStyle(.trailingSwitch)
-                        if expires {
-                            DatePicker("Expires", selection: $expiration,
-                                       in: Date.now...Date.now.addingTimeInterval(Double(deleteAfterDays) * 86_400))
-                                .font(.system(size: 13))
+                        // The two dates are different on the server (the link stops working, then the Send is
+                        // deleted) but the same to whoever opens the link, and the second can never outlast the
+                        // first — so it stays out of the way until it is asked for (issue #97). Folding it back
+                        // only hides it: an expiry that is set stays set, and the row keeps saying when.
+                        FormDisclosure(title: "Advanced", summary: expires ? expirationSummary : nil,
+                                       isExpanded: $showExpiry) {
+                            Toggle("Expire earlier", isOn: $expires).toggleStyle(.trailingSwitch)
+                            if expires {
+                                FormField(label: "Expires",
+                                          note: "The link stops working then, and the Send stays in the list as expired.") {
+                                    SoftDateField(label: "Expires", date: $expiration, range: expiryRange)
+                                }
+                            }
                         }
+                        // A shorter deletion window can leave the expiry past the Send's own end: pull it back in,
+                        // so "Expire earlier" keeps meaning earlier.
+                        .onChange(of: expires) { _, _ in clampExpiration() }
+                        .onChange(of: deleteAfterDays) { _, _ in clampExpiration() }
+                        .onChange(of: deletionDate) { _, _ in clampExpiration() }
                         Toggle("Limit views", isOn: $limitViews).toggleStyle(.trailingSwitch)
                         if limitViews {
                             HStack {
@@ -409,10 +827,36 @@ struct SendComposer: View {
                     }
 
                     FormCard(title: "Protection") {
-                        FormField(label: "Password") {
-                            PasswordField(title: "Password", text: $password,
-                                          prompt: editing?.hasPassword == true ? "Leave blank to keep the current one" : "Optional")
+                        FormField(label: "Password",
+                                  // Only worth saying once there is a passphrase to hand over: Share by Link… starts
+                                  // without one, and the sender may leave it that way.
+                                  note: model.newSendPrefill != nil && !password.isEmpty
+                                        ? "Send this passphrase to the recipient another way. Without it, the link won't open."
+                                        : nil) {
+                            HStack(spacing: 8) {
+                                PasswordField(title: "Password", text: $password,
+                                              prompt: editing?.hasPassword == true ? "Leave blank to keep the current one" : "Optional")
+                                    .disabled(removePassword)
+                                // The same dice as the edit form's password field: a Send made from an item carries
+                                // real secrets, and this is the one click that puts a passphrase in front of them.
+                                Button { showGenerator = true } label: {
+                                    Image(systemName: "dice").font(.system(size: 14, weight: .medium))
+                                        .frame(width: 38, height: 38)
+                                        .background(Color.formInputFill, in: .rect(cornerRadius: 9, style: .continuous))
+                                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
+                                        .contentShape(.rect)
+                                }
+                                .buttonStyle(.plain)
+                                .help(Text("Generate password"))
+                                .accessibilityLabel(Text("Generate password"))
                                 .disabled(removePassword)
+                                .popover(isPresented: $showGenerator, arrowEdge: .trailing) {
+                                    GeneratorView(modes: [.password, .passphrase], compact: true) { generated in
+                                        password = generated
+                                        showGenerator = false
+                                    }
+                                }
+                            }
                         }
                         if editing?.hasPassword == true {
                             Toggle("Remove the password", isOn: $removePassword).toggleStyle(.trailingSwitch)
@@ -422,18 +866,31 @@ struct SendComposer: View {
                             TextField("Private notes", text: $notes, prompt: Text("Only you see these")).textFieldStyle(SoftFieldStyle())
                         }
                     }
+                    // The actions sit with the form, not in a pinned bar: a pinned bar was covered by the window's
+                    // floating Sync/Lock pill and cut off the panels' rounded bottoms beneath it.
+                    HStack(spacing: 10) {
+                        Label("The link holds the key; the server never sees your content.", systemImage: "lock.shield")
+                            .font(.system(size: 11)).foregroundStyle(.secondary)
+                        Spacer(minLength: 12)
+                        Button("Cancel", action: dismiss).buttonStyle(.appSecondary).keyboardShortcut(.cancelAction)
+                        Button(action: { Task { await create() } }) {
+                            HStack(spacing: 6) {
+                                if saving { ProgressView().controlSize(.small).tint(.white) }
+                                Text(editing == nil ? "Create Send" : "Save")
+                            }
+                        }
+                        .buttonStyle(.appPrimary).keyboardShortcut(.defaultAction)
+                        .disabled(!ready || saving)
+                    }
+                    .padding(.top, 2)
                 }
                 .padding(18)
+                // Room for the floating Sync/Lock pill over this page's bottom-right corner.
+                .padding(.bottom, 40)
                 .frame(maxWidth: 640)
                 .frame(maxWidth: .infinity)
             }
             .thinScroller()
-
-            FormFooter(action: editing == nil ? "Create & Copy Link" : "Save", busy: saving, disabled: !ready, cancel: dismiss,
-                       submit: { Task { await create() } }) {
-                Label("The link holds the key; the server never sees your content.", systemImage: "lock.shield")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
-            }
         }
         .fileImporter(isPresented: $picking, allowedContentTypes: [.item]) { result in
             if case .success(let url) = result { choose(url) }

@@ -247,8 +247,10 @@ enum Snapshot {
     static func runIfRequested() {
         let args = CommandLine.arguments
         guard args.contains("--snapshot") else { return }
-        // Sandboxed: write inside our container and print the path.
-        let dir = FileManager.default.temporaryDirectory.appending(path: "snapshots", directoryHint: .isDirectory)
+        // Sandboxed: write inside our container and print the path. `TRIWARDEN_SNAPSHOT_DIR` sends them elsewhere
+        // (a folder the sandbox can already write, e.g. build/snapshots) so other tools can read them.
+        let dir = ProcessInfo.processInfo.environment["TRIWARDEN_SNAPSHOT_DIR"].map { URL(filePath: $0) }
+            ?? FileManager.default.temporaryDirectory.appending(path: "snapshots", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let model = AppModel()
@@ -395,6 +397,11 @@ enum Snapshot {
             renderWindow(VaultView().environment(vault).tint(.brand), size: CGSize(width: 1180, height: 760),
                          appearance: appearance, to: dir.appending(path: "window-page-item-\(name).png"))
             vault.clipboardClearsAt = nil // the pages as they usually look (they end up in the README)
+            // The header bell with something waiting: its count badge sits over the circle's bright edge, not under it.
+            vault.updates.noteAvailableVersion("0.6.0")
+            renderWindow(VaultView().environment(vault).tint(.brand), size: CGSize(width: 1180, height: 760),
+                         appearance: appearance, to: dir.appending(path: "window-bell-badge-\(name).png"))
+            vault.updates.noteAvailableVersion(nil)
             let selected = vault.selectedID
             vault.beginEditing(EditRequest(mode: .create(.sshKey)))
             renderWindow(VaultView().environment(vault).tint(.brand), size: CGSize(width: 1180, height: 760),
@@ -470,8 +477,10 @@ enum Snapshot {
         let plainItems = vault.items
         vault.folders = [Grouping(id: "f-personal", name: "Personal"), Grouping(id: "f-work", name: "Work")]
         vault.organizations = [Grouping(id: "org-nw", name: "Northwind", children: [
-            Grouping(id: "col-eng", name: "Engineering"), Grouping(id: "col-eng-be", name: "Engineering/Backend"),
-            Grouping(id: "col-eng-fe", name: "Engineering/Frontend"), Grouping(id: "col-ops", name: "Operations")])]
+            Grouping(id: "col-eng", name: "Engineering", canWrite: true),
+            Grouping(id: "col-eng-be", name: "Engineering/Backend", canWrite: true),
+            Grouping(id: "col-eng-fe", name: "Engineering/Frontend", canWrite: true),
+            Grouping(id: "col-ops", name: "Operations", canWrite: true)])]
         vault.items = vault.items.map { item in
             var item = item
             if item.id == "1" { item.organizationId = "org-nw"; item.collectionIds = ["col-eng-fe"] }
@@ -505,7 +514,26 @@ enum Snapshot {
                    appearance: appearance, to: dir.appending(path: "vault-shared-move-\(name).png"))
             render(CollectionsSheet(itemID: "1").environment(vault).tint(.brand), size: CGSize(width: 480, height: 420),
                    appearance: appearance, to: dir.appending(path: "vault-shared-folders-\(name).png"))
+            // The edit form's own Vault and Shared Folders: a personal item that can move, and a shared item whose
+            // vault is read-only and whose shared folders are checked.
+            if let personal = vault.items.first(where: { $0.id == "2" }),
+               let shared = vault.items.first(where: { $0.id == "5" }) {
+                render(EditItemSheet(mode: .edit(personal)).environment(vault).tint(.brand), size: CGSize(width: 580, height: 700),
+                       appearance: appearance, to: dir.appending(path: "edit-vault-personal-\(name).png"))
+                render(EditItemSheet(mode: .edit(shared)).environment(vault).tint(.brand), size: CGSize(width: 580, height: 760),
+                       appearance: appearance, to: dir.appending(path: "edit-vault-shared-\(name).png"))
+            }
         }
+        // A shared vault with one writable folder: the only choice there is, so it starts checked and Move is ready.
+        let manyCollections = vault.organizations
+        vault.organizations = [Grouping(id: "org-nw", name: "Northwind", children: [
+            Grouping(id: "col-only", name: "Family", canWrite: true),
+            Grouping(id: "col-locked", name: "Payroll", canWrite: false)])]
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            render(MoveToOrganizationSheet(itemIDs: ["2"]).environment(vault).tint(.brand), size: CGSize(width: 520, height: 600),
+                   appearance: appearance, to: dir.appending(path: "vault-shared-move-single-\(name).png"))
+        }
+        vault.organizations = manyCollections
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             render(NewFolderSheet(parent: "Work").environment(vault).tint(.brand), size: CGSize(width: 440, height: 300),
                    appearance: appearance, to: dir.appending(path: "vault-subfolder-\(name).png"))
@@ -575,6 +603,22 @@ enum Snapshot {
                    size: CGSize(width: 380, height: 760), appearance: appearance,
                    to: dir.appending(path: "menubar-\(name).png"))
         }
+        // The panel with no vault open: nothing signed in on this Mac, then a real locked vault beside it.
+        let signedOutPanel = AppModel()
+        signedOutPanel.setPreviewAccounts([])
+        signedOutPanel.phase = .login
+        let lockedPanel = AppModel()
+        lockedPanel.setPreviewAccounts(vault.accounts)
+        lockedPanel.phase = .locked
+        lockedPanel.touchIDEnabled = true // so the snapshot shows the trailing Touch ID glyph beside the centred name
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            render(MenuBarContent().environment(signedOutPanel).tint(.brand).background(.regularMaterial),
+                   size: CGSize(width: 380, height: 270), appearance: appearance,
+                   to: dir.appending(path: "menubar-signed-out-\(name).png"))
+            render(MenuBarContent().environment(lockedPanel).tint(.brand).background(.regularMaterial),
+                   size: CGSize(width: 380, height: 320), appearance: appearance,
+                   to: dir.appending(path: "menubar-locked-\(name).png"))
+        }
         // The palette's states: ranked and loose matches, an item's actions, the generator, a new login from the query,
         // a type scope, commands only, and a locked vault.
         for (slug, query, actions) in [("query", "git", false), ("fuzzy", "gthb", false), ("actions", "git", true),
@@ -609,7 +653,7 @@ enum Snapshot {
                    size: CGSize(width: 580, height: 700), appearance: appearance,
                    to: dir.appending(path: "edit-\(name).png"))
             var card = demoItems.first { $0.kind == .card }!
-            card.properties = ["cardholderName": "Alex Chen", "brand": "Visa", "number": "4111111111116411", "expMonth": "8", "expYear": "2029", "code": "123"]
+            card.properties = ["cardholderName": "Alex Chen", "brand": "Visa", "number": "4111111111116411", "expMonth": "10", "expYear": "2026", "code": "123"]
             card.customFields = [CustomField(name: "PIN", value: "0420", kind: .hidden), CustomField(name: "Virtual", value: "true", kind: .boolean)]
             render(EditItemSheet(mode: .edit(card)).environment(vault).tint(.brand),
                    size: CGSize(width: 580, height: 700), appearance: appearance,
@@ -669,6 +713,63 @@ enum Snapshot {
                    size: CGSize(width: 1100, height: 860), appearance: appearance,
                    to: dir.appending(path: "send-compose-\(name).png"))
             vault.composingSend = false
+            // The dates the Send form can carry (issues #96, #97): the expiry unfolded in a new Send, and the
+            // deletion date in Edit Send. Both are the app's own soft date field.
+            render(desktop(SendComposer(opensExpiry: true).environment(vault).tint(.brand).padding(14), dark: name == "dark"),
+                   size: CGSize(width: 720, height: 1120), appearance: appearance,
+                   to: dir.appending(path: "send-compose-expiry-\(name).png"))
+            render(desktop(SendComposer(editing: vault.sends[0]).environment(vault).tint(.brand).padding(14), dark: name == "dark"),
+                   size: CGSize(width: 720, height: 1000), appearance: appearance,
+                   to: dir.appending(path: "send-edit-\(name).png"))
+            // The calendar the date field opens, on its own: a popover can't be captured offscreen.
+            render(VStack {
+                DateCalendar(label: "Expires",
+                             date: .constant(.now.addingTimeInterval(3 * 86_400)),
+                             range: Date.now...Date.now.addingTimeInterval(7 * 86_400))
+                    .background(Color.panelStrong, in: .rect(cornerRadius: 12, style: .continuous))
+                    .padding(20)
+            }.frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.windowBase),
+                   size: CGSize(width: 320, height: 380), appearance: appearance,
+                   to: dir.appending(path: "send-date-calendar-\(name).png"))
+            // The folded "Advanced" row: it says what is set without being opened.
+            let expiry = Date.now.addingTimeInterval(3 * 86_400)
+            render(VStack {
+                FormDisclosure(title: "Advanced",
+                               summary: String(localized: "Expires \(expiry.formatted(date: .abbreviated, time: .shortened))"),
+                               isExpanded: .constant(false)) {
+                    EmptyView()
+                }
+                .padding(18)
+                .background(Color.panelStrong, in: .rect(cornerRadius: 18, style: .continuous))
+            }.padding(20).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top).background(Color.windowBase),
+                   size: CGSize(width: 560, height: 130), appearance: appearance,
+                   to: dir.appending(path: "send-expiry-summary-\(name).png"))
+            // Edit Send with an expiry set: the same disclosure, open, over the deletion date.
+            var expiring = vault.sends[0]
+            expiring.expirationDate = expiry
+            render(desktop(SendComposer(editing: expiring).environment(vault).tint(.brand).padding(14), dark: name == "dark"),
+                   size: CGSize(width: 720, height: 1060), appearance: appearance,
+                   to: dir.appending(path: "send-edit-expiry-\(name).png"))
+        }
+        // "Share by Link…" (issue #85): the composer as it opens from an item, name and fields filled in.
+        vault.composeNewSend(prefill: SendPrefill(
+            name: "GitHub",
+            text: "Username: octocat\nPassword: correct-horse-battery\nWebsite: https://github.com\nNotes: work account",
+            accountId: nil))
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            render(desktop(SendsPane().environment(vault).tint(.brand).padding(14), dark: name == "dark"),
+                   size: CGSize(width: 1100, height: 1180), appearance: appearance,
+                   to: dir.appending(path: "send-share-by-link-\(name).png"))
+        }
+        vault.closeSendComposer()
+        // The one-time sheet a Send opens after it's made: its link and the passphrase that opens it.
+        let created = AppModel.CreatedSend(
+            link: "https://vault.home.arpa/#/send/aBcD3fGh1JkL9mNoP2qR7sT/XrPVubZezJMect7W6bhvjA",
+            passphrase: "mule-frost-jumbo-quiet-vex-razor", name: "GitHub")
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            render(desktop(SendCreatedSheet(created: created).environment(vault).tint(.brand), dark: name == "dark"),
+                   size: CGSize(width: 520, height: 380), appearance: appearance,
+                   to: dir.appending(path: "send-created-\(name).png"))
         }
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let locked = AutoFillState()
@@ -862,10 +963,10 @@ enum Snapshot {
             var card = VaultItem(id: "7", kind: .card, name: "Travel Visa", username: "•••• 6411", host: nil, password: nil,
                                  totp: nil, notes: nil, favorite: false,
                                  fields: [ItemField(label: "Card number", value: "4111111111116411", secret: true, monospaced: true),
-                                          ItemField(label: "Cardholder", value: "Alex Chen"), ItemField(label: "Expires", value: "08/2029"),
+                                          ItemField(label: "Cardholder", value: "Alex Chen"), ItemField(label: "Expires", value: "10/2026"),
                                           ItemField(label: "Security code", value: "123", secret: true, monospaced: true)])
             card.properties = ["brand": "Visa", "number": "4111111111116411", "cardholderName": "Alex Chen",
-                               "expMonth": "8", "expYear": "2029", "code": "123"]
+                               "expMonth": "10", "expYear": "2026", "code": "123"]
             return card
         }(),
         VaultItem(id: "5", name: "Tailscale", username: "alexchen", host: "login.tailscale.com", password: "ts-Lw8!r2Kq$7m",
@@ -901,21 +1002,41 @@ enum Snapshot {
         // The window as the screen shows it (glass and all), when the window server lets the app capture its own
         // window; otherwise its views drawn offscreen (glass comes out black).
         if let image = Self.capture(window) {
-            try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: url)
+            Self.write(image, to: url)
         } else if let frame = window.contentView?.superview,
                   let rep = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) {
             frame.cacheDisplay(in: frame.bounds, to: rep)
-            try? rep.representation(using: .png, properties: [:])?.write(to: url)
+            Self.write(rep, to: url)
         }
         // The same live window after a change to the model: what a sync or an edit does to views already on screen.
         if let change, let changedURL {
             change()
             RunLoop.main.run(until: .now + 1)
             if let image = Self.capture(window) {
-                try? NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])?.write(to: changedURL)
+                Self.write(image, to: changedURL)
             }
         }
         window.orderOut(nil)
+    }
+
+    /// Streams the render when a test runner asked for it, else writes it into the app's container.
+    private static func write(_ image: CGImage, to url: URL) {
+        guard let png = NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:]) else { return }
+        write(png, to: url)
+    }
+
+    private static func write(_ rep: NSBitmapImageRep, to url: URL) {
+        guard let png = rep.representation(using: .png, properties: [:]) else { return }
+        write(png, to: url)
+    }
+
+    private static func write(_ png: Data, to url: URL) {
+        // Synthetic renders can be streamed directly to a test runner without reading the app container.
+        if ProcessInfo.processInfo.environment["TRIWARDEN_SNAPSHOT_STDOUT"] == "1" {
+            print("SNAPSHOT \(url.lastPathComponent) \(png.base64EncodedString())")
+        } else {
+            try? png.write(to: url)
+        }
     }
 
     private static func firstSplitView(in view: NSView?) -> NSSplitView? {
@@ -954,14 +1075,7 @@ enum Snapshot {
         let frame = host.superview ?? host
         guard let rep = frame.bitmapImageRepForCachingDisplay(in: frame.bounds) else { return }
         frame.cacheDisplay(in: frame.bounds, to: rep)
-        if let png = rep.representation(using: .png, properties: [:]) {
-            // Synthetic renders can be streamed directly to a test runner without reading the app container.
-            if ProcessInfo.processInfo.environment["TRIWARDEN_SNAPSHOT_STDOUT"] == "1" {
-                print("SNAPSHOT \(url.lastPathComponent) \(png.base64EncodedString())")
-            } else {
-                try? png.write(to: url)
-            }
-        }
+        Self.write(rep, to: url)
         window.orderOut(nil)
     }
 }
@@ -1154,9 +1268,34 @@ enum SelfTest {
                     check(collectionsOK, "set an organization item's collections")
                     if let moved { await model.deleteForever(moved) }
                 }
+                // Editing and moving in one go (the edit form's Vault field): the fields are written first, then the
+                // item is shared. Sharing re-encrypts the server's copy, so the reverse order would lose the edit.
+                _ = await model.createItem(.login, edit: CipherEdit(name: "Selftest edit and share", username: "before", password: "before-pass"))
+                if let mine = model.items.first(where: { $0.name == "Selftest edit and share" }) {
+                    var edit = CipherEdit()
+                    edit.name = "Selftest edit and share (edited)"
+                    edit.username = "after"
+                    edit.password = "after-pass"
+                    let edited = await model.updateItem(mine.id, edit: edit)
+                    let shared = await model.share([mine.id], organizationId: org.id, collectionIds: [collection.id])
+                    let now = model.items.first { $0.id == mine.id }
+                    check(edited && shared && now?.organizationId == org.id
+                          && now?.name == "Selftest edit and share (edited)" && now?.username == "after" && now?.password == "after-pass"
+                          && now?.collectionIds == [collection.id],
+                          "edit then move to an organization keeps the edit")
+                    if let now { await model.deleteForever(now) }
+                }
             } else {
                 check(false, "move to organization: no organization with a collection")
             }
+
+            // A shared vault with one writable folder: the form picks it, so Move needs no click that decides nothing.
+            let folders = [Grouping(id: "a", name: "Family", canWrite: true), Grouping(id: "b", name: "Payroll", canWrite: false)]
+            check(folders.soleWritableCollection == "a", "one writable shared folder is picked automatically")
+            check([Grouping(id: "a", name: "Family", canWrite: true), Grouping(id: "c", name: "Team", canWrite: true)]
+                    .soleWritableCollection == nil, "two writable shared folders leave the choice to the user")
+            check([Grouping(id: "b", name: "Payroll", canWrite: false)].soleWritableCollection == nil,
+                  "a read-only shared folder is never picked")
 
             // Many at once: trash, restore, move to a folder, delete forever — one request each.
             for n in 1...3 { _ = await model.createItem(.secureNote, edit: CipherEdit(name: "Selftest bulk \(n)", notes: "b")) }

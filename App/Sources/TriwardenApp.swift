@@ -76,6 +76,7 @@ struct TriwardenApp: App {
                 .environment(model)
                 .modifier(ReducedMotionPolicy())
                 .modifier(LiveAppearance())
+                .tracksWindowVisibility()
                 .onAppear { appDelegate.model = model; Bench.markAfterCommit("first-frame") }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
                     model.appDidBecomeActive()
@@ -88,6 +89,8 @@ struct TriwardenApp: App {
                 }
                 // Soft pastel wash from the Liquid design under every screen.
                 .containerBackground(for: .window) { WindowBackdrop() }
+                // No text field takes focus just because the window was restored (macOS would offer AutoFill there).
+                .noAutomaticFirstResponder()
         }
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 1120, height: 720)
@@ -97,6 +100,7 @@ struct TriwardenApp: App {
                 .environment(model)
                 .modifier(ReducedMotionPolicy())
                 .modifier(LiveAppearance())
+                .tracksWindowVisibility() // the panel stays built while it's closed
         } label: {
             Image(nsImage: MenuBarGlyph.image(pending: model.sshAgent.pendingCount > 0))
                 .opacity(model.isUnlocked ? 1 : 0.55)
@@ -135,10 +139,16 @@ struct TriwardenApp: App {
                 }
                 Menu("New Other Item") {
                     Button("Card") { model.beginEditing(EditRequest(mode: .create(.card))) }
+                        .keyboardShortcut("b", modifiers: [.command, .option])
                     Button("Identity") { model.beginEditing(EditRequest(mode: .create(.identity))) }
+                        .keyboardShortcut("i", modifiers: [.command, .option])
                     Button("SSH Key") { model.beginEditing(EditRequest(mode: .create(.sshKey))) }
+                        .keyboardShortcut("k", modifiers: [.command, .option])
                 }
                 .disabled(!model.isUnlocked)
+                Button("New Send") { model.composeNewSend() }
+                    .keyboardShortcut("s", modifiers: [.command, .option])
+                    .disabled(!model.isUnlocked)
                 Button("New Folder…") { model.promptNewFolder() }
                     .keyboardShortcut("n", modifiers: [.command, .option])
                     .disabled(!model.isUnlocked)
@@ -176,6 +186,9 @@ struct TriwardenApp: App {
                 Button("Copy One-Time Code") { if let item, let t = item.totp { model.guarded(item) { model.copy(t.code(), label: String(localized: "Code")) } } }
                     .keyboardShortcut("c", modifiers: [.command, .control])
                     .disabled(item?.totp == nil)
+                Button("Copy Notes") { if let item, let notes = item.notes, !notes.isEmpty { model.guarded(item) { model.copy(notes, label: String(localized: "Notes")) } } }
+                    .keyboardShortcut("n", modifiers: [.command, .control])
+                    .disabled(item?.notes?.isEmpty != false)
                 Button("Show Password in Large Type") { if let item { model.showLargeType(item) } }
                     .keyboardShortcut("t", modifiers: [.command, .option])
                     .disabled(item?.password == nil)

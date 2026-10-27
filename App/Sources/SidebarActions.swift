@@ -143,19 +143,18 @@ extension AppModel {
         case .sends:
             func send(_ kind: SendComposer.Kind, _ title: String) -> SidebarContextAction {
                 action(title, "paperplane", enabled: !ids.isEmpty && !composingSend && editingSend == nil) {
-                    self.leaveNewItemForm {
-                        self.sendContextAccountIDs = ids
-                        self.newSendKind = kind
-                        self.newSendNonce = UUID()
-                        self.editingSend = nil
-                        self.composingSend = true
-                        self.expiredSendsOnly = false
-                        self.requestedSection = .sends
-                    }
+                    self.leaveNewItemForm { self.composeNewSend(kind: kind, accountIDs: ids) }
                 }
             }
             return [send(.text, String(localized: "New Text Send")), send(.file, String(localized: "New File Send")),
-                action(expiredSendsOnly ? String(localized: "Show All Sends") : String(localized: "Show Expired Sends"), "clock") { self.expiredSendsOnly.toggle(); self.requestedSection = .sends }]
+                action(expiredSendsOnly ? String(localized: "Show All Sends") : String(localized: "Show Expired Sends"), "clock") { self.expiredSendsOnly.toggle(); self.requestedSection = .sends },
+                // The same closing pair every other section has: narrow the list, then refresh the accounts behind it.
+                SidebarContextAction(title: String(localized: "Search Sends"), symbol: "magnifyingglass",
+                                     separatorBefore: true) {
+                    self.requestedSection = .sends
+                    self.sendSearchRequest = UUID()
+                },
+                sync()]
         case .codes: return [create(.login, title: String(localized: "New Login with TOTP"), totp: true), search()]
         case .toolLaunches: return [action(String(localized: "Choose an API Key"), "key.horizontal") {
             self.requestedSection = .section(.apiKeys)

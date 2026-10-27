@@ -51,27 +51,32 @@ struct VaultView: View {
     @State private var section: SidebarSelection = .section(.all)
     @AppStorage("itemSort") private var sortRaw = ItemSort.title.rawValue
     @AppStorage("itemSortAscending") private var ascending = true
-    /// Window width, to adapt from three columns down to a single phone-width column.
-    @State private var width: CGFloat = 1120
+    /// The window's live geometry. It changes on every frame of a resize, so `body` must not read it: only the few
+    /// views that draw from it do, and they alone are rebuilt while the window is dragged. The layout decisions that
+    /// the whole vault makes are kept as the breakpoints below instead, which change once when they're crossed.
+    @State private var metrics = WindowMetrics()
+    /// Below this the sidebar, list and detail become one sliding strip (Reeder-style).
+    @State private var compact = false
+    /// Below this the palette's trigger narrows to leave the header's other controls their room.
+    @State private var narrowHeader = false
+    /// Below this the detail is a phone-width column and the header belongs to the item's actions.
+    @State private var phoneDetail = false
     @State private var columns = NavigationSplitViewVisibility.all
-    /// Where the detail column (and so the header's leading slot) starts in the window.
-    @State private var detailX: CGFloat = 0
     /// Narrow windows: which pane of the strip is in view (0 sidebar, 1 list or page, 2 detail).
     @State private var depth = 1
 
 
-    /// Below this width the sidebar, list and detail become one sliding strip (Reeder-style).
     /// The item list's width beside the details (wide windows).
     static let listWidth: CGFloat = 330
-    /// Below this the panes slide one at a time; it grows with the list so the details keep their room.
-    private var compact: Bool { width < 900 + (Self.listWidth - 300) }
+    /// Where the compact strip starts: the panes slide one at a time below this, and it grows with the list so the
+    /// details keep their room.
+    private static let compactWidth: CGFloat = 900 + (listWidth - 300)
 
     /// The command palette's trigger: centred over the window when it's wide, beside the back button when narrow.
     /// The header's leading slot starts this far into the detail column.
     static let headerSlotInset: CGFloat = 8
     /// From the header's leading slot to the list's edge below it, so the + and the list line up.
     static let plusInset: CGFloat = 6
-    private var searchWidth: CGFloat { compact ? (width < 560 ? 150 : 228) : min(320, max(280, width * 0.24)) }
     /// The window's controls (Sync, Lock) floating over `content`'s bottom-right corner, under the header's right end
     /// (an item's actions, or a page's edge). No row of their own: the panels run to the window's bottom, and scrolling
     /// content keeps room at its end so its last line can scroll clear of them.
@@ -114,13 +119,26 @@ struct VaultView: View {
     }
 
     var body: some View {
-        // Measure the space the window offers (not the content, which may refuse to shrink) and lay out for it.
-        GeometryReader { geo in
-            newItemFormHandling(content)
-                .frame(width: geo.size.width, height: geo.size.height)
-                .onChange(of: geo.size.width, initial: true) { old, new in resized(from: initialMeasure ? 1120 : old, to: new) }
-                .environment(\.windowMidY, geo.frame(in: .global).midY)
-        }
+        // Measure the window here, but keep the reading out of `body`'s own dependencies: `metrics` is observed by
+        // the few views that draw from it (the header's centring, the empty states' mid-line), so a drag rebuilds
+        // those and not the whole vault.
+        newItemFormHandling(content)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onGeometryChange(for: WindowGeometry.self) { geo in
+                WindowGeometry(width: geo.size.width, midY: geo.frame(in: .global).midY)
+            } action: { geometry in
+                let old = initialMeasure ? 1120 : metrics.width
+                metrics.width = geometry.width
+                metrics.midY = geometry.midY
+                resized(from: old, to: geometry.width)
+            }
+            .background { WindowModeObserver(metrics: metrics) }
+            .environment(metrics)
+    }
+
+    private struct WindowGeometry: Equatable {
+        let width: CGFloat
+        let midY: CGFloat
     }
 
     /// An item form opens in the detail panel: from a tool page, go to the items; on a narrow window, slide to
@@ -155,19 +173,25 @@ struct VaultView: View {
 
     private func resized(from old: CGFloat, to new: CGFloat) {
         initialMeasure = false
-        width = new
         if !appliedInitialDepth { appliedInitialDepth = true; depth = initialDepth }
-        // Fold the sidebar away as the window narrows; bring it back when it widens again.
-        if new < 900, old >= 900 { columns = .detailOnly }
-        if new >= 900, old < 900 { columns = .all }
+        // Only the breakpoints are written: these change once when the window crosses them, not on every drag frame,
+        // so the vault is rebuilt when its layout actually changes and not while the window is being dragged.
+        if compact != (new < Self.compactWidth) { compact = new < Self.compactWidth }
+        if narrowHeader != (new < 560) { narrowHeader = new < 560 }
+        if phoneDetail != (new < PaneStrip.pairWidth) { phoneDetail = new < PaneStrip.pairWidth }
+        // The system sidebar and the compact pane strip hand off at the same breakpoint. Using a lower threshold
+        // here lets the compact-mode `onChange` fold the sidebar away again between 900 and `compactWidth`, with no
+        // later crossing left to restore it when the window becomes wide.
+        if new < Self.compactWidth, old >= Self.compactWidth { columns = .detailOnly }
+        if new >= Self.compactWidth, old < Self.compactWidth { columns = .all }
     }
 
     // MARK: Panes
 
-    private var compactPanes: [AnyView] {
+    private func compactPanes(_ items: [VaultItem]) -> [AnyView] {
         let sidebar = AnyView(sidebarPane)
         guard isItemSection else { return [sidebar, AnyView(sectionPane)] }
-        return [sidebar, AnyView(listPane), AnyView(detailPane.environment(\.showsDetailToolbar, depth == 2))]
+        return [sidebar, AnyView(listPane(items)), AnyView(detailPane.environment(\.showsDetailToolbar, depth == 2))]
     }
 
     /// The sidebar as a pane on the narrow-window strip: the same list, on the app's panel.
@@ -201,7 +225,8 @@ struct VaultView: View {
         return model.accounts.first { $0.id == id }
     }
 
-    private var listPane: some View {
+    /// `items`: the list as filtered and sorted, worked out once per update by `content`.
+    private func listPane(_ items: [VaultItem]) -> some View {
         let locked = lockedFocus
         return ZStack {
             if let account = locked {
@@ -217,7 +242,7 @@ struct VaultView: View {
                     Button("Add API Key") { model.beginAPIKey() }.buttonStyle(.appPrimary)
                 }
             } else {
-                ItemColumn(items: filtered, isTrash: section == .section(.trash), selection: Binding(get: { model.selectedID }, set: { id in
+                ItemColumn(items: items, isTrash: section == .section(.trash), selection: Binding(get: { model.selectedID }, set: { id in
                     // Picking an item leaves a new item's form (asking first when it has input).
                     model.leaveNewItemForm {
                         model.selectedID = id
@@ -257,6 +282,8 @@ struct VaultView: View {
 
     private var content: some View {
         @Bindable var model = model
+        // Filtered and sorted once per update: the list and the selection's follow-up below both use it.
+        let list = filtered
         return NavigationSplitView(columnVisibility: $columns) {
             Sidebar(section: sidebarSection)
                 .modifier(SidebarWidth())
@@ -266,10 +293,10 @@ struct VaultView: View {
         } detail: {
             ZStack {
                 if compact {
-                    withFooter(PaneStrip(panes: compactPanes, depth: $depth, maxDepth: maxDepth))
+                    withFooter(PaneStrip(panes: compactPanes(list), depth: $depth, maxDepth: maxDepth))
                 } else if isItemSection {
                     HStack(spacing: 8) {
-                        listPane.frame(width: Self.listWidth) // full height: the footer stays under the right column
+                        listPane(list).frame(width: Self.listWidth) // full height: the footer stays under the right column
                         withFooter(detailPane.frame(maxWidth: .infinity, maxHeight: .infinity))
                     }
                     .transition(pageTransition)
@@ -281,7 +308,7 @@ struct VaultView: View {
             }
             .animation(compact ? nil : pageAnimation, value: compact ? nil : section)
             .padding(8)
-            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minX } action: { detailX = $0 }
+            .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minX } action: { metrics.detailX = $0 }
             .background(WindowBackdrop())
             .toolbar(removing: .title)
             // The header stays clear over the backdrop (a wide item in it would otherwise bring up a tinted bar).
@@ -289,40 +316,8 @@ struct VaultView: View {
             .toolbar {
                 // Back (narrow windows) and search at the header's start.
                 ToolbarItem(placement: .navigation) {
-                    HStack(spacing: 8) {
-                        if compact && depth > 0 {
-                            Button { depth = max(depth - 1, 0) } label: {
-                                Image(systemName: depth == 1 ? "sidebar.left" : "chevron.left").font(.system(size: 14, weight: .medium))
-                                    .contentTransition(.symbolEffect(.replace))
-                                    .frame(width: 36, height: 36).contentShape(.circle)
-                            }
-                            .buttonStyle(.plain)
-                            .modifier(HeaderChrome(shape: .circle))
-                            .keyboardShortcut("[", modifiers: .command)
-                            .help(Text("Back (⌘[)"))
-                            .accessibilityLabel(Text("Back"))
-                        }
-                        // On a phone-width detail, the header belongs to the item's actions (search and + are the list's).
-                        if !(compact && width < PaneStrip.pairWidth && depth == 2) {
-                            // New items of every kind, first in the header (beside the sidebar's toggle).
-                            NewItemButton()
-                                .padding(.leading, Self.plusInset) // its edge over the list's
-                            // Wide windows: centred on the window (`.principal` isn't honoured in a split view's header, so
-                            // this leading slot is inset to the middle, less the + before it).
-                            PaletteTrigger(compactLabel: searchWidth < 260)
-                                .frame(width: searchWidth)
-                                .padding(.leading, compact ? 0 : max(0, width / 2 - detailX - Self.headerSlotInset - searchWidth / 2
-                                                                         - Self.plusInset - NewItemButton.size - 8))
-                            SSHRequestsButton()
-                            // A slot holding a single view lays it out at zero size; a zero-width sibling keeps it measured.
-                            Text(verbatim: " ").frame(width: 0).accessibilityHidden(true)
-                        }
-                    }
-                    // Under the lock layer: present (so the header keeps its height and nothing moves on unlock)
-                    // but invisible and inert.
-                    .opacity(vaultOpen ? 1 : 0)
-                    .disabled(!vaultOpen) // shortcuts too
-                    .accessibilityHidden(!vaultOpen)
+                    VaultHeader(compact: compact, narrow: narrowHeader, phoneDetail: phoneDetail,
+                                depth: depth, open: vaultOpen) { depth = max(depth - 1, 0) }
                 }
                 .sharedBackgroundVisibility(.hidden)
             }
@@ -357,7 +352,7 @@ struct VaultView: View {
         }
         // When the selected item leaves the list (trashed, restored, deleted, filtered out), select its neighbour
         // so the list and the detail never disagree.
-        .onChange(of: filtered.map(\.id)) { old, new in
+        .onChange(of: list.map(\.id)) { old, new in
             guard let selected = model.selectedID, !new.contains(selected) else { return }
             let at = old.firstIndex(of: selected) ?? 0
             model.selectedID = new.isEmpty ? nil : new[min(at, new.count - 1)]
@@ -584,16 +579,19 @@ private struct Sidebar: View {
     @State private var closed: Set<String> = []
     @FocusState private var focused: Bool
 
-    private func count(_ selection: SidebarSelection) -> Int { model.vaultItems.filter(selection.includes).count }
+    /// How many of `items` (the vault shown) a row stands for: counted in place, not copied out.
+    private static func count(_ selection: SidebarSelection, in items: [VaultItem]) -> Int {
+        items.count(where: selection.includes)
+    }
 
     /// Whether a nested group is open.
     private func open(_ key: String) -> Binding<Bool> {
         Binding(get: { !closed.contains(key) }, set: { if $0 { closed.remove(key) } else { closed.insert(key) } })
     }
 
-    private func row(_ s: VaultSection, depth: Int = 0, expanded: Binding<Bool>? = nil) -> some View {
+    private func row(_ s: VaultSection, in items: [VaultItem], depth: Int = 0, expanded: Binding<Bool>? = nil) -> some View {
         SidebarRow(depth: depth, expanded: expanded, selected: section == .section(s), action: { pick(.section(s)) }) {
-            SidebarLabel(s.title, symbol: s.symbol, tag: .section(s), count: count(.section(s)))
+            SidebarLabel(s.title, symbol: s.symbol, tag: .section(s), count: Self.count(.section(s), in: items))
         }
         .sidebarContextMenu(model.sidebarActions(for: .section(s)), selection: .section(s))
         .id(SidebarSelection.section(s))
@@ -708,6 +706,9 @@ private struct Sidebar: View {
 
     var body: some View {
         let folders = FolderNode.tree(model.folders)
+        // The vault shown, worked out once for every row's count (with a vault filter on, it's a filtered copy).
+        let items = model.vaultItems
+        let count = { (selection: SidebarSelection) in Self.count(selection, in: items) }
         ScrollViewReader { scroll in
             ScrollView {
                 VStack(alignment: .leading, spacing: SidebarRow<EmptyView>.gap) {
@@ -716,9 +717,9 @@ private struct Sidebar: View {
                     // A row and its fold sit together: the fold brings its own gap, so the stack's spacing would
                     // double it (and leave one under a closed group).
                     VStack(spacing: 0) {
-                        row(.all, expanded: $typesExpanded)
+                        row(.all, in: items, expanded: $typesExpanded)
                         SidebarFold(expanded: typesExpanded) {
-                            ForEach(VaultSection.underAll.filter { model.showsNavigation(.section($0)) }, id: \.self) { row($0, depth: 1) }
+                            ForEach(VaultSection.underAll.filter { model.showsNavigation(.section($0)) }, id: \.self) { row($0, in: items, depth: 1) }
                         }
                     }
                     // Where items live: your own vault, then each shared vault (opening onto its shared folders). A
@@ -737,7 +738,7 @@ private struct Sidebar: View {
                     SidebarHeading(title: "Tools")
                     tool("Send", symbol: "paperplane", .sends, count: model.sends.count)
                     tool("One-Time Codes", symbol: "clock.badge.checkmark", .codes,
-                         count: model.vaultItems.filter { !$0.isDeleted && !$0.isArchived && $0.totp != nil }.count)
+                         count: items.count(where: { !$0.isDeleted && !$0.isArchived && $0.totp != nil }))
                     tool("Generator", symbol: "dice", .generator)
                     if model.showsAPIKeyTools { tool("Tools", symbol: "terminal", .toolLaunches) }
                     tool("Access", symbol: "checkmark.shield", .access)
@@ -759,8 +760,8 @@ private struct Sidebar: View {
                             }
                         }
                     }
-                    row(.archive)
-                    row(.trash)
+                    row(.archive, in: items)
+                    row(.trash, in: items)
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 8)
@@ -1341,10 +1342,10 @@ private struct NewItemButton: View {
         ] + (model.showsAPIKeyTools ? [
             ActionMenuEntry(title: String(localized: "New API Key"), symbol: "key.horizontal") { model.beginAPIKey() }
         ] : []) + [
-            ActionMenuEntry(title: String(localized: "New Card"), symbol: "creditcard") { model.beginEditing(EditRequest(mode: .create(.card))) },
-            ActionMenuEntry(title: String(localized: "New Identity"), symbol: "person.crop.rectangle") { model.beginEditing(EditRequest(mode: .create(.identity))) },
-            ActionMenuEntry(title: String(localized: "New SSH Key"), symbol: "terminal") { model.beginEditing(EditRequest(mode: .create(.sshKey))) },
-            ActionMenuEntry(title: String(localized: "New Send"), symbol: "paperplane") { model.requestedSection = .sends; model.composingSend = true },
+            ActionMenuEntry(title: String(localized: "New Card"), symbol: "creditcard", shortcut: "⌥⌘B") { model.beginEditing(EditRequest(mode: .create(.card))) },
+            ActionMenuEntry(title: String(localized: "New Identity"), symbol: "person.crop.rectangle", shortcut: "⌥⌘I") { model.beginEditing(EditRequest(mode: .create(.identity))) },
+            ActionMenuEntry(title: String(localized: "New SSH Key"), symbol: "terminal", shortcut: "⌥⌘K") { model.beginEditing(EditRequest(mode: .create(.sshKey))) },
+            ActionMenuEntry(title: String(localized: "New Send"), symbol: "paperplane", shortcut: "⌥⌘S") { model.composeNewSend() },
             ActionMenuEntry(title: String(localized: "New Folder…"), symbol: "folder.badge.plus", shortcut: "⌥⌘N") { model.promptNewFolder() },
             ActionMenuEntry(title: String(localized: "Import…"), symbol: "square.and.arrow.down", shortcut: "⇧⌘I", enabled: !model.sessions.isEmpty) { model.beginImport() }
         ]) {
@@ -1426,12 +1427,15 @@ private struct SSHRequestsButton: View {
     @State private var emergency: [EmergencyNotice] = []
 
     var body: some View {
-        let count = Inbox.badgeCount(model: model, emergency: emergency)
+        let count = Inbox.badgeCount(model: model, emergency: emergency,
+                                     visible: Inbox.notes(model: model, emergency: emergency, dismiss: {}, reload: {}))
         Button { open.toggle() } label: {
             Image(systemName: "bell")
                 .font(.system(size: 14, weight: .medium))
                 .symbolRenderingMode(.monochrome)
                 .frame(width: PaletteTrigger.height, height: PaletteTrigger.height)
+                .modifier(HeaderChrome(shape: .circle, hovering: hovering))
+                // Over the chrome, not under it: the circle's bright edge would otherwise cut across the badge.
                 .overlay(alignment: .topTrailing) {
                     if count > 0 {
                         Text(verbatim: count > 9 ? "9+" : "\(count)")
@@ -1443,7 +1447,6 @@ private struct SSHRequestsButton: View {
                             .offset(x: 3, y: -1)
                     }
                 }
-                .modifier(HeaderChrome(shape: .circle, hovering: hovering))
                 .contentShape(.circle)
                 .animation(.easeOut(duration: 0.12), value: hovering)
         }
@@ -1452,6 +1455,7 @@ private struct SSHRequestsButton: View {
         .onHover { hovering = $0 }
         .help(Text("Notifications"))
         .accessibilityLabel(Text("Notifications"))
+        .accessibilityIdentifier("notifications-bell")
         .accessibilityValue(Text("^[\(count) waiting](inflect: true)"))
         .onAppear { revealIfAsked() }
         .onChange(of: model.presentInbox) { _, _ in revealIfAsked() }
@@ -1497,14 +1501,36 @@ private struct SSHRequestsButton: View {
 /// The request list for the header bell: the waiting signature, other notices, trusts, and the recent log.
 private struct SSHRequestsPopover: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     var emergency: [EmergencyNotice]
     var close: () -> Void
     var reloadEmergency: () async -> Void
+    /// The list's content height, so the popover wraps the rows instead of taking a fixed slab.
+    @State private var listHeight: CGFloat = 0
+
+    /// Right-click on a notice: its own action (the word the row shows), then putting it away.
+    private func noteActions(_ note: InboxNote) -> [ActionMenuEntry] {
+        var rows: [ActionMenuEntry] = []
+        if let title = note.primaryTitle {
+            rows.append(ActionMenuEntry(title: title, symbol: note.symbol) { note.primary() })
+        }
+        if let title = note.secondaryTitle {
+            rows.append(ActionMenuEntry(title: title, symbol: "xmark.circle") { note.secondary() })
+        }
+        rows.append(ActionMenuEntry(title: String(localized: "Dismiss"), symbol: "xmark",
+                                    separatorBefore: !rows.isEmpty) { model.hideInbox(note.id) })
+        return rows
+    }
 
     var body: some View {
         let agent = model.sshAgent!
         let notes = Inbox.notes(model: model, emergency: emergency, dismiss: close, reload: reloadEmergency)
-        VStack(alignment: .leading, spacing: 12) {
+        // The recent log, minus the rows swiped away. Consecutive repeats read as one activity instead of noise.
+        let recentEvents = agent.accessLog.events
+            .filter { !model.hiddenInbox.contains("ssh-" + $0.id.uuidString) }
+            .prefix(12)
+        let eventGroups = SSHAccessGroup.consecutive(Array(recentEvents)).prefix(8)
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("Notifications")
                     .font(.system(size: 13, weight: .semibold))
@@ -1542,56 +1568,97 @@ private struct SSHRequestsPopover: View {
                     }
                 }
             }
-            if !notes.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Needs attention")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(.secondary)
-                    ScrollView {
-                        VStack(spacing: 6) {
-                            ForEach(notes) { note in
-                                InboxRow(note: note)
-                            }
-                        }
-                    }
-                    .frame(maxHeight: 220)
-                    .scrollBounceBehavior(.basedOnSize)
-                    .thinScroller()
-                }
-            }
-            if agent.accessLog.events.isEmpty, agent.pending == nil, notes.isEmpty {
+            if notes.isEmpty, eventGroups.isEmpty, agent.pending == nil {
                 Text("Nothing waiting.")
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
-            } else if !agent.accessLog.events.isEmpty {
+                    .padding(.vertical, 8)
+            } else if !notes.isEmpty || !eventGroups.isEmpty {
                 ScrollView {
-                    VStack(spacing: 6) {
-                        ForEach(agent.accessLog.events.prefix(8)) { event in
-                            SSHAccessRow(event: event) {
-                                guard let item = model.items.first(where: {
-                                    $0.kind == .sshKey && !$0.isDeleted && $0.name == event.keyName
-                                }) else { return }
-                                close()
-                                model.showItem(item.id)
+                  VStack(spacing: 6) {
+                    if !notes.isEmpty {
+                        BellSectionHeader(title: String(localized: "Needs attention"), count: notes.count)
+                        ForEach(notes) { note in
+                            SwipeDismissRow { model.hideInbox(note.id) } content: {
+                                InboxRow(note: note)
                             }
+                                .appContextMenu(noteActions(note))
                         }
                     }
+                    if !eventGroups.isEmpty {
+                        BellSectionHeader(title: String(localized: "Recent activity"))
+                        ForEach(eventGroups) { group in
+                            SwipeDismissRow {
+                                for event in group.events { model.hideInbox("ssh-" + event.id.uuidString) }
+                            } content: {
+                                SSHAccessRow(event: group.latest, count: group.events.count) {
+                                    guard let item = model.items.first(where: {
+                                        $0.kind == .sshKey && !$0.isDeleted && $0.name == group.latest.keyName
+                                    }) else { return }
+                                    close()
+                                    model.showItem(item.id)
+                                }
+                            }
+                            .appContextMenu([
+                                ActionMenuEntry(title: String(localized: "Show Key"), symbol: "key") {
+                                    guard let item = model.items.first(where: {
+                                        $0.kind == .sshKey && !$0.isDeleted && $0.name == group.latest.keyName
+                                    }) else { return }
+                                    close()
+                                    model.showItem(item.id)
+                                },
+                                ActionMenuEntry(title: String(localized: "Dismiss"), symbol: "xmark", separatorBefore: true) {
+                                    for event in group.events { model.hideInbox("ssh-" + event.id.uuidString) }
+                                },
+                            ])
+                        }
+                    }
+                  }
+                  .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { listHeight = $0 }
                 }
-                .frame(maxHeight: 280)
-                .scrollBounceBehavior(.basedOnSize)
-                .thinScroller()
+                .contentMargins(.horizontal, 0, for: .scrollContent)
+                .scrollIndicators(.never)
+                .frame(height: listHeight > 0 ? min(listHeight, 340) : 240)
+                .padding(.horizontal, -6)
             }
         }
         .padding(14)
         .frame(width: 380)
+        .animation(reduceMotion ? .easeOut(duration: 0.1) : .smooth(duration: 0.24), value: model.hiddenInbox)
+        .animation(reduceMotion ? nil : .smooth(duration: 0.24), value: listHeight)
         .task { await reloadEmergency() }
     }
 
 }
 
+/// Adjacent copies of the same SSH decision are one recent activity; the full audit trail remains in Settings.
+private struct SSHAccessGroup: Identifiable {
+    var events: [SSHAccessEvent]
+    var id: UUID { latest.id }
+    var latest: SSHAccessEvent { events[0] }
+
+    static func consecutive(_ events: [SSHAccessEvent]) -> [SSHAccessGroup] {
+        var groups: [SSHAccessGroup] = []
+        for event in events {
+            if let last = groups.indices.last, groups[last].matches(event) {
+                groups[last].events.append(event)
+            } else {
+                groups.append(SSHAccessGroup(events: [event]))
+            }
+        }
+        return groups
+    }
+
+    private func matches(_ event: SSHAccessEvent) -> Bool {
+        latest.appName == event.appName && latest.via == event.via && latest.keyName == event.keyName
+            && latest.outcome == event.outcome && latest.trustKey == event.trustKey
+    }
+}
+
 /// One SSH access record: app, what it signed with, and how the request ended.
 private struct SSHAccessRow: View {
     let event: SSHAccessEvent
+    let count: Int
     var open: () -> Void
 
     var body: some View {
@@ -1602,23 +1669,19 @@ private struct SSHAccessRow: View {
     }
 
     private var row: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Image(systemName: symbol)
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(tint)
-                .frame(width: 26, height: 26)
-                .background(tint.opacity(0.16), in: .rect(cornerRadius: 7, style: .continuous))
+                .frame(width: 16)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     Text(verbatim: event.appName)
                         .font(.system(size: 13, weight: .medium))
                         .lineLimit(1)
                     Text("SSH access")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 1)
-                        .background(Color.primary.opacity(0.08), in: .capsule)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
                         .layoutPriority(1)
                 }
                 Text("via \(event.via) · \(event.keyName)")
@@ -1627,22 +1690,24 @@ private struct SSHAccessRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 2) {
                 Text(label)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(tint.opacity(0.16), in: .capsule)
-                Text(verbatim: SSHAccessClock.label(since: event.date))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(labelTint)
+                Text(verbatim: detail)
                     .font(.system(size: 10))
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .contentShape(.rect(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, 8)
+        .padding(.vertical, 9)
+        .contentShape(.rect)
+    }
+
+    private var detail: String {
+        let age = SSHAccessClock.label(since: event.date)
+        return count > 1 ? String(localized: "\(count) accesses · \(age)") : age
     }
 
     private var symbol: String {
@@ -1665,6 +1730,13 @@ private struct SSHAccessRow: View {
         }
     }
 
+    private var labelTint: Color {
+        switch event.outcome {
+        case .denied, .timedOut: tint
+        default: .secondary
+        }
+    }
+
     private var label: LocalizedStringKey {
         switch event.outcome {
         case .allowedOnce: "Allowed once"
@@ -1674,7 +1746,7 @@ private struct SSHAccessRow: View {
         case .denied: "Denied"
         case .timedOut: "Timed out"
         case .locked: "Vault locked"
-        case .reusedTrust: "Used an existing grant"
+        case .reusedTrust: "Existing grant"
         }
     }
 }
@@ -1696,10 +1768,14 @@ private struct InboxNote: Identifiable {
     let tint: Color
     let title: String
     let subtitle: String
-    var primaryTitle: LocalizedStringKey?
+    var primaryTitle: String?
     var primary: () -> Void = {}
-    var secondaryTitle: LocalizedStringKey?
+    var secondaryTitle: String?
     var secondary: () -> Void = {}
+    /// What the bell counts. Rows of one kind count once, and a kind whose rows were all swiped away stops counting.
+    var kind: Kind = .watchtower
+
+    enum Kind: Hashable { case sync, update, emergency, watchtower, sends }
 }
 
 /// Press and hover for a row in the bell. The fill lives here so a click is visible.
@@ -1709,12 +1785,248 @@ private struct PressableRowStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
-                Color.primary.opacity(configuration.isPressed ? 0.16 : (hovering ? 0.10 : 0.05)),
-                in: .rect(cornerRadius: 12, style: .continuous)
+                Color.primary.opacity(configuration.isPressed ? 0.10 : (hovering ? 0.06 : 0)),
+                in: .rect(cornerRadius: 6, style: .continuous)
             )
             .onHover { hovering = $0 }
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
             .animation(.easeOut(duration: 0.12), value: hovering)
+    }
+}
+
+private struct BellSectionHeader: View {
+    let title: String
+    var count: Int? = nil
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Text(verbatim: title)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(.tertiary)
+                .textCase(.uppercase)
+            if let count, count > 1 {
+                Text(verbatim: String(count))
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.quaternary)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .padding(.top, 8)
+        .padding(.bottom, 3)
+        .listRowInsets(EdgeInsets())
+        .listRowSeparator(.hidden)
+        .listRowBackground(Color.clear)
+        .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// One interaction for both pointer drags and trackpad scrolls inside the notification popover.
+private struct SwipeDismissRow<Content: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    var dismiss: () -> Void
+    @ViewBuilder var content: () -> Content
+    @State private var restingOffset: CGFloat = 0
+    @State private var pointerDragging = false
+    @State private var isDismissing = false
+    @State private var exitOffset: CGFloat = 0
+
+    private let actionWidth: CGFloat = 44
+    private let actionGap: CGFloat = 6
+
+    private var offset: CGFloat {
+        guard !reduceMotion else { return max(-380, min(0, restingOffset)) }
+        if restingOffset > 0 { return resistance(restingOffset) }
+        let reveal = actionWidth + actionGap
+        if restingOffset < -reveal { return -reveal - resistance(-restingOffset - reveal) }
+        return restingOffset
+    }
+
+    private func resistance(_ distance: CGFloat) -> CGFloat {
+        (distance * 0.55 * 120) / (120 + distance * 0.55)
+    }
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            Button(action: dismissRow) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 11, weight: .medium))
+                    .frame(width: actionWidth)
+                    .frame(maxHeight: .infinity)
+                    .contentShape(.rect)
+            }
+            .buttonStyle(.plain)
+            .help("Dismiss")
+            .accessibilityLabel(Text("Dismiss"))
+            .accessibilityIdentifier("notification-dismiss")
+            .foregroundStyle(.white)
+            .background(Color.red, in: .rect(cornerRadius: 8))
+            .padding(.leading, actionGap)
+            .mask(alignment: .trailing) {
+                Rectangle().frame(width: max(0, -offset))
+            }
+            .allowsHitTesting(offset < -24)
+            .accessibilityHidden(offset >= 0)
+            .zIndex(1)
+
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .offset(x: offset)
+                .allowsHitTesting(!pointerDragging)
+        }
+        .background {
+            SwipeScrollSurface(
+                onDelta: { delta in
+                    guard !isDismissing else { return }
+                    restingOffset = max(-500, min(160, restingOffset + delta))
+                },
+                onEnded: { settle(restingOffset) },
+                onPointerDragging: { pointerDragging = $0 }
+            )
+        }
+        .clipped()
+        .contentShape(.rect)
+        .offset(x: exitOffset)
+        .opacity(isDismissing ? 0 : 1)
+        .allowsHitTesting(!isDismissing)
+        .transition(.opacity)
+        .accessibilityAction(named: Text("Dismiss"), dismissRow)
+    }
+
+    private func settle(_ projectedOffset: CGFloat) {
+        guard !isDismissing else { return }
+        if projectedOffset < -120 {
+            dismissRow()
+        } else {
+            withAnimation(reduceMotion ? .easeOut(duration: 0.1) : .spring(response: 0.28, dampingFraction: 0.9)) {
+                restingOffset = projectedOffset < -32 ? -(actionWidth + actionGap) : 0
+            }
+        }
+    }
+
+    private func dismissRow() {
+        guard !isDismissing else { return }
+        withAnimation(.easeOut(duration: reduceMotion ? 0.1 : 0.18), completionCriteria: .removed) {
+            isDismissing = true
+            exitOffset = reduceMotion ? 0 : -380
+        } completion: {
+            withAnimation(reduceMotion ? .easeOut(duration: 0.1) : .smooth(duration: 0.24)) {
+                dismiss()
+            }
+        }
+    }
+}
+
+/// Feed trackpad and horizontal wheel events into the same interaction as pointer drags.
+private struct SwipeScrollSurface: NSViewRepresentable {
+    var onDelta: (CGFloat) -> Void
+    var onEnded: () -> Void
+    var onPointerDragging: (Bool) -> Void
+
+    func makeNSView(context: Context) -> Surface { Surface() }
+
+    func updateNSView(_ view: Surface, context: Context) {
+        view.onDelta = onDelta
+        view.onEnded = onEnded
+        view.onPointerDragging = onPointerDragging
+    }
+
+    static func dismantleNSView(_ view: Surface, coordinator: ()) { view.stop() }
+
+    final class Surface: NSView {
+        var onDelta: (CGFloat) -> Void = { _ in }
+        var onEnded: () -> Void = {}
+        var onPointerDragging: (Bool) -> Void = { _ in }
+        private var monitor: Any?
+        private var tracking = false
+        private var settleWorkItem: DispatchWorkItem?
+        private var pointerStart: NSPoint?
+        private var lastPointer: NSPoint?
+        private var pointerDragging = false
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            stop()
+            guard window != nil else { return }
+            monitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
+                guard let self else { return event }
+                return self.handle(event)
+            }
+        }
+
+        func handle(_ event: NSEvent) -> NSEvent? {
+            guard !self.isHiddenOrHasHiddenAncestor else { return event }
+            // The last trackpad event can have no window, no delta, or a pointer outside the row.
+            // Finish the gesture we already own before applying the hit-test for new gestures.
+            if event.type == .scrollWheel, self.tracking,
+               event.window == nil || event.window === self.window,
+               event.phase.contains(.ended) || event.phase.contains(.cancelled) {
+                self.finishScroll()
+                return nil
+            }
+            guard event.window === self.window else { return event }
+            if event.type == .leftMouseDown {
+                let point = self.convert(event.locationInWindow, from: nil)
+                self.pointerStart = self.visibleRect.contains(point) ? event.locationInWindow : nil
+                self.lastPointer = self.pointerStart
+                return event
+            }
+            if event.type == .leftMouseDragged, let start = self.pointerStart {
+                let point = event.locationInWindow
+                let dx = point.x - start.x
+                let dy = point.y - start.y
+                guard self.pointerDragging || (abs(dx) > 8 && abs(dx) > abs(dy)) else { return event }
+                if !self.pointerDragging {
+                    self.pointerDragging = true
+                    self.onPointerDragging(true)
+                }
+                self.onDelta(point.x - (self.lastPointer?.x ?? start.x))
+                self.lastPointer = point
+                return nil
+            }
+            if event.type == .leftMouseUp {
+                self.pointerStart = nil
+                self.lastPointer = nil
+                guard self.pointerDragging else { return event }
+                self.pointerDragging = false
+                self.onEnded()
+                self.onPointerDragging(false)
+                return nil
+            }
+            guard event.type == .scrollWheel else { return event }
+            let point = self.convert(event.locationInWindow, from: nil)
+            guard self.tracking || self.visibleRect.contains(point),
+                  abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) else { return event }
+
+            self.tracking = true
+            self.settleWorkItem?.cancel()
+            self.onDelta(event.scrollingDeltaX)
+            // Some mice and popover event routes omit .ended. An idle stream must settle too.
+            let workItem = DispatchWorkItem { [weak self] in self?.finishScroll() }
+            self.settleWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2, execute: workItem)
+            return nil
+        }
+
+        private func finishScroll() {
+            guard tracking else { return }
+            settleWorkItem?.cancel()
+            settleWorkItem = nil
+            tracking = false
+            onEnded()
+        }
+
+        func stop() {
+            if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
+            settleWorkItem?.cancel()
+            settleWorkItem = nil
+            tracking = false
+            pointerStart = nil
+            lastPointer = nil
+            pointerDragging = false
+        }
     }
 }
 
@@ -1724,12 +2036,11 @@ private struct InboxRow: View {
     var body: some View {
         HStack(spacing: 0) {
             Button(action: note.primary) {
-                HStack(spacing: 10) {
+                HStack(spacing: 8) {
                     Image(systemName: note.symbol)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 11, weight: .medium))
                         .foregroundStyle(note.tint)
-                        .frame(width: 26, height: 26)
-                        .background(note.tint.opacity(0.16), in: .rect(cornerRadius: 7, style: .continuous))
+                        .frame(width: 16)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(verbatim: note.title)
                             .font(.system(size: 13, weight: .medium))
@@ -1741,16 +2052,17 @@ private struct InboxRow: View {
                     }
                     Spacer(minLength: 8)
                     if note.secondaryTitle == nil, let primaryTitle = note.primaryTitle {
-                        Text(primaryTitle)
+                        Text(verbatim: primaryTitle)
                             .font(.system(size: 12, weight: .semibold))
                     }
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .contentShape(.rect(cornerRadius: 12, style: .continuous))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 9)
+                .contentShape(.rect)
             }
             .buttonStyle(PressableRowStyle())
             .disabled(note.primaryTitle == nil)
+            .accessibilityIdentifier("inbox-note-" + note.id)
             if let secondaryTitle = note.secondaryTitle {
                 Button(secondaryTitle, action: note.secondary)
                     .buttonStyle(.borderless)
@@ -1769,13 +2081,16 @@ private struct InboxRow: View {
 /// What the bell counts and lists, besides the SSH card and its log.
 @MainActor
 private enum Inbox {
-    static func badgeCount(model: AppModel, emergency: [EmergencyNotice]) -> Int {
+    /// What the bell counts: the waiting signature, then one per kind of notice that still has a row on show.
+    /// A kind whose rows were all swiped away no longer counts, so the badge and the list agree.
+    static func badgeCount(model: AppModel, emergency: [EmergencyNotice], visible notes: [InboxNote]) -> Int {
+        let kinds = Set(notes.map(\.kind))
         var count = model.sshAgent?.pending == nil ? 0 : 1
-        if model.sessions.contains(where: { $0.lastSyncError != nil }) { count += 1 }
-        if model.updates.availableVersion != nil { count += 1 }
-        if !expiringOrOpened(model.sends).isEmpty { count += 1 }
-        if hasUrgentWatchtower(model) { count += 1 }
-        if !emergency.isEmpty { count += 1 }
+        if kinds.contains(.sync) { count += 1 }
+        if kinds.contains(.update) { count += 1 }
+        if kinds.contains(.sends) { count += 1 }
+        if kinds.contains(.watchtower) { count += 1 }
+        if kinds.contains(.emergency) { count += 1 }
         return count
     }
 
@@ -1788,8 +2103,9 @@ private enum Inbox {
                 tint: Color(red: 0.95, green: 0.72, blue: 0.38),
                 title: String(localized: "Couldn't sync"),
                 subtitle: model.sessions.filter { $0.lastSyncError != nil }.map { $0.account.email + ": " + ($0.lastSyncError ?? "") }.joined(separator: "\n"),
-                primaryTitle: "Retry",
-                primary: { model.scheduleSync() }
+                primaryTitle: String(localized: "Retry"),
+                primary: { model.scheduleSync() },
+                kind: .sync
             ))
         }
         if let version = model.updates.availableVersion {
@@ -1799,11 +2115,12 @@ private enum Inbox {
                 tint: Color(red: 0.35, green: 0.78, blue: 0.55),
                 title: String(localized: "Update \(version) is ready"),
                 subtitle: String(localized: "Install when you're ready."),
-                primaryTitle: "Install",
+                primaryTitle: String(localized: "Install"),
                 primary: {
                     model.updates.checkForUpdates()
                     dismiss()
-                }
+                },
+                kind: .update
             ))
         }
         for notice in emergency {
@@ -1815,11 +2132,12 @@ private enum Inbox {
                     tint: Color(red: 0.95, green: 0.45, blue: 0.42),
                     title: notice.person,
                     subtitle: String(localized: "Emergency access granted"),
-                    primaryTitle: "Review",
+                    primaryTitle: String(localized: "Review"),
                     primary: {
                         model.showSettings(.accounts)
                         dismiss()
-                    }
+                    },
+                    kind: .emergency
                 ))
             } else if notice.contact.status == .recoveryInitiated {
                 notes.append(InboxNote(
@@ -1828,20 +2146,21 @@ private enum Inbox {
                     tint: Color(red: 0.95, green: 0.72, blue: 0.38),
                     title: notice.person,
                     subtitle: String(localized: "Asked for emergency access"),
-                    primaryTitle: "Approve",
+                    primaryTitle: String(localized: "Approve"),
                     primary: {
                         Task {
                             try? await session.emergencyAccess("approve", notice.contact)
                             await reload()
                         }
                     },
-                    secondaryTitle: "Reject",
+                    secondaryTitle: String(localized: "Reject"),
                     secondary: {
                         Task {
                             try? await session.emergencyAccess("reject", notice.contact)
                             await reload()
                         }
-                    }
+                    },
+                    kind: .emergency
                 ))
             } else {
                 notes.append(InboxNote(
@@ -1850,11 +2169,12 @@ private enum Inbox {
                     tint: .secondary,
                     title: notice.person,
                     subtitle: String(localized: "Needs confirming"),
-                    primaryTitle: "Review",
+                    primaryTitle: String(localized: "Review"),
                     primary: {
                         model.showSettings(.accounts)
                         dismiss()
-                    }
+                    },
+                    kind: .emergency
                 ))
             }
         }
@@ -1866,7 +2186,7 @@ private enum Inbox {
                 tint: Color(red: 0.95, green: 0.45, blue: 0.42),
                 title: item.name,
                 subtitle: String(localized: "Password found in a data breach"),
-                primaryTitle: "Open",
+                primaryTitle: String(localized: "Open"),
                 primary: {
                     model.showInWatchtower(item)
                     dismiss()
@@ -1880,7 +2200,7 @@ private enum Inbox {
                 tint: Color(red: 0.95, green: 0.72, blue: 0.38),
                 title: item.name,
                 subtitle: String(localized: "Card expiring soon"),
-                primaryTitle: "Open",
+                primaryTitle: String(localized: "Open"),
                 primary: {
                     model.showInWatchtower(item)
                     dismiss()
@@ -1897,19 +2217,15 @@ private enum Inbox {
                 subtitle: expiring
                     ? String(localized: "Send expires soon")
                     : String(localized: "Opened \(send.accessCount) times"),
-                primaryTitle: "Open",
+                primaryTitle: String(localized: "Open"),
                 primary: {
                     model.requestedSection = .sends
                     dismiss()
-                }
+                },
+                kind: .sends
             ))
         }
-        return notes
-    }
-
-    private static func hasUrgentWatchtower(_ model: AppModel) -> Bool {
-        let report = WatchtowerReport(items: model.items, breaches: model.breachCounts)
-        return !(report.issues[.breached] ?? []).isEmpty || !(report.issues[.cardExpiring] ?? []).isEmpty
+        return notes.filter { !model.hiddenInbox.contains($0.id) }
     }
 
     private static func isExpiringSoon(_ send: SendItem) -> Bool {
@@ -1979,16 +2295,36 @@ enum ItemSort: String, CaseIterable, Identifiable {
     }
 
     /// The index letter for a title: A–Z, with Chinese and Japanese romanised (銀行 → Y) and everything else "#".
-    static func letter(_ name: String) -> String {
+    /// The list asks for every item's letter each time it updates, so this has to be cheap.
+    @MainActor static func letter(_ name: String) -> String {
+        // A name that starts with plain ASCII comes back from romanising unchanged: decide it here, without ICU.
+        for character in name {
+            guard character.isASCII else { break }
+            if character.isWhitespace { continue }
+            return character.isLetter ? character.uppercased() : "#"
+        }
+        // ICU's transliterator is slow, so each other name is romanised once.
+        if let known = romanised[name] { return known }
+        let found = romanisedLetter(name)
+        romanised[name] = found
+        return found
+    }
+
+    private static func romanisedLetter(_ name: String) -> String {
         let latin = name.applyingTransform(.toLatin, reverse: false)?.applyingTransform(.stripDiacritics, reverse: false) ?? name
         guard let first = latin.trimmingCharacters(in: .whitespacesAndNewlines).first.map({ String($0).uppercased() }),
               first.count == 1, ("A"..."Z").contains(first) else { return "#" }
         return first
     }
 
+    /// Letters already worked out for names that needed romanising. Names are vault contents: cleared on lock.
+    @MainActor private static var romanised: [String: String] = [:]
+
+    @MainActor static func forgetLetters() { romanised = [:] }
+
     private func date(_ item: VaultItem) -> Date? { self == .created ? item.created : item.revised }
 
-    static func sorted(_ items: [VaultItem], by sort: ItemSort, ascending: Bool) -> [VaultItem] {
+    @MainActor static func sorted(_ items: [VaultItem], by sort: ItemSort, ascending: Bool) -> [VaultItem] {
         switch sort {
         case .title:
             // Letters A–Z, then # (numbers and symbols), then by name within a letter.
@@ -2009,7 +2345,7 @@ enum ItemSort: String, CaseIterable, Identifiable {
     }
 
     /// Consecutive runs of the (already sorted) items under one header each.
-    static func sections(_ items: [VaultItem], by sort: ItemSort) -> [(title: String, items: [VaultItem])] {
+    @MainActor static func sections(_ items: [VaultItem], by sort: ItemSort) -> [(title: String, items: [VaultItem])] {
         let month = Date.FormatStyle().month(.wide).year()
         var out: [(title: String, items: [VaultItem])] = []
         for item in items {
@@ -2158,7 +2494,7 @@ private struct ItemColumn: View {
                         case .item(let item):
                             ItemRow(item: item, isSelected: picked(item), highlight: query)
                                 .modifier(ArrivalPop(arrived: model.arrivedID == item.id))
-                                .onTapGesture { click(item, ordered: ItemSort.sections(items, by: order).flatMap(\.items)) }
+                                .onTapGesture { click(item, ordered: items) } // the sections run in the list's own order
                                 .accessibilityElement(children: .combine)
                                 .accessibilityAddTraits(item.id == selection ? [.isButton, .isSelected] : .isButton)
                                 .accessibilityAction { selection = item.id }
@@ -2315,21 +2651,158 @@ struct ItemRow: View {
 extension EnvironmentValues {
     /// False while the detail pane sits off-screen on the narrow-window strip.
     @Entry var showsDetailToolbar = true
-    /// The vault window's vertical middle, in window coordinates: empty states line up on it across columns.
-    @Entry var windowMidY: CGFloat?
+}
+
+/// The window's live geometry, in window points. It changes on every frame of a resize, so it is a separate
+/// observable rather than `VaultView` state: a drag then rebuilds only the views that draw from it, not the vault.
+@MainActor @Observable
+final class WindowMetrics {
+    /// The window's width.
+    var width: CGFloat = 1120
+    /// The window's vertical middle: empty states line up on it across columns.
+    var midY: CGFloat?
+    /// Where the detail column starts. The maximized/full-screen header uses it to center the palette on the window.
+    var detailX: CGFloat = 0
+    /// True only for the system's zoomed or full-screen window states, not merely for a manually wide window.
+    var expanded = false
+}
+
+/// Tracks the two system window states that center the palette. Repeated resize notifications are harmless: the
+/// observable value is written only when the state actually changes, so a live resize does not rebuild the header.
+private struct WindowModeObserver: NSViewRepresentable {
+    let metrics: WindowMetrics
+
+    func makeCoordinator() -> Coordinator { Coordinator(metrics: metrics) }
+
+    func makeNSView(context: Context) -> WindowView {
+        let view = WindowView()
+        view.windowChanged = { [weak coordinator = context.coordinator] window in coordinator?.attach(to: window) }
+        return view
+    }
+
+    func updateNSView(_ view: WindowView, context: Context) {
+        context.coordinator.attach(to: view.window)
+    }
+
+    static func dismantleNSView(_ view: WindowView, coordinator: Coordinator) {
+        view.windowChanged = nil
+        coordinator.attach(to: nil)
+    }
+
+    @MainActor final class Coordinator {
+        private let metrics: WindowMetrics
+        private weak var window: NSWindow?
+        private var notifications: [NSObjectProtocol] = []
+
+        init(metrics: WindowMetrics) { self.metrics = metrics }
+
+        func attach(to window: NSWindow?) {
+            guard self.window !== window else { return }
+            notifications.forEach(NotificationCenter.default.removeObserver)
+            notifications.removeAll()
+            self.window = window
+            guard let window else { update(nil); return }
+            let names: [Notification.Name] = [
+                NSWindow.didResizeNotification,
+                NSWindow.didEnterFullScreenNotification,
+                NSWindow.didExitFullScreenNotification,
+            ]
+            notifications = names.map { name in
+                NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] note in
+                    let changedWindow = note.object as? NSWindow
+                    MainActor.assumeIsolated { self?.update(changedWindow) }
+                }
+            }
+            update(window)
+        }
+
+        private func update(_ window: NSWindow?) {
+            let expanded = window.map { $0.isZoomed || $0.styleMask.contains(.fullScreen) } ?? false
+            if metrics.expanded != expanded { metrics.expanded = expanded }
+        }
+    }
+
+    final class WindowView: NSView {
+        var windowChanged: ((NSWindow?) -> Void)?
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            windowChanged?(window)
+        }
+    }
+}
+
+/// The window's header: back (narrow windows), new item, the palette's trigger, and the SSH requests.
+private struct VaultHeader: View {
+    @Environment(WindowMetrics.self) private var metrics
+    let compact: Bool
+    let narrow: Bool
+    let phoneDetail: Bool
+    let depth: Int
+    let open: Bool
+    let back: () -> Void
+
+    /// The palette's trigger width. It changes only at the header's breakpoints (compact, and narrow within that) —
+    /// never continuously with the window — so nothing in the header moves while the window is being dragged.
+    private var searchWidth: CGFloat {
+        compact ? (narrow ? 150 : 228) : 300
+    }
+
+    private var searchLeadingPadding: CGFloat {
+        guard !compact else { return 0 }
+        guard metrics.expanded else {
+            return VaultView.listWidth + ItemDetail.detailInset - VaultView.plusInset - NewItemButton.size
+        }
+        return max(0, metrics.width / 2 - metrics.detailX - VaultView.headerSlotInset - searchWidth / 2
+                   - VaultView.plusInset - NewItemButton.size - 8)
+    }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if compact && depth > 0 {
+                Button(action: back) {
+                    Image(systemName: depth == 1 ? "sidebar.left" : "chevron.left").font(.system(size: 14, weight: .medium))
+                        .contentTransition(.symbolEffect(.replace))
+                        .frame(width: 36, height: 36).contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .modifier(HeaderChrome(shape: .circle))
+                .keyboardShortcut("[", modifiers: .command)
+                .help(Text("Back (⌘[)"))
+                .accessibilityLabel(Text("Back"))
+            }
+            // On a phone-width detail, the header belongs to the item's actions (search and + are the list's).
+            if !(compact && phoneDetail && depth == 2) {
+                // The + belongs over the list. In a wide item layout, the trigger starts exactly where the detail
+                // cards start below it: after the list, the pane gap, and the detail's own leading inset.
+                NewItemButton()
+                    .padding(.leading, VaultView.plusInset) // its edge over the list's
+                PaletteTrigger(compactLabel: searchWidth < 260)
+                    .frame(width: searchWidth)
+                    .padding(.leading, searchLeadingPadding)
+                SSHRequestsButton()
+                // A slot holding a single view lays it out at zero size; a zero-width sibling keeps it measured.
+                Text(verbatim: " ").frame(width: 0).accessibilityHidden(true)
+            }
+        }
+        // Under the lock layer: present (so the header keeps its height and nothing moves on unlock) but invisible
+        // and inert.
+        .opacity(open ? 1 : 0)
+        .disabled(!open) // shortcuts too
+        .accessibilityHidden(!open)
+    }
 }
 
 /// An empty state centred on the window's middle rather than its own column's, so the list's and the detail's sit on
 /// one line however their panels are inset (the filter bar above one, the footer below the other).
 struct WindowCentered: ViewModifier {
-    @Environment(\.windowMidY) private var windowMidY
+    @Environment(WindowMetrics.self) private var metrics
 
     func body(content: Content) -> some View {
         GeometryReader { geo in
             let own = geo.frame(in: .global).midY
             content
                 .frame(width: geo.size.width, height: geo.size.height)
-                .offset(y: windowMidY.map { $0 - own } ?? 0)
+                .offset(y: metrics.midY.map { $0 - own } ?? 0)
         }
     }
 }
@@ -2717,6 +3190,7 @@ struct ItemDetail: View {
                 }
                     .foregroundStyle(item.favorite ? .yellow : .primary)
                     .overlay { Burst(trigger: starBurst) }
+                toolbarButton("paperplane", help: "Share by Link…", spoken: "Share by Link") { model.shareItemByLink(item) }
                 toolbarButton("pencil", help: "Edit (⌘E)", spoken: "Edit", effect: .wiggle) { model.guarded(item) { model.beginEditing(EditRequest(mode: .edit(item))) } }
                 toolbarButton("trash", help: "Move to Trash… (⌘⌫)", spoken: "Move to Trash", effect: .bounce) { model.confirmTrash(item) }
             }
@@ -2736,8 +3210,8 @@ struct ItemDetail: View {
 }
 
 extension HeroCard {
-    /// The password and one-time-code tiles.
-    @ViewBuilder func tiles(_ style: HeroStyle) -> some View {
+    /// The password and one-time-code tiles. `stacked`: one above the other, each the column's full width.
+    @ViewBuilder func tiles(_ style: HeroStyle, stacked: Bool = false) -> some View {
         if let password = item.password {
             Tile(style: style) {
                 passwordArmed = model.copyCount
@@ -2775,19 +3249,21 @@ extension HeroCard {
                     CopyStatusIcon(copied: codeCopied)
                 }
                 .font(.system(size: 12)).foregroundStyle(style.muted)
-                // Pinned to the tile's bottom, so it sits low like the password and its strength bar, with room above.
-                Spacer(minLength: 4)
+                // The row takes the tile's slack and sits at its bottom, level with the password's strength bar.
                 HStack(alignment: .center, spacing: 12) {
                     LiveOTPCode(totp: totp, size: 22)
                     // The ring sits at the tile's trailing edge, under the copy icon, at any tile width.
                     Spacer(minLength: 12)
                     LiveCountdownRing(totp: totp, size: 24, digits: 0.38)
                 }
+                .frame(maxHeight: .infinity, alignment: .bottom)
                 .padding(.bottom, 2)
             }
-            .frame(minWidth: item.password == nil ? nil : 220,
-                   maxWidth: item.password == nil ? .infinity : nil)
-            .fixedSize(horizontal: item.password != nil, vertical: false)
+            // Beside the password it keeps its own width, as before. Stacked, it takes the column's width instead:
+            // hugging there left the ring floating mid-column with a gap after it.
+            .frame(minWidth: stacked || item.password == nil ? nil : 220,
+                   maxWidth: stacked || item.password == nil ? .infinity : nil)
+            .fixedSize(horizontal: !stacked && item.password != nil, vertical: false)
             .help(Text("Copy one-time code"))
             .accessibilityLabel(Text("Copy One-time code"))
             .copyTick(armed: $codeArmed, copied: $codeCopied)
@@ -2875,7 +3351,7 @@ private struct HeroCard: View {
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: 10) { tiles(style) }
                         .frame(minWidth: 0, idealWidth: 440, maxWidth: .infinity, alignment: .leading)
-                    VStack(alignment: .leading, spacing: 10) { tiles(style) }
+                    VStack(alignment: .leading, spacing: 10) { tiles(style, stacked: true) }
                 }
                 .fixedSize(horizontal: false, vertical: true)
             }
@@ -3106,6 +3582,7 @@ struct ToastView: View {
 private struct ClipboardCountdown: View {
     @Environment(AppModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.windowVisible) private var windowVisible
     @State private var hovering = false
     @State private var labelWidth: CGFloat = 0
 
@@ -3123,8 +3600,9 @@ private struct ClipboardCountdown: View {
                         .frame(width: hovering ? labelWidth + 15 : 0, alignment: .trailing)
                         .clipped()
                         .opacity(hovering ? 1 : 0)
-                    // The same ring as a one-time code's: draining, the seconds inside. Only it redraws with the clock.
-                    TimelineView(.animation(minimumInterval: 1 / 15)) { context in
+                    // The same ring as a one-time code's: draining, the seconds inside. Only it redraws with the clock,
+                    // and not while the window can't be seen.
+                    TimelineView(.animation(minimumInterval: 1 / 15, paused: !windowVisible)) { context in
                         let remaining = max(0, clears.timeIntervalSince(context.date))
                         CountdownRing(fraction: remaining / total, seconds: Int(remaining.rounded(.up)), size: 20, digits: 0.46)
                     }

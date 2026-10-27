@@ -1,5 +1,61 @@
 # Changelog
 
+## [0.5.2](https://github.com/sinhong2011/triwarden/compare/v0.5.1...v0.5.2) (2026-10-27)
+
+
+### Fixes
+
+* **menubar:** unlock in the panel, with a centred locked card ([#128](https://github.com/sinhong2011/triwarden/issues/128)) ([8f83409](https://github.com/sinhong2011/triwarden/commit/8f83409e78243ab8cd112108708abdb8de022b21))
+
+
+### UI
+
+* quiet Vault Lock chrome (Touch ID, logout, reveal) ([#127](https://github.com/sinhong2011/triwarden/issues/127)) ([6e1a371](https://github.com/sinhong2011/triwarden/commit/6e1a371dbfa8aa85497f2e2290a30967562a3ee0))
+
+## [0.5.1](https://github.com/sinhong2011/triwarden/compare/v0.5.0...v0.5.1) (2026-10-26)
+
+
+### Fixes
+
+* **cli:** resolve tw's own path with proc_pidpath for install-chrome ([#121](https://github.com/sinhong2011/triwarden/issues/121)) ([9a42c84](https://github.com/sinhong2011/triwarden/commit/9a42c849e45d6974afeed7c8db95dc4b08026022)) (@sinhong2011)
+* **header:** draw the bell's count badge over the button's chrome ([#106](https://github.com/sinhong2011/triwarden/issues/106)) ([1d928cc](https://github.com/sinhong2011/triwarden/commit/1d928cc7f3412c0a559028afe10ae783eb9c4e0e)) (@sinhong2011)
+* **menubar:** offer a sign-in when no account is signed in ([#123](https://github.com/sinhong2011/triwarden/issues/123)) ([3ff4b3c](https://github.com/sinhong2011/triwarden/commit/3ff4b3cfc7999f71d95e41eeb9fe9ab09b82f5e1)) (@sinhong2011)
+* **ui:** draggable scroll thumb, OTP tile width, new-item keys, and no AutoFill at launch ([#119](https://github.com/sinhong2011/triwarden/issues/119)) ([7505738](https://github.com/sinhong2011/triwarden/commit/7505738eb950f06988a667e36d2909c0af83055b)) (@sinhong2011)
+
+
+### Performance
+
+* **app:** keep input bookkeeping out of observation ([#118](https://github.com/sinhong2011/triwarden/issues/118)) ([e28561b](https://github.com/sinhong2011/triwarden/commit/e28561b3d018603b83098aeb87fa72cbf4430528)) (@erfnzdeh)
+* bound IconStore memory and reject stale icon requests ([#104](https://github.com/sinhong2011/triwarden/issues/104)) ([12a25ee](https://github.com/sinhong2011/triwarden/commit/12a25ee7d70f04c8ac965277fddceb2912e74639)) (@sinhong2011)
+* **list:** filter and sort the item list once per update, and index letters without ICU ([#115](https://github.com/sinhong2011/triwarden/issues/115)) ([5724089](https://github.com/sinhong2011/triwarden/commit/57240893937de4509a9513480a81c8178885850d)) (@erfnzdeh)
+* **otp:** rest countdown rings while their window can't be seen ([#117](https://github.com/sinhong2011/triwarden/issues/117)) ([5a56b2f](https://github.com/sinhong2011/triwarden/commit/5a56b2faef813541edbed425f512942a1639af44)) (@erfnzdeh)
+* **sidebar:** count rows in place, and work out the Watchtower badge without the whole report ([#116](https://github.com/sinhong2011/triwarden/issues/116)) ([5d26e99](https://github.com/sinhong2011/triwarden/commit/5d26e9935629e174689734c50f58856572bfccac)) (@erfnzdeh)
+* **vault:** take live window geometry out of the vault's body, and settle the header ([#110](https://github.com/sinhong2011/triwarden/issues/110)) ([b768927](https://github.com/sinhong2011/triwarden/commit/b7689272e4e29c8391bfec3126ecf063204fe4fa)) (@sinhong2011)
+
+## [0.5.0](https://github.com/sinhong2011/triwarden/compare/v0.4.0...v0.5.0) (2026-10-24)
+
+
+### Features
+
+* change vault and shared folders from the edit form ([#86](https://github.com/sinhong2011/triwarden/issues/86)) ([f3dc545](https://github.com/sinhong2011/triwarden/commit/f3dc54536ca1abd0c7bcf7f97945fd87cf6c68e9))
+* **i18n:** rename zh picker labels; add Korean, French, Spanish, Thai ([#83](https://github.com/sinhong2011/triwarden/issues/83)) ([d33a486](https://github.com/sinhong2011/triwarden/commit/d33a4863314187a77435a758ee3f540658ba5b87))
+* pre-check the only shared folder there is ([#94](https://github.com/sinhong2011/triwarden/issues/94)) ([56ebc2f](https://github.com/sinhong2011/triwarden/commit/56ebc2f9a4830bf149442995e6d695be02506ef6))
+* **send:** bring the Sends list up to the item list's standard ([#98](https://github.com/sinhong2011/triwarden/issues/98)) ([c6878d2](https://github.com/sinhong2011/triwarden/commit/c6878d29dae59c85c773663d1b01416d52ec5487))
+* **send:** share an item by link with a prefilled Send ([#85](https://github.com/sinhong2011/triwarden/issues/85)) ([#87](https://github.com/sinhong2011/triwarden/issues/87)) ([2386c89](https://github.com/sinhong2011/triwarden/commit/2386c89d89ffd7a92466a9e2b945b75d1ca4f095))
+
+
+### Fixes
+
+* **autofill:** use the app's selected-row style for passkey save targets ([#100](https://github.com/sinhong2011/triwarden/issues/100)) ([71d9e87](https://github.com/sinhong2011/triwarden/commit/71d9e878d1d3e9eefae371e73cb4ea044be1b8f3))
+* **inbox:** stack attention cards and history without a gap ([#99](https://github.com/sinhong2011/triwarden/issues/99)) ([#101](https://github.com/sinhong2011/triwarden/issues/101)) ([ca20572](https://github.com/sinhong2011/triwarden/commit/ca205726a70be2daca106779436114cb7ba57c60))
+* keep the marketing site on GitHub's latest release ([#80](https://github.com/sinhong2011/triwarden/issues/80)) ([cf2fcb7](https://github.com/sinhong2011/triwarden/commit/cf2fcb7141700cbb29647009dfc42de241d192e2))
+* **menu:** align menu rows and size the popover to its rows ([#91](https://github.com/sinhong2011/triwarden/issues/91)) ([cdf26a7](https://github.com/sinhong2011/triwarden/commit/cdf26a76c2a1aafd2fb0ea54f2c36bca6a1a435d))
+* **quick-access:** copy shortcuts in palette ([#88](https://github.com/sinhong2011/triwarden/issues/88)) ([#95](https://github.com/sinhong2011/triwarden/issues/95)) ([75122e4](https://github.com/sinhong2011/triwarden/commit/75122e47ef71fc1c895fc99a5ed462bb424c4241))
+* **send:** a date field of the app's own, and expiry folded away ([#96](https://github.com/sinhong2011/triwarden/issues/96), [#97](https://github.com/sinhong2011/triwarden/issues/97)) ([#103](https://github.com/sinhong2011/triwarden/issues/103)) ([84e28f0](https://github.com/sinhong2011/triwarden/commit/84e28f0177f7c6e82d0f2b11fbab3f5dbc850518))
+* **send:** editing a Send no longer wipes its password ([#90](https://github.com/sinhong2011/triwarden/issues/90)) ([47167fa](https://github.com/sinhong2011/triwarden/commit/47167faae16ba25e68c7dc74453b81a6d3cfbb76))
+* serve robots.txt and the light vault Open Graph image ([#82](https://github.com/sinhong2011/triwarden/issues/82)) ([957a91d](https://github.com/sinhong2011/triwarden/commit/957a91d2dbb5b4efda75798768c56cfae05a3a5d))
+* show the Triwarden icon for Auto-Type in System Settings ([#78](https://github.com/sinhong2011/triwarden/issues/78)) ([7cc2476](https://github.com/sinhong2011/triwarden/commit/7cc24768820d66ce9e612f5e54cdb56b97454dbe))
+
 ## [0.4.0](https://github.com/sinhong2011/triwarden/compare/v0.3.0...v0.4.0) (2026-10-19)
 
 
