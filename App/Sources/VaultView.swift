@@ -301,6 +301,7 @@ struct VaultView: View {
             .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minX } action: { metrics.detailX = $0 }
             .background(WindowBackdrop())
             .toolbar(removing: .title)
+            .background { if #unavailable(macOS 26) { TallToolbar() } }
             // The header stays clear over the backdrop (a wide item in it would otherwise bring up a tinted bar).
             .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
             .toolbar {
@@ -311,17 +312,11 @@ struct VaultView: View {
                                     depth: depth, open: vaultOpen) { depth = max(depth - 1, 0) }
                     }
                     .sharedBackgroundVisibility(.hidden)
-                }
-            }
-            .overlay(alignment: .topLeading) {
-                // macOS 15 draws a toolbar flush with the window's top edge, with no floating gap. Here the header
-                // is laid over the content instead, so it keeps the gap macOS 26 gives it.
-                if #unavailable(macOS 26) {
-                    VaultHeader(compact: compact, narrow: narrowHeader, phoneDetail: phoneDetail,
-                                depth: depth, open: vaultOpen) { depth = max(depth - 1, 0) }
-                        .padding(.leading, 8)
-                        .padding(.top, 8)
-                        .ignoresSafeArea(.container, edges: .top)
+                } else {
+                    ToolbarItem(placement: .navigation) {
+                        VaultHeader(compact: compact, narrow: narrowHeader, phoneDetail: phoneDetail,
+                                    depth: depth, open: vaultOpen) { depth = max(depth - 1, 0) }
+                    }
                 }
             }
             .background {
@@ -4545,5 +4540,19 @@ struct SidebarCalmSelection: NSViewRepresentable {
         private static func outlines(in view: NSView) -> [NSOutlineView] {
             (view as? NSOutlineView).map { [$0] } ?? view.subviews.flatMap(outlines)
         }
+    }
+}
+
+/// macOS 15 only: the window's toolbar is 38pt high. The unified style is 52pt, which centres the header and the
+/// traffic lights lower, nearer to the macOS 26 header.
+private struct TallToolbar: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async { view.window?.toolbarStyle = .unified }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        if let window = view.window, window.toolbarStyle != .unified { window.toolbarStyle = .unified }
     }
 }

@@ -57,6 +57,9 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
             .thinScroller()
             .navigationSplitViewColumnWidth(min: 200, ideal: 230, max: 280)
+            // macOS 26 floats the sidebar below the traffic lights. macOS 15 starts it at the title bar's edge, so the
+            // first row is moved down to leave the same space.
+            .safeAreaPadding(.top, { if #available(macOS 26, *) { 0 } else { 12 } }())
             // Settings always shows its sidebar, like System Settings: no button to fold it away.
             .toolbar(removing: .sidebarToggle)
         } detail: {

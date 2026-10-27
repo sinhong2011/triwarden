@@ -1,5 +1,5 @@
 {
-  "originHash" : "1dae83c1d7a16bce15a2eb4894d641877341545ebb4926a1f1243c662d5c1298",
+  "originHash" : "f785969dd60b29f75a1676cf6938aa6414a5dc213e7a141b90efc2a28966c61b",
   "pins" : [
     {
       "identity" : "phc-winner-argon2",
@@ -7,6 +7,15 @@
       "location" : "https://github.com/P-H-C/phc-winner-argon2",
       "state" : {
         "revision" : "f57e61e19229e23c4445b85494dbf7c07de721cb"
+      }
+    },
+    {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "eef1a539a373c1f1a320624b1130fc5de7b2e100",
+        "version" : "2.10.0"
       }
     }
   ],
