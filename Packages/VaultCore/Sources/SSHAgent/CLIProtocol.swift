@@ -70,7 +70,7 @@ public enum BridgeClient {
 
     public static func send(_ request: CLIRequest, socket: String = defaultSocketPath) -> CLIResponse {
         guard let fd = FramedSocketServer.connect(to: socket) else {
-            return .failure("Triwarden isn't running, or this connection is turned off in Settings › Developer.")
+            return .failure("Triwarden isn't running, or this connection is turned off in Settings › Browser or Developer.")
         }
         defer { close(fd) }
         guard let body = try? JSONEncoder().encode(request), FramedSocketServer.writeFrame(fd, body),

@@ -646,7 +646,7 @@ enum Snapshot {
                        to: dir.appending(path: "account-unlock-\(name).png"))
             }
             let saved = UserDefaults.standard.string(forKey: "settingsPane")
-            for pane in ["accounts", "general", "shortcuts", "server", "security", "developer", "license", "about"] {
+            for pane in ["accounts", "general", "shortcuts", "server", "security", "browser", "developer", "license", "about"] {
                 UserDefaults.standard.set(pane, forKey: "settingsPane")
                 render(SettingsView().environment(people).tint(.controlTint),
                        size: CGSize(width: 820, height: 640), appearance: appearance,

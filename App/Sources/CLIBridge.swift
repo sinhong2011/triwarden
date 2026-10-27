@@ -169,7 +169,7 @@ final class CLIBridge {
         let browserCommand = [.match, .fill, .save].contains(request.command)
         let enabled = UserDefaults.standard.bool(forKey: browserCommand ? Pref.browser : Pref.cli) || approveOverride != nil
         guard enabled else {
-            return .failure(browserCommand ? "Turn on the browser extension in Triwarden › Settings › Developer."
+            return .failure(browserCommand ? "Turn on the browser extension in Triwarden › Settings › Browser."
                                            : "Turn on “Answer the tw command” in Triwarden › Settings › Developer.")
         }
         switch request.command {

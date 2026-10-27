@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     enum Pane: String, CaseIterable, Identifiable {
         // Everyday first, then who and how it's protected, then the keys, the connection, the tools, and about.
-        case general, accounts, security, shortcuts, server, developer, license, about
+        case general, accounts, security, shortcuts, server, browser, developer, license, about
         var id: Self { self }
         var title: String {
             switch self {
@@ -17,6 +17,7 @@ struct SettingsView: View {
             case .general: String(localized: "General")
             case .shortcuts: String(localized: "Shortcuts")
             case .security: String(localized: "Security")
+            case .browser: String(localized: "Browser")
             case .developer: String(localized: "Developer")
             case .server: String(localized: "Server")
             case .license: String(localized: "License")
@@ -29,6 +30,7 @@ struct SettingsView: View {
             case .general: "gearshape"
             case .shortcuts: "keyboard"
             case .security: "lock.shield"
+            case .browser: "safari"
             case .developer: "terminal"
             case .server: "server.rack"
             case .license: "checkmark.seal"
@@ -67,6 +69,7 @@ struct SettingsView: View {
                 case .general: GeneralSettings()
                 case .shortcuts: ShortcutsSettings()
                 case .security: SecuritySettings()
+                case .browser: BrowserSettings()
                 case .developer: DeveloperSettings()
                 case .server: ServerSettings()
                 case .license: LicenseSettings()
@@ -473,6 +476,41 @@ private struct SecuritySettings: View {
     }
 }
 
+// MARK: Browser
+
+private struct BrowserSettings: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage(Pref.browser) private var browserEnabled = false
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Allow the browser extension", isOn: $browserEnabled)
+                    .onChange(of: browserEnabled) { model.cli.refreshRunning() }
+                LabeledContent("Safari") {
+                    Button("Open Safari Extensions") {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Safari-Extensions-Settings")!)
+                    }
+                }
+                LabeledContent("Chrome, Edge, Brave") {
+                    Button("Show Extension Folder") {
+                        let folder = Bundle.main.bundleURL.appending(path: "Contents/PlugIns/TriwardenSafari.appex/Contents/Resources/manifest.json")
+                        NSWorkspace.shared.activateFileViewerSelecting([folder])
+                    }
+                }
+            } header: {
+                Text("Browser extension")
+            } footer: {
+                Text("Safari: turn on Triwarden in Safari › Settings › Extensions. Chromium browsers: load the folder as an unpacked extension, then run tw install-chrome <extension id>. Suggestions show names only; filling asks for Touch ID, saving asks you first.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .thinScroller()
+    }
+}
+
 // MARK: SSH
 
 private struct DeveloperSettings: View {
@@ -480,7 +518,6 @@ private struct DeveloperSettings: View {
     @AppStorage(Pref.sshAgent) private var enabled = false
     @AppStorage(Pref.cli) private var cliEnabled = false
     @AppStorage(Pref.cliApprovalSeconds) private var cliApprovalSeconds = 0
-    @AppStorage(Pref.browser) private var browserEnabled = false
 
     private var installCommand: String { "sudo ln -sf \"\(CLIBridge.toolPath)\" /usr/local/bin/tw" }
 
@@ -542,27 +579,6 @@ private struct DeveloperSettings: View {
                 Text("Command line")
             } footer: {
                 Text("tw get github · tw code github · tw list · tw generate. Reading anything from the vault needs it unlocked and Touch ID or your Mac password.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            Section {
-                Toggle("Allow the browser extension", isOn: $browserEnabled)
-                    .onChange(of: browserEnabled) { model.cli.refreshRunning() }
-                LabeledContent("Safari") {
-                    Button("Open Safari Extensions") {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Safari-Extensions-Settings")!)
-                    }
-                }
-                LabeledContent("Chrome, Edge, Brave") {
-                    Button("Show Extension Folder") {
-                        let folder = Bundle.main.bundleURL.appending(path: "Contents/PlugIns/TriwardenSafari.appex/Contents/Resources/manifest.json")
-                        NSWorkspace.shared.activateFileViewerSelecting([folder])
-                    }
-                }
-            } header: {
-                Text("Browser extension")
-            } footer: {
-                Text("Safari: turn on Triwarden in Safari › Settings › Extensions. Chromium browsers: load the folder as an unpacked extension, then run tw install-chrome <extension id>. Suggestions show names only; filling asks for Touch ID, saving asks you first.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
