@@ -23,8 +23,10 @@ enum Snapshot {
     static func runIfRequested() {
         let args = CommandLine.arguments
         guard args.contains("--snapshot") else { return }
-        // Sandboxed: write inside our container and print the path.
-        let dir = FileManager.default.temporaryDirectory.appending(path: "snapshots", directoryHint: .isDirectory)
+        // Sandboxed: write inside our container and print the path. `TRIWARDEN_SNAPSHOT_DIR` sends them elsewhere
+        // (a folder the sandbox can already write, e.g. build/snapshots) so other tools can read them.
+        let dir = ProcessInfo.processInfo.environment["TRIWARDEN_SNAPSHOT_DIR"].map { URL(filePath: $0) }
+            ?? FileManager.default.temporaryDirectory.appending(path: "snapshots", directoryHint: .isDirectory)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
 
         let model = AppModel()
@@ -376,6 +378,22 @@ enum Snapshot {
             render(MenuBarContent().environment(vault).tint(.brand).background(.regularMaterial),
                    size: CGSize(width: 380, height: 760), appearance: appearance,
                    to: dir.appending(path: "menubar-\(name).png"))
+        }
+        // The panel with no vault open: nothing signed in on this Mac, then a real locked vault beside it.
+        let signedOutPanel = AppModel()
+        signedOutPanel.setPreviewAccounts([])
+        signedOutPanel.phase = .login
+        let lockedPanel = AppModel()
+        lockedPanel.setPreviewAccounts(vault.accounts)
+        lockedPanel.phase = .locked
+        lockedPanel.touchIDEnabled = true // so the snapshot shows the trailing Touch ID glyph beside the centred name
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            render(MenuBarContent().environment(signedOutPanel).tint(.brand).background(.regularMaterial),
+                   size: CGSize(width: 380, height: 270), appearance: appearance,
+                   to: dir.appending(path: "menubar-signed-out-\(name).png"))
+            render(MenuBarContent().environment(lockedPanel).tint(.brand).background(.regularMaterial),
+                   size: CGSize(width: 380, height: 320), appearance: appearance,
+                   to: dir.appending(path: "menubar-locked-\(name).png"))
         }
         // The palette's states: ranked and loose matches, an item's actions, the generator, a new login from the query,
         // a type scope, commands only, and a locked vault.
