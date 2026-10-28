@@ -34,6 +34,27 @@ struct CLIProtocolTests {
         #expect(rows[0]["totp"] == nil)
     }
 
+    @Test func matchCarriesIconCodeAndTheAutoShowSetting() throws {
+        let json = try object(.list([.init(id: "1", name: "n", detail: "d", totpPeriod: 30, icon: "iVBOR", code: "123456")],
+                                    autoShow: true))
+        #expect(json["autoShow"] as? Bool == true)
+        let row = try #require((json["rows"] as? [[String: Any]])?.first)
+        #expect(row["icon"] as? String == "iVBOR")
+        #expect(row["code"] as? String == "123456")
+    }
+
+    @Test func requestAsksForCodesOnlyWhenTold() throws {
+        let plain = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"match","url":"https://a.test"}"#.utf8))
+        #expect(plain.codes == nil)
+        #expect(plain.reveal == nil)
+        let asking = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"match","codes":true,"reveal":true}"#.utf8))
+        #expect(asking.codes == true)
+        #expect(asking.reveal == true)
+        // A focus-only request can name codes without revealing them: the app must not read that as a yes.
+        let focus = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"match","codes":true}"#.utf8))
+        #expect(focus.reveal != true)
+    }
+
     @Test func oldRepliesStillDecode() throws {
         let reply = Data(#"{"ok":true,"rows":[{"id":"1","name":"n","detail":"d"}]}"#.utf8)
         let decoded = try JSONDecoder().decode(CLIResponse.self, from: reply)

@@ -23,6 +23,10 @@ final class CLIBridge {
     private(set) var lastError: String?
     private var server: FramedSocketServer?
     private var approvedUntil: [String: Date] = [:]
+    /// Sites whose one-time codes were approved for the browser extension a moment ago, so the code on the screen can
+    /// roll over, and the fill that follows, without asking again. In memory only, per site, and dropped on lock.
+    private var revealedSites: [String: Date] = [:]
+    private static let revealSeconds: TimeInterval = 60
     private weak var model: AppModel?
     /// Self-test hook: skip the Touch ID prompt.
     var approveOverride: ((String) -> Bool)?
@@ -72,6 +76,7 @@ final class CLIBridge {
 
     func reset() {
         approvedUntil = [:]
+        revealedSites = [:]
         LoginSaveNotifier.withdraw(pendingSaves.map(\.id))
         pendingSaves = []
         declinedSaves = []
@@ -174,13 +179,37 @@ final class CLIBridge {
         }
         switch request.command {
         case .match:
-            // Names/usernames only, for the page's site, and only for our own extension/host binaries.
+            // Names, usernames and site icons only, for the page's site, and only for our own extension/host binaries.
+            // The one-time codes shown on a code field are secrets like the ones `fill` returns: they wait for the same
+            // approval, and a refusal still lists the logins, just without the digits.
             guard Self.isOwnBinary(peer) else { return .failure("Unknown client.") }
-            guard model.isUnlocked else { return .failure(Self.locked) }
-            guard let host = request.url.flatMap(URL.init(string:))?.host()?.lowercased() else { return .list([]) }
-            return .list(Self.logins(for: host, in: model.items).map {
-                CLIResponse.Row(id: $0.id, name: $0.name, detail: $0.username ?? "", totpPeriod: $0.totp?.period)
-            })
+            let autoShow = UserDefaults.standard.bool(forKey: Pref.browserAutoShow)
+            guard model.isUnlocked else {
+                var locked = CLIResponse.failure(Self.locked)
+                locked.autoShow = autoShow // the setting is known even while the vault is locked
+                return locked
+            }
+            guard let host = request.url.flatMap(URL.init(string:))?.host()?.lowercased() else {
+                return .list([], autoShow: autoShow)
+            }
+            let matches = Self.logins(for: host, in: model.items)
+            // Codes are secrets: they only come when the person asked for them (the icon in the field, the shortcut),
+            // never because a field was focused. One approval covers that site for a minute, so a code that rolls over
+            // or the fill that follows does not ask again.
+            var withCodes = false
+            if request.codes == true, request.reveal == true, matches.contains(where: { $0.totp != nil && !$0.reprompt }) {
+                if let until = revealedSites[host], until > .now {
+                    withCodes = true
+                } else if await approve(String(localized: "show one-time codes for \(host)"), peer: peer) {
+                    revealedSites[host] = .now.addingTimeInterval(Self.revealSeconds)
+                    withCodes = true
+                }
+            }
+            return .list(matches.map {
+                CLIResponse.Row(id: $0.id, name: $0.name, detail: $0.username ?? "", totpPeriod: $0.totp?.period,
+                                icon: Self.iconPNG(for: $0, model: model),
+                                code: withCodes && !$0.reprompt ? $0.totp?.code() : nil)
+            }, autoShow: autoShow)
         case .fill:
             guard model.isUnlocked else { return .failure(Self.locked) }
             guard let item = model.items.first(where: { $0.id == request.query && !$0.isDeleted && !$0.isArchived }) else {
@@ -189,7 +218,12 @@ final class CLIBridge {
             let host = request.url.flatMap(URL.init(string:))?.host() ?? ""
             // Only fill a login on the site it belongs to.
             guard Self.logins(for: host.lowercased(), in: [item]).count == 1 else { return .failure("“\(item.name)” isn't for \(host).") }
-            guard await approve(String(localized: "fill “\(item.name)” on \(host)"), peer: peer) else { return .failure(Self.denied) }
+            // A code reveal a moment ago on this site covers the fill that follows, except for logins that ask for the
+            // master password: those are never waved through.
+            let revealed = !item.reprompt && (revealedSites[host.lowercased()].map { $0 > .now } ?? false)
+            if !revealed {
+                guard await approve(String(localized: "fill “\(item.name)” on \(host)"), peer: peer) else { return .failure(Self.denied) }
+            }
             guard let totp = item.totp else { return .credentials(username: item.username, password: item.password, totp: nil) }
             let fresh = await Self.freshCode(totp)
             return .credentials(username: item.username, password: item.password, totp: fresh.code,
@@ -257,6 +291,17 @@ final class CLIBridge {
         if allowed, window > 0 { approvedUntil[grant] = .now.addingTimeInterval(TimeInterval(window)) }
         if allowed { model?.noteActivity() }
         return allowed
+    }
+
+    /// The site's icon from the vault list's cache (so only the icon service you already use is asked, and only when
+    /// icons are on), as a base64 PNG. A site not cached yet starts loading and appears the next time.
+    static func iconPNG(for item: VaultItem, model: AppModel) -> String? {
+        guard IconStore.enabled, item.kind == .login, let host = item.host else { return nil }
+        let store = IconStore.shared
+        store.request(host: host, environment: model.session(for: item.accountId)?.environment ?? store.fallbackEnvironment)
+        guard let image = store.image(for: host),
+              let bitmap = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        return NSBitmapImageRep(cgImage: bitmap).representation(using: .png, properties: [:])?.base64EncodedString()
     }
 
     /// A code that will still be valid when the page submits it. One with a few seconds left would often expire on

@@ -481,12 +481,15 @@ private struct SecuritySettings: View {
 private struct BrowserSettings: View {
     @Environment(AppModel.self) private var model
     @AppStorage(Pref.browser) private var browserEnabled = false
+    @AppStorage(Pref.browserAutoShow) private var autoShow = false
 
     var body: some View {
         Form {
             Section {
                 Toggle("Allow the browser extension", isOn: $browserEnabled)
                     .onChange(of: browserEnabled) { model.cli.refreshRunning() }
+                Toggle("Show suggestions when a field is focused", isOn: $autoShow)
+                    .disabled(!browserEnabled)
                 LabeledContent("Safari") {
                     Button("Open Safari Extensions") {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Safari-Extensions-Settings")!)

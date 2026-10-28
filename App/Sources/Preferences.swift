@@ -18,6 +18,7 @@ enum Pref {
     static let cli = "cli"                               // answer the `cw` command
     static let cliApprovalSeconds = "cliApprovalSeconds"
     static let browser = "browser"                       // answer the Safari/Chrome extension
+    static let browserAutoShow = "browserAutoShow"       // the extension opens its suggestions when a login field is focused
     static let checkUpdates = "checkUpdates"             // opt-in: look at GitHub's latest release daily
     static let hideFromCapture = "hideFromCapture"       // windows stay out of screen sharing, recordings and screenshots
     static let timeoutAction = "timeoutAction"           // after inactivity: "lock" or "logOut" (accounts may override)

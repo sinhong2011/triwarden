@@ -1,24 +1,28 @@
 /* Matches the Triwarden app's palette and menu bar panel: a soft neutral selection wash (no colour slab), continuous
-   corners, hairline edges and a spring-in. Colours come from the page's colour scheme, so the menu follows light
-   and dark without asking the page. Brand blue is only ever a fill; icons and text stay neutral. */
+   corners, hairline edges, the vault list's white icon tiles, the app's "485 • 657" code and a spring-in. Colours
+   come from the page's colour scheme, so the menu follows light and dark without asking the page. Brand blue is only
+   ever a fill (the app icon); text and symbols stay neutral. */
 :host {
   all: initial;
   color-scheme: light dark;
-  --ink: CanvasText;
+  --ink: #1d1d1f; /* not CanvasText: that follows the page's colour scheme, and the menu follows the system's */
   /* Nearly opaque: unlike the app's glass, this sits over any page, and a page's colours must not tint it. */
   --card: rgba(255, 255, 255, 0.98);
   --edge: rgba(0, 0, 0, 0.08);
-  --wash: rgba(0, 0, 0, 0.06);
+  --wash: rgba(0, 0, 0, 0.055);
   --chip: rgba(0, 0, 0, 0.06);
-  --shadow: 0 12px 32px rgba(20, 24, 60, 0.16), 0 2px 6px rgba(20, 24, 60, 0.08);
+  --tile: #fff;
+  --shadow: 0 18px 40px rgba(20, 24, 60, 0.18), 0 2px 8px rgba(20, 24, 60, 0.08);
 }
 @media (prefers-color-scheme: dark) {
   :host {
+    --ink: #f5f5f7;
     --card: rgba(38, 39, 43, 0.98);
     --edge: rgba(255, 255, 255, 0.14);
-    --wash: rgba(255, 255, 255, 0.1);
+    --wash: rgba(255, 255, 255, 0.09);
     --chip: rgba(255, 255, 255, 0.1);
-    --shadow: 0 14px 36px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(0, 0, 0, 0.3);
+    --tile: #f5f5f7;
+    --shadow: 0 18px 44px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
   }
 }
 
@@ -26,25 +30,28 @@
   box-sizing: border-box;
 }
 
-/* ---- The key inside a field ---- */
+/* ---- The app icon inside a field ---- */
 .key {
   position: fixed;
-  width: 24px;
-  height: 24px;
+  width: 22px;
+  height: 22px;
   border: 0;
-  border-radius: 7px;
+  border-radius: 6px;
   padding: 0;
   display: grid;
   place-items: center;
-  color: color-mix(in srgb, var(--ink) 55%, transparent);
   background: transparent;
   cursor: pointer;
-  transition: background-color 140ms ease, color 140ms ease;
+  filter: drop-shadow(0 1px 2px rgba(11, 42, 64, 0.28));
+  transition: transform 160ms cubic-bezier(0.2, 1.2, 0.4, 1), filter 160ms ease;
+}
+.key svg {
+  display: block;
 }
 .key:hover,
 .key:focus-visible {
-  background: var(--wash);
-  color: var(--ink);
+  transform: scale(1.12);
+  filter: drop-shadow(0 3px 6px rgba(11, 42, 64, 0.34));
   outline: none;
 }
 .key:active {
@@ -54,54 +61,56 @@
 /* ---- The menu ---- */
 .menu {
   position: fixed;
-  width: 300px;
+  width: 332px;
   max-width: calc(100vw - 16px);
   padding: 6px;
-  border-radius: 16px;
+  border-radius: 20px;
   font: 13px/1.3 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
   color: var(--ink);
   background: var(--card);
-  -webkit-backdrop-filter: saturate(1.6) blur(24px);
-  backdrop-filter: saturate(1.6) blur(24px);
+  -webkit-backdrop-filter: saturate(1.6) blur(28px);
+  backdrop-filter: saturate(1.6) blur(28px);
   box-shadow: var(--shadow), inset 0 0 0 0.5px var(--edge);
   transform-origin: top left;
-  animation: pop 260ms cubic-bezier(0.2, 1.2, 0.4, 1);
+  animation: pop 280ms cubic-bezier(0.2, 1.2, 0.4, 1);
 }
 @keyframes pop {
   from {
     opacity: 0;
-    transform: scale(0.94) translateY(-3px);
+    transform: scale(0.93) translateY(-4px);
   }
 }
 
 .head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 5px 10px 7px;
-  font-size: 11px;
+  gap: 7px;
+  padding: 6px 10px 8px;
+  font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
   color: color-mix(in srgb, var(--ink) 55%, transparent);
 }
 .head svg {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 1px 1.5px rgba(11, 42, 64, 0.25));
 }
 
 .note {
-  padding: 10px 10px 12px;
+  padding: 10px 10px 14px;
   color: color-mix(in srgb, var(--ink) 62%, transparent);
 }
 
-/* ---- A login row: site initial, name, username ---- */
+/* ---- A login row: site icon, name, username, and for code fields the code with its countdown ---- */
 .row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 7px 10px;
-  border-radius: 11px;
+  gap: 11px;
+  min-height: 52px;
+  padding: 8px 10px;
+  border-radius: 14px;
   cursor: pointer;
   transition: background-color 120ms ease;
 }
@@ -113,19 +122,31 @@
   outline: none;
   background: var(--wash);
 }
-.badge {
+
+/* The vault list's icon tile: white, a hairline edge, continuous corners; letters and logos sit together. */
+.avatar {
   flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
-  font-size: 13px;
-  font-weight: 600;
-  text-transform: uppercase;
-  color: color-mix(in srgb, var(--ink) 70%, transparent);
-  background: var(--chip);
+  overflow: hidden;
+  background: var(--tile);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
 }
+.avatar img {
+  width: 100%;
+  height: 100%;
+  padding: 5px;
+  object-fit: contain;
+}
+.avatar .letter {
+  font: 600 15px/1 ui-rounded, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.62);
+}
+
 .text {
   min-width: 0;
   flex: 1;
@@ -133,8 +154,47 @@
   flex-direction: column;
   gap: 1px;
 }
+.name {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--ink) 58%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-/* ---- Seconds left on a login's one-time code: neutral, orange only in the last five ---- */
+/* The one-time code, as in the app: two halves and a still dot, orange only in the last seconds. */
+.code {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 16px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.code[data-masked="true"] {
+  color: color-mix(in srgb, var(--ink) 45%, transparent);
+  letter-spacing: 0.06em;
+}
+.code .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
+  transition: background-color 200ms ease;
+}
+.code[data-urgent="true"] .dot {
+  background: #ff9f0a;
+}
+
+/* ---- Seconds left on the code: neutral, orange only in the last five ---- */
 .ring {
   flex: none;
   position: relative;
@@ -168,27 +228,14 @@
 .ring[data-urgent="true"] {
   color: #ff9f0a;
 }
-.name {
-  font-size: 14px;
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.detail {
-  font-size: 12px;
-  color: color-mix(in srgb, var(--ink) 58%, transparent);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 @media (prefers-reduced-motion: reduce) {
   .menu {
     animation: none;
   }
   .key,
-  .row {
+  .row,
+  .ring .arc {
     transition: none;
   }
 }
