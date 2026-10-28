@@ -6,6 +6,14 @@ import { COMMANDS, type Reply } from '../lib/protocol';
 const HOST = 'io.github.sinhong2011.triwarden';
 
 export default defineBackground(() => {
+  // The fill shortcut (see `commands` in wxt.config.ts): every frame of the tab hears it, and the ones with a
+  // login or code field answer by filling or opening the menu.
+  browser.commands.onCommand.addListener(async (command, tab) => {
+    if (command !== 'fill-login') return;
+    const id = tab?.id ?? (await browser.tabs.query({ active: true, currentWindow: true }))[0]?.id;
+    if (id != null) await browser.tabs.sendMessage(id, { trigger: 'fill' }).catch(() => {});
+  });
+
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (!message || !COMMANDS.has(message.command) || !sender.tab) return false;
     // The page URL comes from the browser, not from the page, so a frame can't claim another site.

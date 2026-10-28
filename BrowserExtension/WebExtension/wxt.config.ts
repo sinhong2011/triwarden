@@ -10,6 +10,12 @@ export default defineConfig({
     description: 'Fill and save logins from your Triwarden vault. Filling asks for Touch ID in the app.',
     icons: { 48: 'icon-48.png', 96: 'icon-96.png', 128: 'icon-128.png' },
     permissions: ['nativeMessaging'],
+    commands: {
+      'fill-login': {
+        suggested_key: { default: 'Ctrl+Shift+L', mac: 'Command+Shift+L' },
+        description: 'Fill the login or one-time code on this page',
+      },
+    },
     ...(browser === 'firefox' && {
       browser_specific_settings: {
         gecko: {

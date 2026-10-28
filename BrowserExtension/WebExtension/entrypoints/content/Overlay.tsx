@@ -1,4 +1,5 @@
 import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import { browser } from 'wxt/browser';
 import { send } from '../../lib/send';
 import { fillOtp, otpTargets, passwordFields, setValue, usernameFor, visible } from '../../lib/dom';
 import type { Row } from '../../lib/protocol';
@@ -88,7 +89,8 @@ export default function Overlay() {
     return { display: 'grid', left: `${r.right - 28}px`, top: `${r.top + (r.height - 22) / 2}px` };
   };
 
-  async function open(target: Target) {
+  /** `direct`: with exactly one match, fill it without showing the menu (the keyboard shortcut). */
+  async function open(target: Target, direct = false) {
     const r = target.field.getBoundingClientRect();
     const base = { target, x: r.left, y: r.bottom + 4, rows: [] as Row[] };
     setMenu({ ...base, state: 'note', note: 'Looking for logins…' });
@@ -101,8 +103,18 @@ export default function Overlay() {
       const none = target.otp ? 'No login with a one-time code for this site.' : 'No logins for this site.';
       return setMenu({ ...base, state: 'note', note: none });
     }
+    const only = rows.length === 1 ? rows[0] : undefined;
+    if (direct && only) return choose(only, target);
     setActive(0);
     setMenu({ ...base, state: 'rows', rows, note: '' });
+  }
+
+  /** The keyboard shortcut: act on the field the user is in, else the first login or code field on the page. */
+  function trigger() {
+    const list = targets();
+    const here = document.activeElement;
+    const target = list.find((t) => t.field === here || t.otp?.includes(here as HTMLInputElement)) ?? list[0];
+    if (target) void open(target, true);
   }
 
   async function choose(row: Row, target: Target) {
@@ -153,12 +165,18 @@ export default function Overlay() {
         if (row) void choose(row, m.target);
       }
     };
+    // Frames with nothing to fill stay quiet, so the background can ask every frame of the tab.
+    const asked = (message: unknown) => {
+      if ((message as { trigger?: string } | null)?.trigger === 'fill') trigger();
+    };
+    browser.runtime.onMessage.addListener(asked);
     addEventListener('scroll', move, { passive: true, capture: true });
     addEventListener('resize', move, { passive: true });
     document.addEventListener('mousedown', outside, true);
     document.addEventListener('keydown', keys, true);
     onCleanup(() => {
       clearTimeout(timer);
+      browser.runtime.onMessage.removeListener(asked);
       observer.disconnect();
       removeEventListener('scroll', move, true);
       removeEventListener('resize', move);
