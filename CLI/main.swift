@@ -26,10 +26,7 @@ func fail(_ message: String, code: Int32 = 1) -> Never {
 }
 
 let socket = ProcessInfo.processInfo.environment["TW_SOCKET"] ?? BridgeClient.defaultSocketPath
-let chromeHost = "io.github.sinhong2011.triwarden"
-/// The Firefox add-on id. It must equal `browser_specific_settings.gecko.id` in
-/// BrowserExtension/WebExtension/wxt.config.ts (scripts/test-install-chrome-path.py checks that).
-let firefoxExtensionID = "triwarden@sinhong2011.github.io"
+let chromeHost = NativeHost.name
 
 /// Chrome starts the host with the extension's origin; Firefox with the host manifest's path, then the add-on id.
 func startedByBrowser(_ arguments: [String]) -> Bool {
@@ -37,15 +34,30 @@ func startedByBrowser(_ arguments: [String]) -> Bool {
     return first.hasPrefix("chrome-extension://") || first.hasSuffix("/\(chromeHost).json")
 }
 
+/// The bundle id of the browser that started `tw` (its parent process), e.g. "com.google.Chrome".
+func launchingBrowserBundleID() -> String? {
+    var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+    guard proc_pidpath(getppid(), &buffer, UInt32(buffer.count)) > 0 else { return nil }
+    let path = String(cString: buffer)
+    // The outermost .app: a browser's own helper apps live inside it.
+    guard let end = path.range(of: ".app/")?.lowerBound else { return nil }
+    return Bundle(path: String(path[..<end]) + ".app")?.bundleIdentifier
+}
+
 /// Browser native messaging (Chrome and Firefox): messages are 4-byte little-endian length + JSON on stdin/stdout.
-func nativeMessagingLoop() -> Never {
+func nativeMessagingLoop(launchedWith arguments: [String]) -> Never {
+    // Chrome passes the extension's origin; Firefox passes the host manifest's path and then the add-on id.
+    let origin = arguments.first { $0.hasPrefix("chrome-extension://") } ?? (arguments.count > 1 ? arguments[1] : nil)
+    let browser = launchingBrowserBundleID()
     let input = FileHandle.standardInput, output = FileHandle.standardOutput
     while let header = try? input.read(upToCount: 4), header.count == 4 {
         let length = Int(header[0]) | Int(header[1]) << 8 | Int(header[2]) << 16 | Int(header[3]) << 24
         guard length > 0, length < 1_048_576, let body = try? input.read(upToCount: length), body.count == length else { break }
         let response: CLIResponse
-        if let request = try? JSONDecoder().decode(CLIRequest.self, from: body),
-           [.match, .fill, .save].contains(request.command) {
+        if var request = try? JSONDecoder().decode(CLIRequest.self, from: body),
+           [.match, .fill, .save, .copy].contains(request.command) {
+            request.origin = origin // from how the browser started us, whatever the message said
+            request.browser = browser
             response = BridgeClient.send(request, socket: socket)
         } else {
             response = .failure("Unsupported request.")
@@ -72,40 +84,27 @@ func executablePath() -> String? {
     return URL(fileURLWithPath: argv0).resolvingSymlinksInPath().path
 }
 
-/// Write the native-messaging host manifest for each browser whose data folder exists. Returns the files written.
-func writeHostManifest(_ manifest: [String: Any], browsers: [(folder: String, hostFolder: String)]) -> [String] {
+/// Write the native-messaging host manifest for each installed browser of `family`. Returns the files written.
+func installHost(_ family: NativeHost.Browser.Family, chromeExtensionID: String? = nil) -> [String] {
     guard let me = executablePath() else {
         fail("couldn't work out where tw is installed; run it by its full path", code: 70)
     }
-    var manifest = manifest
-    manifest["path"] = me
-    let support = FileManager.default.homeDirectoryForCurrentUser.appending(path: "Library/Application Support")
     var written: [String] = []
-    for browser in browsers {
-        guard FileManager.default.fileExists(atPath: support.appending(path: browser.folder).path) else { continue }
-        let dir = support.appending(path: "\(browser.hostFolder)/NativeMessagingHosts")
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        let file = dir.appending(path: "\(chromeHost).json")
-        if let data = try? JSONSerialization.data(withJSONObject: manifest, options: [.prettyPrinted, .sortedKeys]),
-           (try? data.write(to: file)) != nil { written.append(file.path) }
+    for browser in NativeHost.browsers where browser.family == family && NativeHost.isInstalled(browser) {
+        guard let data = try? NativeHost.manifest(for: browser, tool: me, chromeExtensionID: chromeExtensionID) else { continue }
+        let file = NativeHost.manifestURL(browser)
+        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+        if (try? data.write(to: file)) != nil { written.append(file.path) }
     }
     return written
 }
 
 /// `tw install-chrome <extension-id>` registers this binary as Chrome's native-messaging host.
 func installChromeHost(_ extensionID: String) -> Never {
-    guard extensionID.range(of: "^[a-p]{32}$", options: .regularExpression) != nil else {
+    guard NativeHost.isChromeExtensionID(extensionID) else {
         fail("that doesn't look like a Chrome extension id (32 letters a–p, see chrome://extensions)", code: 64)
     }
-    let manifest: [String: Any] = [
-        "name": chromeHost, "description": "Triwarden", "type": "stdio",
-        "allowed_origins": ["chrome-extension://\(extensionID)/"],
-    ]
-    let written = writeHostManifest(manifest, browsers: [
-        ("Google/Chrome", "Google/Chrome"), ("Google/Chrome Beta", "Google/Chrome Beta"), ("Chromium", "Chromium"),
-        ("Microsoft Edge", "Microsoft Edge"), ("BraveSoftware/Brave-Browser", "BraveSoftware/Brave-Browser"),
-        ("Arc/User Data", "Arc/User Data"),
-    ])
+    let written = installHost(.chromium, chromeExtensionID: extensionID)
     guard !written.isEmpty else { fail("no Chromium-based browser found") }
     written.forEach { print("wrote \($0)") }
     exit(0)
@@ -114,18 +113,13 @@ func installChromeHost(_ extensionID: String) -> Never {
 /// `tw install-firefox` registers this binary as Firefox's native-messaging host. Firefox lists the add-ons that
 /// may start it (`allowed_extensions`) instead of Chrome's origins.
 func installFirefoxHost() -> Never {
-    let manifest: [String: Any] = [
-        "name": chromeHost, "description": "Triwarden", "type": "stdio",
-        "allowed_extensions": [firefoxExtensionID],
-    ]
-    // Firefox keeps its profiles in "Firefox" and reads hosts from "Mozilla".
-    let written = writeHostManifest(manifest, browsers: [("Firefox", "Mozilla")])
+    let written = installHost(.firefox)
     guard !written.isEmpty else { fail("Firefox not found") }
     written.forEach { print("wrote \($0)") }
     exit(0)
 }
 
-if startedByBrowser(Array(CommandLine.arguments.dropFirst())) { nativeMessagingLoop() }
+if startedByBrowser(Array(CommandLine.arguments.dropFirst())) { nativeMessagingLoop(launchedWith: Array(CommandLine.arguments.dropFirst())) }
 
 var args = Array(CommandLine.arguments.dropFirst())
 guard let first = args.first else { print(usage); exit(64) }

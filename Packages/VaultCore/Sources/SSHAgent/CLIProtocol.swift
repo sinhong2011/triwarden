@@ -7,6 +7,9 @@ public struct CLIRequest: Codable, Sendable, Equatable {
         case status, list, get, code, generate, lock
         /// Browser extension: logins for a page (names/usernames only), fill one, offer to save one.
         case match, fill, save
+        /// Browser extension: copy one field of a login (`field`: username, password or totp) to the clipboard. The app
+        /// does the copying, so the value never reaches the extension.
+        case copy
     }
     public var command: Command
     public var query: String?
@@ -22,12 +25,19 @@ public struct CLIRequest: Codable, Sendable, Equatable {
     /// `match` with `codes`: the person asked for them (clicked the icon, pressed the shortcut). A field that merely
     /// took focus does not set this, and gets no codes.
     public var reveal: Bool?
+    /// Added by `tw` when a browser started it: that browser's extension origin (`chrome-extension://<id>/`) or, for
+    /// Firefox, the add-on id. The app uses it to show which browsers are connected, since a sandboxed app cannot read
+    /// their folders. The extension itself never sets it.
+    public var origin: String?
+    /// Added by `tw` the same way: the bundle id of the browser that started it (com.google.Chrome, ...), so the app
+    /// can say which browser is connected.
+    public var browser: String?
 
     public init(command: Command, query: String? = nil, field: String? = nil, length: Int? = nil,
                 url: String? = nil, username: String? = nil, password: String? = nil, codes: Bool? = nil,
-                reveal: Bool? = nil) {
+                reveal: Bool? = nil, origin: String? = nil, browser: String? = nil) {
         self.command = command; self.query = query; self.field = field; self.length = length
-        self.url = url; self.username = username; self.password = password; self.codes = codes; self.reveal = reveal
+        self.url = url; self.username = username; self.password = password; self.codes = codes; self.reveal = reveal; self.origin = origin; self.browser = browser
     }
 }
 
@@ -43,8 +53,15 @@ public struct CLIResponse: Codable, Sendable, Equatable {
         public var icon: String?
         /// `match` with `codes`: the login's current one-time code (not for logins that ask for the master password).
         public var code: String?
-        public init(id: String, name: String, detail: String, totpPeriod: Int? = nil, icon: String? = nil, code: String? = nil) {
-            self.id = id; self.name = name; self.detail = detail; self.totpPeriod = totpPeriod; self.icon = icon; self.code = code
+        /// `match`: the login's address is exactly this site, not a parent domain or subdomain. Rows come sorted with
+        /// these first, then the ones filled most recently.
+        public var exact: Bool?
+        /// `match`: the login also holds a passkey for the site.
+        public var passkey: Bool?
+        public init(id: String, name: String, detail: String, totpPeriod: Int? = nil, icon: String? = nil,
+                    code: String? = nil, exact: Bool? = nil, passkey: Bool? = nil) {
+            self.id = id; self.name = name; self.detail = detail; self.totpPeriod = totpPeriod; self.icon = icon
+            self.code = code; self.exact = exact; self.passkey = passkey
         }
     }
 

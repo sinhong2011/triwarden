@@ -56,13 +56,22 @@ const Avatar = (props: { row: Row }) => (
   </span>
 );
 
+const ROW_HEIGHT = 50;
+const MAX_ROWS = 5; // taller lists scroll
+const HINT_HEIGHT = 30;
+const MENU_WIDTH = 332;
+const CODE_MENU_WIDTH = 392; // a code field's rows also hold the code and its ring, so the username needs more room
+
+/** Rows are shown in two groups when a site has both logins with a passkey and logins without. */
+const groupOf = (row: Row) => (row.passkey ? 'Passkeys' : 'Passwords');
+
 /** `pw`: the password field of a login form. `otp`: the field, or row of one-digit boxes, for a one-time code. */
 type Target = { field: HTMLInputElement; pw?: HTMLInputElement; otp?: HTMLInputElement[] };
 /** `at`: when the rows were fetched, so a code that has since rolled over is fetched again. */
 type Menu = {
   target: Target;
-  x: number;
-  y: number;
+  /** Opened by itself when a field took focus: starts with nothing highlighted and shows the key hints. */
+  auto: boolean;
   state: 'rows' | 'note';
   rows: Row[];
   note: string;
@@ -115,7 +124,7 @@ export default function Overlay() {
     const reply = await send({ command: 'match', codes: true, reveal: true });
     refreshing = false;
     const now = menu();
-    if (!now || now.target !== m.target || !reply.ok) return;
+    if (!now || now.target.field !== m.target.field || !reply.ok) return;
     const rows = (reply.rows ?? []).filter((r) => r.totpPeriod);
     if (rows.length) setMenu({ ...now, rows, at: Date.now() });
   }
@@ -152,14 +161,29 @@ export default function Overlay() {
     return { display: 'grid', left: `${r.right - 30}px`, top: `${r.top + (r.height - 22) / 2}px` };
   };
 
+  /** Where the menu sits: under its field, or over it when the space below is too small; kept inside the window. */
+  const menuStyle = (m: Menu) => {
+    tick(); // scroll and resize move the field, and the menu goes with it
+    const f = m.target.field;
+    if (!f.isConnected) return { display: 'none' };
+    const r = f.getBoundingClientRect();
+    const shown = m.state === 'rows' ? Math.min(m.rows.length, MAX_ROWS) : 1;
+    const groups = m.state === 'rows' && new Set(m.rows.map(groupOf)).size > 1 && !m.target.otp ? 2 : 0;
+    const height = shown * ROW_HEIGHT + groups * 24 + 12 + (m.auto && m.state === 'rows' ? HINT_HEIGHT : 0);
+    const below = innerHeight - r.bottom - 12;
+    const wide = m.target.otp ? CODE_MENU_WIDTH : MENU_WIDTH;
+    const left = `${Math.max(8, Math.min(r.left, innerWidth - wide - 8))}px`;
+    const width = `${wide}px`;
+    return below >= height || r.top < below ? { left, width, top: `${r.bottom + 6}px` } : { left, width, bottom: `${innerHeight - r.top + 6}px` };
+  };
+
   /**
    * `click`: the icon in the field. `direct`: the keyboard shortcut, which fills at once when exactly one login matches.
    * `auto`: the field was focused; stays silent unless the app's setting is on and there is something to offer.
    */
   async function open(target: Target, mode: 'click' | 'direct' | 'auto' = 'click') {
     const auto = mode === 'auto';
-    const r = target.field.getBoundingClientRect();
-    const base = { target, x: r.left, y: r.bottom + 6, rows: [] as Row[], at: Date.now(), revealed: !auto };
+    const base = { target, auto, rows: [] as Row[], at: Date.now(), revealed: !auto };
     const mine = ++asking;
     autoOpened = false;
     if (!auto) setMenu({ ...base, state: 'note', note: 'Looking for logins…' });
@@ -177,7 +201,10 @@ export default function Overlay() {
       return setMenu({ ...base, state: 'note', note: reply.error || "Triwarden isn't available." });
     }
     // A code field only offers the logins that have a code.
-    const rows = target.otp ? (reply.rows ?? []).filter((row) => row.totpPeriod) : (reply.rows ?? []);
+    const found = target.otp ? (reply.rows ?? []).filter((row) => row.totpPeriod) : (reply.rows ?? []);
+    // Two groups only when a site has both kinds; each keeps the app's order (exact address, then most recently filled).
+    const mixed = !target.otp && found.some((row) => row.passkey) && found.some((row) => !row.passkey);
+    const rows = mixed ? [...found.filter((r) => r.passkey), ...found.filter((r) => !r.passkey)] : found;
     if (!rows.length) {
       if (auto) return;
       const none = target.otp ? 'No login with a one-time code for this site.' : 'No logins for this site.';
@@ -185,7 +212,7 @@ export default function Overlay() {
     }
     const only = rows.length === 1 ? rows[0] : undefined;
     if (mode === 'direct' && only) return choose(only, target);
-    setActive(0);
+    setActive(auto ? -1 : 0); // a menu that opened by itself highlights nothing until the mouse or an arrow key does
     navigated = !auto;
     autoOpened = auto;
     setMenu({ ...base, state: 'rows', rows, note: '', at: Date.now() });
@@ -198,6 +225,8 @@ export default function Overlay() {
   function offerFor(el: Element | null): boolean {
     const t = targets().find((x) => x.field === el || x.otp?.includes(el as HTMLInputElement));
     if (!t) return false;
+    // Focus moved to another field: the menu follows. (Compare the fields: a rescan makes new Target objects.)
+    if (menu()?.auto && menu()!.target.field !== t.field) close();
     if (filling || menu() || offered.has(t.field) || Date.now() < autoPausedUntil) return true;
     // While the setting is off, look again every few seconds: turning it on in the app should work on pages that
     // are already open, without asking the app on every single focus.
@@ -207,12 +236,17 @@ export default function Overlay() {
     return true;
   }
 
-  /** The keyboard shortcut: act on the field the user is in, else the first login or code field on the page. */
-  function trigger() {
+  /**
+   * The keyboard shortcut and the right-click menu: act on the field the user is in, else the first login or code field
+   * on the page. With `rowId` (a login picked from the right-click menu) that login is filled, without asking again.
+   */
+  function trigger(rowId?: string) {
     const list = targets();
     const here = document.activeElement;
     const target = list.find((t) => t.field === here || t.otp?.includes(here as HTMLInputElement)) ?? list[0];
-    if (target) void open(target, 'direct');
+    if (!target) return;
+    if (rowId) void choose({ id: rowId, name: '' }, target);
+    else void open(target, 'direct');
   }
 
   async function choose(row: Row, target: Target) {
@@ -270,12 +304,14 @@ export default function Overlay() {
         e.stopPropagation();
         navigated = true;
         setActive((i) => (e.key === 'ArrowDown' ? Math.min(i + 1, last) : Math.max(i - 1, 0)));
+        requestAnimationFrame(() => root.querySelector('.row[data-active="true"]')?.scrollIntoView({ block: 'nearest' }));
       } else if (e.key === 'Enter' && navigated) {
         // A menu that opened by itself leaves Enter to the page until the arrow keys have picked a row.
         e.preventDefault();
         e.stopPropagation();
         const row = m.rows[active()];
         if (row) void choose(row, m.target);
+        else close();
       }
     };
     // Focus: open the suggestions when the app's setting asks for it; moving to any other field closes them.
@@ -284,8 +320,14 @@ export default function Overlay() {
     };
     const left = (e: FocusEvent) => offered.delete(e.target as HTMLInputElement);
     // Frames with nothing to fill stay quiet, so the background can ask every frame of the tab.
-    const asked = (message: unknown) => {
-      if ((message as { trigger?: string } | null)?.trigger === 'fill') trigger();
+    const asked = (message: unknown, _sender: unknown, reply: (value: unknown) => void) => {
+      const m = message as { trigger?: string; row?: string; ask?: string } | null;
+      if (m?.ask === 'url') {
+        if (window === window.top) reply(location.href); // the right-click menu is built for the page's own address
+      } else if (m?.trigger === 'fill') {
+        trigger(m.row);
+      }
+      return false;
     };
     browser.runtime.onMessage.addListener(asked);
     addEventListener('scroll', move, { passive: true, capture: true });
@@ -325,45 +367,63 @@ export default function Overlay() {
         )}
       </For>
       <Show when={menu()}>
-        {(m) => (
-          <div class="menu" role="menu" style={{ left: `${m().x}px`, top: `${m().y}px` }}>
-            <div class="head">
-              <AppMark size={16} />
-              Triwarden
-            </div>
-            <Show when={m().state === 'rows'} fallback={<div class="note">{m().note}</div>}>
-              <For each={m().rows}>
-                {(row, i) => (
-                  <div
-                    class="row"
-                    role="menuitem"
-                    data-active={i() === active()}
-                    onMouseEnter={() => setActive(i())}
-                    on:mousedown={(e) => e.preventDefault()}
-                    on:click={() => choose(row, m().target)}
-                  >
-                    <Avatar row={row} />
-                    <span class="text">
-                      <span class="name">{row.name}</span>
-                      <Show when={row.detail}>
-                        <span class="detail">{row.detail}</span>
-                      </Show>
-                    </span>
-                    {/* The code and its countdown belong to a code field only. */}
-                    <Show when={m().target.otp && row.totpPeriod}>
-                      {(period) => (
-                        <>
-                          <Code code={row.code} urgent={secondsLeft(period(), now()) <= 5} />
-                          <Ring period={period()} now={now()} />
-                        </>
-                      )}
-                    </Show>
+        {(m) => {
+          // Two logins with the same name are told apart by their username, which then leads the row.
+          const dupes = () => {
+            const seen = new Set<string>(), twice = new Set<string>();
+            for (const r of m().rows) (seen.has(r.name) ? twice : seen).add(r.name);
+            return twice;
+          };
+          const mixed = () => !m().target.otp && new Set(m().rows.map(groupOf)).size > 1;
+          return (
+            <div class="menu" role="menu" style={menuStyle(m())}>
+              <Show when={m().state === 'rows'} fallback={<div class="note">{m().note}</div>}>
+                <div class="list">
+                  <For each={m().rows}>
+                    {(row, i) => (
+                      <>
+                        <Show when={mixed() && (i() === 0 || groupOf(m().rows[i() - 1]!) !== groupOf(row))}>
+                          <div class="group">{groupOf(row)}</div>
+                        </Show>
+                        <div
+                          class="row"
+                          role="menuitem"
+                          data-active={i() === active()}
+                          onMouseEnter={() => setActive(i())}
+                          on:mousedown={(e) => e.preventDefault()}
+                          on:click={() => choose(row, m().target)}
+                        >
+                          <Avatar row={row} />
+                          <span class="text">
+                            <span class="name">{dupes().has(row.name) && row.detail ? row.detail : row.name}</span>
+                            <Show when={dupes().has(row.name) ? row.name : row.detail}>
+                              {(sub) => <span class="detail">{sub()}</span>}
+                            </Show>
+                          </span>
+                          {/* The code and its countdown belong to a code field only. */}
+                          <Show when={m().target.otp && row.totpPeriod}>
+                            {(period) => (
+                              <>
+                                <Code code={row.code} urgent={secondsLeft(period(), now()) <= 5} />
+                                <Ring period={period()} now={now()} />
+                              </>
+                            )}
+                          </Show>
+                        </div>
+                      </>
+                    )}
+                  </For>
+                </div>
+                <Show when={m().auto}>
+                  <div class="hint">
+                    <kbd>↑</kbd>
+                    <kbd>↓</kbd> choose <kbd>↵</kbd> fill <kbd>esc</kbd> close
                   </div>
-                )}
-              </For>
-            </Show>
-          </div>
-        )}
+                </Show>
+              </Show>
+            </div>
+          );
+        }}
       </Show>
     </div>
   );

@@ -43,6 +43,18 @@ struct CLIProtocolTests {
         #expect(row["code"] as? String == "123456")
     }
 
+    @Test func matchRowsCarryTheExactAndPasskeyFlags() throws {
+        let json = try object(.list([
+            .init(id: "1", name: "a", detail: "d", exact: true, passkey: true),
+            .init(id: "2", name: "b", detail: "d"),
+        ]))
+        let rows = try #require(json["rows"] as? [[String: Any]])
+        #expect(rows[0]["exact"] as? Bool == true)
+        #expect(rows[0]["passkey"] as? Bool == true)
+        #expect(rows[1]["exact"] == nil)
+        #expect(rows[1]["passkey"] == nil)
+    }
+
     @Test func requestAsksForCodesOnlyWhenTold() throws {
         let plain = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"match","url":"https://a.test"}"#.utf8))
         #expect(plain.codes == nil)
@@ -53,6 +65,16 @@ struct CLIProtocolTests {
         // A focus-only request can name codes without revealing them: the app must not read that as a yes.
         let focus = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"match","codes":true}"#.utf8))
         #expect(focus.reveal != true)
+    }
+
+    @Test func requestCarriesWhereItCameFrom() throws {
+        let data = try JSONEncoder().encode(CLIRequest(command: .match, url: "https://a.test", origin: "chrome-extension://x/", browser: "com.google.Chrome"))
+        let json = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(json["origin"] as? String == "chrome-extension://x/")
+        #expect(json["browser"] as? String == "com.google.Chrome")
+        // An extension that sends none is still understood.
+        let plain = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"match"}"#.utf8))
+        #expect(plain.origin == nil && plain.browser == nil)
     }
 
     @Test func oldRepliesStillDecode() throws {

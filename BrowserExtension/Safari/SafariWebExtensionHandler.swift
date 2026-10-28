@@ -13,7 +13,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             if let message, JSONSerialization.isValidJSONObject(message),
                let data = try? JSONSerialization.data(withJSONObject: message),
                let request = try? JSONDecoder().decode(CLIRequest.self, from: data),
-               [.match, .fill, .save].contains(request.command) {
+               [.match, .fill, .save, .copy].contains(request.command) {
                 response = BridgeClient.send(request)
             } else {
                 response = .failure("Unsupported request.")

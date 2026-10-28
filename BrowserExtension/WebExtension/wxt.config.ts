@@ -16,6 +16,11 @@ export default defineConfig({
         description: 'Fill the login or one-time code on this page',
       },
     },
+    // Chromium: the Chrome Web Store's public key, so an unpacked build has the store's extension ID (deiehcliaaoigminkkbnjlgmaoagimdm)
+    // and the host manifest can name it ahead of time. It is a public key.
+    ...(browser === 'chrome' && {
+      key: 'MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA42663IYRdt7SsrqT2NGa1DivTogJyXpX2e4rCu/x9gJbaih2Wbu3NlRs8Ft0yyKr5n7f+XpCASFRjdhqvKQ6KJXVCG1oFfRaVDbVTH2/39bFEn52IElvaRXXY8vUBx6eANvo+EjlSPRJuzBXRwqZg0nJ0KyS1Nvw1yFJmV3m0QsvXhC/VHyMXIIkZrmE8BGzFYpK8RjASWEPpJuGkY+s4hEBRleYIxO/kshvNozCXj6AfISLNBSN8URwIKbEJBuZzZ1VWuObBFkEoiAGYTyYHpP/KGT1l6JOXR9LCk5ZzEXpaLTmg+GQjTee47VJSXfX2TrllLL6JeOnCXPB7Nf+ewIDAQAB',
+    }),
     ...(browser === 'firefox' && {
       browser_specific_settings: {
         gecko: {

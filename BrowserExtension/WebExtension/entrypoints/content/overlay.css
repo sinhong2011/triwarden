@@ -36,7 +36,7 @@
   width: 22px;
   height: 22px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 50%;
   padding: 0;
   display: grid;
   place-items: center;
@@ -61,7 +61,7 @@
 /* ---- The menu ---- */
 .menu {
   position: fixed;
-  width: 332px;
+  width: 332px; /* keep in step with MENU_WIDTH in Overlay.tsx */
   max-width: calc(100vw - 16px);
   padding: 6px;
   border-radius: 20px;
@@ -82,24 +82,50 @@
   }
 }
 
-.head {
+/* At most five rows show; more scroll, with the app's thin scroller. */
+.list {
+  max-height: 256px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ink) 25%, transparent) transparent;
+}
+
+/* "Passkeys" / "Passwords", only when a site has both. */
+.group {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--ink) 50%, transparent);
+}
+.group:first-child {
+  padding-top: 4px;
+}
+
+/* Keys that work in a menu that opened by itself. */
+.hint {
   display: flex;
   align-items: center;
-  gap: 7px;
-  padding: 6px 10px 8px;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: color-mix(in srgb, var(--ink) 55%, transparent);
+  gap: 6px;
+  padding: 7px 10px 4px;
+  margin-top: 4px;
+  border-top: 1px solid var(--edge);
+  font-size: 11px;
+  color: color-mix(in srgb, var(--ink) 50%, transparent);
 }
-.head svg {
-  width: 16px;
-  height: 16px;
-  filter: drop-shadow(0 1px 1.5px rgba(11, 42, 64, 0.25));
+.hint kbd {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  font: 600 10.5px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  text-align: center;
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+  background: var(--chip);
 }
 
 .note {
-  padding: 10px 10px 14px;
+  padding: 10px 10px 10px;
   color: color-mix(in srgb, var(--ink) 62%, transparent);
 }
 
@@ -108,8 +134,8 @@
   display: flex;
   align-items: center;
   gap: 11px;
-  min-height: 52px;
-  padding: 8px 10px;
+  height: 50px;
+  padding: 0 10px;
   border-radius: 14px;
   cursor: pointer;
   transition: background-color 120ms ease;
