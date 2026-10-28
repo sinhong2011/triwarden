@@ -179,7 +179,7 @@ final class CLIBridge {
             guard model.isUnlocked else { return .failure(Self.locked) }
             guard let host = request.url.flatMap(URL.init(string:))?.host()?.lowercased() else { return .list([]) }
             return .list(Self.logins(for: host, in: model.items).map {
-                CLIResponse.Row(id: $0.id, name: $0.name, detail: $0.username ?? "")
+                CLIResponse.Row(id: $0.id, name: $0.name, detail: $0.username ?? "", totpPeriod: $0.totp?.period)
             })
         case .fill:
             guard model.isUnlocked else { return .failure(Self.locked) }
@@ -190,7 +190,10 @@ final class CLIBridge {
             // Only fill a login on the site it belongs to.
             guard Self.logins(for: host.lowercased(), in: [item]).count == 1 else { return .failure("“\(item.name)” isn't for \(host).") }
             guard await approve(String(localized: "fill “\(item.name)” on \(host)"), peer: peer) else { return .failure(Self.denied) }
-            return .credentials(username: item.username, password: item.password, totp: item.totp?.code())
+            guard let totp = item.totp else { return .credentials(username: item.username, password: item.password, totp: nil) }
+            let fresh = await Self.freshCode(totp)
+            return .credentials(username: item.username, password: item.password, totp: fresh.code,
+                                totpRemaining: fresh.remaining, totpPeriod: totp.period)
         case .save:
             guard Self.isOwnBinary(peer) else { return .failure("Unknown client.") }
             guard model.isUnlocked else { return .failure(Self.locked) }
@@ -254,6 +257,16 @@ final class CLIBridge {
         if allowed, window > 0 { approvedUntil[grant] = .now.addingTimeInterval(TimeInterval(window)) }
         if allowed { model?.noteActivity() }
         return allowed
+    }
+
+    /// A code that will still be valid when the page submits it. One with a few seconds left would often expire on
+    /// the way, so wait for the next one. (Short periods are left alone: they would always be waiting.)
+    static func freshCode(_ totp: TOTP) async -> (code: String, remaining: Int) {
+        let margin = 3
+        if totp.period > 10, totp.secondsRemaining() <= margin {
+            try? await Task.sleep(for: .seconds(Double(totp.secondsRemaining()) + 0.1))
+        }
+        return (totp.code(), totp.secondsRemaining())
     }
 
     /// Our Safari extension and the bundled `tw` (Chrome's native-messaging host) live inside the app.

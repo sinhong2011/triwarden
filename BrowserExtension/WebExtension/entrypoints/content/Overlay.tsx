@@ -1,6 +1,6 @@
-import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { send } from '../../lib/send';
-import { passwordFields, setValue, usernameFor, visible } from '../../lib/dom';
+import { fillOtp, otpTargets, passwordFields, setValue, usernameFor, visible } from '../../lib/dom';
 import type { Row } from '../../lib/protocol';
 
 const KeyIcon = () => (
@@ -12,7 +12,34 @@ const KeyIcon = () => (
   </svg>
 );
 
-type Target = { field: HTMLInputElement; pw?: HTMLInputElement };
+/** Seconds left in the code's period, drained like the app's ring. Codes are counted from the Unix epoch, so the
+ *  page's clock and the app's agree on where a period starts. */
+const Ring = (props: { period: number; now: number }) => {
+  const left = () => props.period - (Math.floor(props.now / 1000) % props.period);
+  const circumference = 2 * Math.PI * 9;
+  return (
+    <span class="ring" data-urgent={left() <= 5} role="img" aria-label={`Code valid for ${left()} more seconds`}>
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <circle class="track" cx="12" cy="12" r="9" />
+        <circle
+          class="arc"
+          cx="12"
+          cy="12"
+          r="9"
+          transform="matrix(-1 0 0 1 24 0) rotate(-90 12 12)"
+          stroke-dasharray={String(circumference)}
+          stroke-dashoffset={String(circumference * (1 - left() / props.period))}
+        />
+      </svg>
+      <span class="secs" aria-hidden="true">
+        {left()}
+      </span>
+    </span>
+  );
+};
+
+/** `pw`: the password field of a login form. `otp`: the field, or row of one-digit boxes, for a one-time code. */
+type Target = { field: HTMLInputElement; pw?: HTMLInputElement; otp?: HTMLInputElement[] };
 type Menu = { target: Target; x: number; y: number; state: 'rows' | 'note'; rows: Row[]; note: string };
 
 export default function Overlay() {
@@ -20,7 +47,15 @@ export default function Overlay() {
   const [tick, setTick] = createSignal(0); // bumped on scroll/resize so positions are re-read
   const [menu, setMenu] = createSignal<Menu | null>(null);
   const [active, setActive] = createSignal(0); // the highlighted row, moved with the arrow keys
+  const [now, setNow] = createSignal(Date.now()); // ticks once a second while the menu shows, for the countdowns
   let root!: HTMLDivElement;
+
+  createEffect(() => {
+    if (!menu()) return;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    onCleanup(() => clearInterval(timer));
+  });
 
   function scan() {
     const found = new Map<HTMLInputElement, Target>();
@@ -30,13 +65,25 @@ export default function Overlay() {
       const user = usernameFor(pw);
       if (user && !found.has(user)) found.set(user, { field: user, pw });
     }
+    for (const boxes of otpTargets()) {
+      const first = boxes[0];
+      if (first && !found.has(first)) found.set(first, { field: first, otp: boxes });
+    }
     setTargets([...found.values()]);
     setTick((n) => n + 1);
   }
 
   const place = (t: Target) => {
     tick();
-    if (!t.field.isConnected || !visible(t.field)) return { display: 'none' };
+    if (!t.field.isConnected) return { display: 'none' };
+    const last = t.otp?.at(-1);
+    if (last && t.otp && t.otp.length > 1) {
+      // A row of one-digit boxes has no room inside: put the key after the last one.
+      const r = last.getBoundingClientRect();
+      if (r.width < 8) return { display: 'none' };
+      return { display: 'grid', left: `${r.right + 6}px`, top: `${r.top + (r.height - 22) / 2}px` };
+    }
+    if (!visible(t.field)) return { display: 'none' };
     const r = t.field.getBoundingClientRect();
     return { display: 'grid', left: `${r.right - 28}px`, top: `${r.top + (r.height - 22) / 2}px` };
   };
@@ -48,18 +95,27 @@ export default function Overlay() {
     const reply = await send({ command: 'match' });
     if (!menu()) return; // closed while waiting
     if (!reply.ok) return setMenu({ ...base, state: 'note', note: reply.error || "Triwarden isn't available." });
-    if (!reply.rows?.length) return setMenu({ ...base, state: 'note', note: 'No logins for this site.' });
+    // A code field only offers the logins that have a code.
+    const rows = target.otp ? (reply.rows ?? []).filter((row) => row.totpPeriod) : (reply.rows ?? []);
+    if (!rows.length) {
+      const none = target.otp ? 'No login with a one-time code for this site.' : 'No logins for this site.';
+      return setMenu({ ...base, state: 'note', note: none });
+    }
     setActive(0);
-    setMenu({ ...base, state: 'rows', rows: reply.rows, note: '' });
+    setMenu({ ...base, state: 'rows', rows, note: '' });
   }
 
   async function choose(row: Row, target: Target) {
     setMenu(null);
     const filled = await send({ command: 'fill', query: row.id });
     if (!filled.ok) return;
+    if (target.otp) return filled.totp ? fillOtp(target.otp, filled.totp) : undefined;
     const { field, pw } = target;
     setValue(pw ? usernameFor(pw) : field, filled.username);
     setValue(pw || passwordFields().find(visible), filled.password);
+    // A page that asks for the code on the same form gets it too.
+    const code = otpTargets()[0];
+    if (filled.totp && code) fillOtp(code, filled.totp);
   }
 
   onMount(() => {
@@ -155,6 +211,7 @@ export default function Overlay() {
                         <span class="detail">{row.detail}</span>
                       </Show>
                     </span>
+                    <Show when={row.totpPeriod}>{(period) => <Ring period={period()} now={now()} />}</Show>
                   </div>
                 )}
               </For>

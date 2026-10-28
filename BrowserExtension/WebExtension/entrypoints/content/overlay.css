@@ -128,9 +128,45 @@
 }
 .text {
   min-width: 0;
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+/* ---- Seconds left on a login's one-time code: neutral, orange only in the last five ---- */
+.ring {
+  flex: none;
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: color-mix(in srgb, var(--ink) 58%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke-width: 2;
+}
+.ring .track {
+  stroke: var(--chip);
+}
+.ring .arc {
+  stroke: currentColor;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear, stroke 200ms ease;
+}
+.ring .secs {
+  font-size: 10px;
+  font-weight: 600;
+}
+.ring[data-urgent="true"] {
+  color: #ff9f0a;
 }
 .name {
   font-size: 14px;

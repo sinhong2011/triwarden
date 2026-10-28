@@ -30,7 +30,12 @@ public struct CLIResponse: Codable, Sendable, Equatable {
         public var id: String
         public var name: String
         public var detail: String
-        public init(id: String, name: String, detail: String) { self.id = id; self.name = name; self.detail = detail }
+        /// `match`: the length of the login's one-time code period, if it has one. The code itself only comes with
+        /// `fill`, after approval; the period lets the extension draw a countdown.
+        public var totpPeriod: Int?
+        public init(id: String, name: String, detail: String, totpPeriod: Int? = nil) {
+            self.id = id; self.name = name; self.detail = detail; self.totpPeriod = totpPeriod
+        }
     }
 
     public var ok: Bool
@@ -39,14 +44,19 @@ public struct CLIResponse: Codable, Sendable, Equatable {
     public var username: String?
     public var password: String?
     public var totp: String?
+    /// `fill`: seconds the one-time code stays valid, and the length of its period (for a countdown).
+    public var totpRemaining: Int?
+    public var totpPeriod: Int?
     public var rows: [Row]?
     public var error: String?
 
     public static func success(_ value: String) -> CLIResponse { CLIResponse(ok: true, value: value) }
     public static func list(_ rows: [Row]) -> CLIResponse { CLIResponse(ok: true, rows: rows) }
     public static func failure(_ message: String) -> CLIResponse { CLIResponse(ok: false, error: message) }
-    public static func credentials(username: String?, password: String?, totp: String?) -> CLIResponse {
-        CLIResponse(ok: true, username: username, password: password, totp: totp)
+    public static func credentials(username: String?, password: String?, totp: String?,
+                                   totpRemaining: Int? = nil, totpPeriod: Int? = nil) -> CLIResponse {
+        CLIResponse(ok: true, username: username, password: password, totp: totp,
+                    totpRemaining: totpRemaining, totpPeriod: totpPeriod)
     }
 }
 
