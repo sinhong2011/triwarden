@@ -481,7 +481,7 @@ private struct SecuritySettings: View {
 private struct BrowserSettings: View {
     @Environment(AppModel.self) private var model
     @AppStorage(Pref.browser) private var browserEnabled = false
-    @AppStorage(Pref.browserAutoShow) private var autoShow = false
+    @AppStorage(Pref.browserAutoShow) private var autoShow = true
 
     var body: some View {
         Form {

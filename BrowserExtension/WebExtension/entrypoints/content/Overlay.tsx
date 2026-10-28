@@ -84,6 +84,8 @@ export default function Overlay() {
   let autoOpened = false; // the menu opened by itself on focus: it must not take Enter from the page
   let navigated = false; // arrow keys moved the highlight, so Enter means "fill this one"
   let autoPausedUntil = 0; // the app didn't answer: don't ask again on every focus
+  let filling = false; // we are putting values in fields: that moves focus, and must not open the menu again
+  const offered = new WeakSet<HTMLInputElement>(); // fields already offered suggestions while focused
 
   const close = () => {
     asking++;
@@ -132,6 +134,7 @@ export default function Overlay() {
     }
     setTargets([...found.values()]);
     setTick((n) => n + 1);
+    offerFor(document.activeElement);
   }
 
   const place = (t: Target) => {
@@ -188,6 +191,22 @@ export default function Overlay() {
     setMenu({ ...base, state: 'rows', rows, note: '', at: Date.now() });
   }
 
+  /**
+   * Offer suggestions for the focused field, if it is one of ours. Returns whether it is. Also called after every scan:
+   * a field that was focused before we looked (autofocus, a form that appeared under the cursor) fires no focus event.
+   */
+  function offerFor(el: Element | null): boolean {
+    const t = targets().find((x) => x.field === el || x.otp?.includes(el as HTMLInputElement));
+    if (!t) return false;
+    if (filling || menu() || offered.has(t.field) || Date.now() < autoPausedUntil) return true;
+    // While the setting is off, look again every few seconds: turning it on in the app should work on pages that
+    // are already open, without asking the app on every single focus.
+    if (autoShow === false && Date.now() - autoCheckedAt < 5000) return true;
+    offered.add(t.field);
+    void open(t, 'auto');
+    return true;
+  }
+
   /** The keyboard shortcut: act on the field the user is in, else the first login or code field on the page. */
   function trigger() {
     const list = targets();
@@ -200,13 +219,24 @@ export default function Overlay() {
     close();
     const filled = await send({ command: 'fill', query: row.id });
     if (!filled.ok) return;
-    if (target.otp) return filled.totp ? fillOtp(target.otp, filled.totp) : undefined;
-    const { field, pw } = target;
-    setValue(pw ? usernameFor(pw) : field, filled.username);
-    setValue(pw || passwordFields().find(visible), filled.password);
-    // A page that asks for the code on the same form gets it too.
-    const code = otpTargets()[0];
-    if (filled.totp && code) fillOtp(code, filled.totp);
+    filling = true;
+    try {
+      if (target.otp) {
+        if (filled.totp) fillOtp(target.otp, filled.totp);
+        return;
+      }
+      const { field, pw } = target;
+      setValue(pw ? usernameFor(pw) : field, filled.username);
+      setValue(pw || passwordFields().find(visible), filled.password);
+      // A page that asks for the code on the same form gets it too.
+      const code = otpTargets()[0];
+      if (filled.totp && code) fillOtp(code, filled.totp);
+    } finally {
+      // Focus events from the fill arrive synchronously; give them a moment, then listen again. Fields we just filled
+      // count as offered, so they stay quiet until the person leaves and comes back.
+      for (const el of document.querySelectorAll('input')) offered.add(el);
+      setTimeout(() => (filling = false), 400);
+    }
   }
 
   onMount(() => {
@@ -225,7 +255,9 @@ export default function Overlay() {
       attributeFilter: ['type', 'style', 'class'],
     });
     const outside = (e: MouseEvent) => {
-      if (menu() && !e.composedPath().includes(root.getRootNode() as ShadowRoot)) close();
+      // The overlay is a closed shadow root: listeners on the document see its host, never what is inside.
+      const host = (root.getRootNode() as ShadowRoot).host;
+      if (menu() && !e.composedPath().includes(host)) close();
     };
     const keys = (e: KeyboardEvent) => {
       const m = menu();
@@ -248,18 +280,9 @@ export default function Overlay() {
     };
     // Focus: open the suggestions when the app's setting asks for it; moving to any other field closes them.
     const focused = (e: FocusEvent) => {
-      const el = e.target as Element;
-      const t = targets().find((x) => x.field === el || x.otp?.includes(el as HTMLInputElement));
-      if (!t) {
-        if (autoOpened) close();
-        return;
-      }
-      if (menu() || Date.now() < autoPausedUntil) return;
-      // While the setting is off, look again every few seconds: turning it on in the app should work on pages
-      // that are already open, without asking the app on every single focus.
-      if (autoShow === false && Date.now() - autoCheckedAt < 5000) return;
-      void open(t, 'auto');
+      if (!offerFor(e.target as Element) && autoOpened) close();
     };
+    const left = (e: FocusEvent) => offered.delete(e.target as HTMLInputElement);
     // Frames with nothing to fill stay quiet, so the background can ask every frame of the tab.
     const asked = (message: unknown) => {
       if ((message as { trigger?: string } | null)?.trigger === 'fill') trigger();
@@ -270,6 +293,7 @@ export default function Overlay() {
     document.addEventListener('mousedown', outside, true);
     document.addEventListener('keydown', keys, true);
     document.addEventListener('focusin', focused, true);
+    document.addEventListener('focusout', left, true);
     onCleanup(() => {
       clearTimeout(timer);
       browser.runtime.onMessage.removeListener(asked);
@@ -279,6 +303,7 @@ export default function Overlay() {
       document.removeEventListener('mousedown', outside, true);
       document.removeEventListener('keydown', keys, true);
       document.removeEventListener('focusin', focused, true);
+      document.removeEventListener('focusout', left, true);
     });
   });
 
@@ -292,8 +317,8 @@ export default function Overlay() {
             title="Fill with Triwarden"
             aria-label="Fill with Triwarden"
             style={place(t)}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => open(t)}
+            on:mousedown={(e) => e.preventDefault()}
+            on:click={() => open(t)}
           >
             <AppMark size={22} />
           </button>
@@ -314,8 +339,8 @@ export default function Overlay() {
                     role="menuitem"
                     data-active={i() === active()}
                     onMouseEnter={() => setActive(i())}
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => choose(row, m().target)}
+                    on:mousedown={(e) => e.preventDefault()}
+                    on:click={() => choose(row, m().target)}
                   >
                     <Avatar row={row} />
                     <span class="text">

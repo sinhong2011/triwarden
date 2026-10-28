@@ -6,6 +6,20 @@ import { COMMANDS, type Reply } from '../lib/protocol';
 const HOST = 'io.github.sinhong2011.triwarden';
 
 export default defineBackground(() => {
+  // Right-click in a field: "Fill with Triwarden". It acts like the shortcut, in the frame that was clicked.
+  browser.runtime.onInstalled.addListener(() => {
+    browser.contextMenus.removeAll(() => {
+      browser.contextMenus.create({ id: 'fill-login', title: 'Fill with Triwarden', contexts: ['editable'] });
+    });
+  });
+  browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId !== 'fill-login' || tab?.id == null) return;
+    const frameId = (info as { frameId?: number }).frameId;
+    browser.tabs
+      .sendMessage(tab.id, { trigger: 'fill' }, frameId != null ? { frameId } : undefined)
+      .catch(() => {});
+  });
+
   // The fill shortcut (see `commands` in wxt.config.ts): every frame of the tab hears it, and the ones with a
   // login or code field answer by filling or opening the menu.
   browser.commands.onCommand.addListener(async (command, tab) => {

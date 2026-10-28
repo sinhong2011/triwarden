@@ -9,7 +9,7 @@ export default defineConfig({
     name: 'Triwarden',
     description: 'Fill and save logins from your Triwarden vault. Filling asks for Touch ID in the app.',
     icons: { 48: 'icon-48.png', 96: 'icon-96.png', 128: 'icon-128.png' },
-    permissions: ['nativeMessaging'],
+    permissions: ['nativeMessaging', 'contextMenus'],
     commands: {
       'fill-login': {
         suggested_key: { default: 'Ctrl+Shift+L', mac: 'Command+Shift+L' },

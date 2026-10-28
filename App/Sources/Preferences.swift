@@ -18,7 +18,7 @@ enum Pref {
     static let cli = "cli"                               // answer the `cw` command
     static let cliApprovalSeconds = "cliApprovalSeconds"
     static let browser = "browser"                       // answer the Safari/Chrome extension
-    static let browserAutoShow = "browserAutoShow"       // the extension opens its suggestions when a login field is focused
+    static let browserAutoShow = "browserAutoShow"       // the extension opens its suggestions when a login field is focused (on by default)
     static let checkUpdates = "checkUpdates"             // opt-in: look at GitHub's latest release daily
     static let hideFromCapture = "hideFromCapture"       // windows stay out of screen sharing, recordings and screenshots
     static let timeoutAction = "timeoutAction"           // after inactivity: "lock" or "logOut" (accounts may override)
@@ -38,7 +38,7 @@ enum Pref {
             appearance: "system", autoLockMinutes: 15, lockOnSleep: true, fullDoorAnimation: false, clipboardSeconds: 30,
             hideFromCapture: false, timeoutAction: "lock", // opt-in: some screen tools and recordings need the window
             showMenuBar: true, closeToMenuBar: false, matchFrontTab: false, matchFrontTabDismissed: false,
-            rememberPalettePosition: false,
+            rememberPalettePosition: false, browserAutoShow: true,
         ])
         UserDefaults.standard.removeObject(forKey: "lockAnimations") // retired (see fullDoorAnimation)
     }
