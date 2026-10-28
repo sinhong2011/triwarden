@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.3](https://github.com/sinhong2011/triwarden/compare/v0.5.2...v0.5.3) (2026-10-27)
+
+
+### Fixes
+
+* **browser:** offer to save logins without a modal dialog ([#136](https://github.com/sinhong2011/triwarden/issues/136)) ([3f4af6d](https://github.com/sinhong2011/triwarden/commit/3f4af6de241d8438cc8c3aa67a68c1d46562f263))
+* **palette:** focus the master password when the palette opens over a locked vault ([#135](https://github.com/sinhong2011/triwarden/issues/135)) ([96abc26](https://github.com/sinhong2011/triwarden/commit/96abc267922262dea4e31c02e9c9c98d20a6b4f1))
+
+
+### UI
+
+* smooth transitions on the Send page ([#133](https://github.com/sinhong2011/triwarden/issues/133)) ([056f5dd](https://github.com/sinhong2011/triwarden/commit/056f5dddb2a114b621408e0e63447b3e95ee1e91))
+
 ## [0.5.2](https://github.com/sinhong2011/triwarden/compare/v0.5.1...v0.5.2) (2026-10-27)
 
 
