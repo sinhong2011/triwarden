@@ -12,13 +12,16 @@
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
     "compile": "tsc --noEmit",
+    "test": "vitest run",
     "postinstall": "wxt prepare"
   },
   "devDependencies": {
     "@types/node": "26.6.5",
     "@wxt-dev/module-solid": "1.1.4",
+    "jsdom": "30.1.3",
     "solid-js": "1.9.17",
     "typescript": "7.0.2",
+    "vitest": "5.0.5",
     "wxt": "0.21.5"
   }
 }

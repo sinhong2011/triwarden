@@ -292,12 +292,13 @@ jobs:
       - name: Verify install-chrome and install-firefox host manifests
         if: needs.changes.outputs.code == 'true'
         run: python3 scripts/test-install-chrome-path.py
-      - name: Web extension (type-check, Chrome and Firefox builds)
+      - name: Web extension (type-check, tests, Chrome and Firefox builds)
         if: needs.changes.outputs.code == 'true'
         working-directory: BrowserExtension/WebExtension
         run: |
           pnpm install --frozen-lockfile
           pnpm compile
+          pnpm test
           pnpm build
           pnpm build:firefox
       - name: Upload test evidence
