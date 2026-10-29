@@ -6,12 +6,16 @@ import VaultwardenAPI
 
 @main
 struct TriwardenApp: App {
-    @State private var model = AppModel()
+    @State private var model: AppModel
     @AppStorage(Pref.showMenuBar) private var showMenuBar = true
     @NSApplicationDelegateAdaptor private var appDelegate: AppDelegate
 
     init() {
         Pref.register()
+        #if DEBUG
+        // Select diagnostic storage before any AppModel stored-property initializer reads accounts.
+        SecretsSelfTest.prepareModelIfRequested()
+        #endif
         // Tips (the vault search's, once): not in renders, self-tests or benchmarks, which must look the same every run.
         if !CommandLine.arguments.contains(where: { $0 == "--snapshot" || $0.hasPrefix("--selftest") || $0.hasPrefix("--bench") }),
            !Bench.on {
@@ -20,17 +24,30 @@ struct TriwardenApp: App {
         // One window with its own toolbar: no system tab bar (and no View › Show Tab Bar to turn it on).
         NSWindow.allowsAutomaticWindowTabbing = false
         #if DEBUG
+        ToolsBrowserSelfTest.runIfRequested()
+        Snapshot.runToolsWorkspaceIfRequested()
+        Snapshot.runAPIKeyJourneyIfRequested()
+        Snapshot.runSSHIfRequested()
+        SSHApprovalSelfTest.runIfRequested()
+        Snapshot.runSecretsIfRequested()
         Bench.runUnlockIfRequested()
         CompatibilitySelfTest.runIfRequested()
+        SecretsSelfTest.runIfRequested()
+        SecretsOnlineSelfTest.runIfRequested()
         Snapshot.runIfRequested()
         SelfTest.runIfRequested()
         CloudSelfTest.runIfRequested()
+        #endif
+        // Construct explicitly after diagnostic setup; do not rely on SwiftUI State's lazy default.
+        let initialModel = AppModel()
+        _model = State(initialValue: initialModel)
+        #if DEBUG
         // `--demo`: open straight into the vault with demo items, for UI review. `--demo-full`: a lived-in vault of
         // 200+ items in folders, for screenshots.
         let full = CommandLine.arguments.contains("--demo-full")
         if full || CommandLine.arguments.contains("--demo") {
             let demo = AppModel()
-            demo.items = full ? DemoVault.items : Snapshot.demoItems
+            demo.items = (full ? DemoVault.items : Snapshot.demoItems) + [APIKeyTemplate.fixture]
             if full {
                 demo.folders = DemoVault.folders
                 demo.organizations = DemoVault.organizations
@@ -41,6 +58,8 @@ struct TriwardenApp: App {
                                                   serverURL: "https://vault.home.arpa", kdf: .pbkdf2(iterations: 600_000),
                                                   protectedUserKey: "")])
             demo.previewUnlocked = true
+            // API-key pages start hidden for new users; UI tests of those pages ask for them explicitly.
+            if CommandLine.arguments.contains("--show-api-key-tools") { demo.showsAPIKeyTools = true }
             demo.phase = .vault
             _model = State(initialValue: demo)
             DemoShots.runIfRequested(demo)
@@ -117,6 +136,9 @@ struct TriwardenApp: App {
                 Button("New Secure Note") { model.beginEditing(EditRequest(mode: .create(.secureNote))) }
                     .keyboardShortcut("n", modifiers: [.command, .shift])
                     .disabled(!model.isUnlocked)
+                if model.showsAPIKeyTools {
+                    Button("New API Key") { model.beginAPIKey() }.disabled(!model.isUnlocked)
+                }
                 Menu("New Other Item") {
                     Button("Card") { model.beginEditing(EditRequest(mode: .create(.card))) }
                         .keyboardShortcut("b", modifiers: [.command, .option])
@@ -198,6 +220,13 @@ struct TriwardenApp: App {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") { model.showSettings() }
                     .keyboardShortcut(",", modifiers: .command)
+                if model.showsAPIKeyTools {
+                    Button("Install Terminal Helper…") { model.showHelperSetup() }
+                }
+                #if DEBUG
+                Button { model.showNotchDemo() } label: { Text(verbatim: "Show Notch Status Demo") }
+                    .keyboardShortcut("n", modifiers: [.control, .option, .command])
+                #endif
             }
             CommandGroup(after: .appSettings) {
                 Button("Lock Vault") { model.lock(animated: true) }

@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     enum Pane: String, CaseIterable, Identifiable {
         // Everyday first, then who and how it's protected, then the keys, the connection, the tools, and about.
-        case general, accounts, security, shortcuts, server, developer, license, about
+        case general, accounts, security, shortcuts, server, developer, secrets, license, about
         var id: Self { self }
         var title: String {
             switch self {
@@ -18,6 +18,7 @@ struct SettingsView: View {
             case .shortcuts: String(localized: "Shortcuts")
             case .security: String(localized: "Security")
             case .developer: String(localized: "Developer")
+            case .secrets: String(localized: "Secrets")
             case .server: String(localized: "Server")
             case .license: String(localized: "License")
             case .about: String(localized: "About")
@@ -30,6 +31,7 @@ struct SettingsView: View {
             case .shortcuts: "keyboard"
             case .security: "lock.shield"
             case .developer: "terminal"
+            case .secrets: "key.horizontal"
             case .server: "server.rack"
             case .license: "checkmark.seal"
             case .about: "info.circle"
@@ -42,14 +44,19 @@ struct SettingsView: View {
     static let paneKey = "settingsPane"
     @AppStorage(paneKey) private var paneRaw = Pane.general.rawValue
 
+    private var selectedPane: Pane {
+        if paneRaw.hasPrefix("account:") { return .accounts }
+        let pane = Pane(rawValue: paneRaw) ?? .general
+        return pane == .secrets && !model.showsAPIKeyTools ? .developer : pane
+    }
     private var selection: Binding<Pane?> {
-        Binding(get: { paneRaw.hasPrefix("account:") ? .accounts : Pane(rawValue: paneRaw) ?? .general },
+        Binding(get: { selectedPane },
                 set: { paneRaw = ($0 ?? .general).rawValue })
     }
 
     var body: some View {
         NavigationSplitView {
-            List(Pane.allCases, selection: selection) { pane in
+            List(Pane.allCases.filter { $0 != .secrets || model.showsAPIKeyTools }, selection: selection) { pane in
                 Label(pane.title, systemImage: pane.symbol).tag(pane)
             }
             .listStyle(.sidebar)
@@ -68,6 +75,7 @@ struct SettingsView: View {
                 case .shortcuts: ShortcutsSettings()
                 case .security: SecuritySettings()
                 case .developer: DeveloperSettings()
+                case .secrets: SecretsSettings()
                 case .server: ServerSettings()
                 case .license: LicenseSettings()
                 case .about: AboutSettings()
@@ -481,14 +489,56 @@ private struct DeveloperSettings: View {
     @AppStorage(Pref.cli) private var cliEnabled = false
     @AppStorage(Pref.cliApprovalSeconds) private var cliApprovalSeconds = 0
     @AppStorage(Pref.browser) private var browserEnabled = false
+    @AppStorage(Pref.accessStatus) private var accessStatus = NotchStatusController.macHasNotch
+    @AppStorage(Pref.approvalStyle) private var approvalStyle = NotchStatusController.defaultApprovalStyle
+    @AppStorage(Pref.accessStatusPosition) private var accessStatusPosition = NotchPosition.notch.rawValue
 
-    private var installCommand: String { "sudo ln -sf \"\(CLIBridge.toolPath)\" /usr/local/bin/tw" }
+    @State private var helperSetup = false
 
     private var configLine: String { "Host *\n  IdentityAgent \"\(model.sshAgent.socketPath)\"" }
 
     var body: some View {
+        @Bindable var model = model
         let agent = model.sshAgent!
         Form {
+            Section {
+                Toggle("Show API key tools", isOn: $model.showsAPIKeyTools)
+                    .accessibilityIdentifier("showAPIKeyTools")
+                if model.showsAPIKeyTools {
+                    Button("Start Setup Guide…") { model.showToolGuide() }.disabled(!model.isUnlocked)
+                    Text("Unlock your vault, then open Tools to start the guide.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } header: { Text("Local API keys") } footer: {
+                Text("Show API Keys, Tools, and API-key actions. Hiding them keeps saved keys and configured launches.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Show active access at the top of the screen", isOn: $accessStatus)
+                    .accessibilityIdentifier("showAccessStatus")
+                if accessStatus {
+                    Picker("Position", selection: $accessStatusPosition) {
+                        ForEach(NotchPosition.allCases, id: \.rawValue) { Text(verbatim: $0.title).tag($0.rawValue) }
+                    }.accessibilityIdentifier("accessStatusPosition")
+                    Text("Drag the status to put it anywhere. Choose another position to move it back.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if accessStatusPosition == NotchPosition.notch.rawValue, let owner = NotchOccupancy.shared.owner {
+                        Label("\(owner) is using the notch, so the status shows at the top right instead.", systemImage: "info.circle")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Picker("Show approval requests", selection: $approvalStyle) {
+                    Text("In a window").tag("window")
+                    Text("In the notch").tag("notch")
+                }.accessibilityIdentifier("approvalStyle")
+                if approvalStyle == "notch" {
+                    Text("SSH signing, and tools that use one key, ask in the notch. Tools with several keys, unverified launchers and full-screen apps still use the window. Touch ID or your password is still required.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } header: { Text("Access status") } footer: {
+                Text("While a tool or app has temporary access, a small status sits at the top of the screen. Point at it to see what has access and end it. Without a notch, it floats below the menu bar.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section {
                 Toggle("Use Triwarden as SSH agent", isOn: $enabled)
                     .onChange(of: enabled) { _, on in
@@ -504,7 +554,7 @@ private struct DeveloperSettings: View {
             } header: {
                 Text("SSH agent")
             } footer: {
-                Text("SSH key items from unlocked accounts are offered to ssh and git. Each signature asks you, then asks macOS for Touch ID or your Mac login password. Keys never leave the app.")
+                Text("SSH key items from unlocked accounts are offered to ssh and git. New approvals require Touch ID or your Mac login password. Review temporary and Always Allowed permissions in Access. Private keys stay in Triwarden.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -531,10 +581,8 @@ private struct DeveloperSettings: View {
                     Text("Once per 10 minutes, per app").tag(600)
                 }
                 LabeledContent("Install tw") {
-                    Button("Copy Command") { model.copyPlain(installCommand) }
+                    Button("Terminal Helper Setup…") { helperSetup = true }
                 }
-                Text(verbatim: installCommand)
-                    .font(.system(size: 11, design: .monospaced)).textSelection(.enabled).foregroundStyle(.secondary)
                 if let error = model.cli.lastError {
                     Label(error, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(.caption)
                 }
@@ -567,56 +615,12 @@ private struct DeveloperSettings: View {
             }
 
             Section {
-                if agent.allowlist.entries.isEmpty {
-                    Text("Choose Always Allow when an app asks to sign. It can sign whenever this vault is unlocked, including after you lock and open it again.")
-                        .font(.caption).foregroundStyle(.secondary)
-                } else {
-                    ForEach(agent.allowlist.entries) { entry in
-                        HStack {
-                            Text(verbatim: entry.displayName).font(.system(size: 13))
-                            Spacer()
-                            Button("Remove") { agent.revokeAllowlist(trustKey: entry.trustKey) }
-                        }
-                    }
-                }
-            } header: {
-                Text("Always allowed")
-            }
-
-            Section {
-                if agent.trustedUntilLock.isEmpty {
-                    Text("Trust an app from the prompt when it asks to sign. Trust lasts until the vault locks.")
-                        .font(.caption).foregroundStyle(.secondary)
-                } else {
-                    ForEach(agent.trustedUntilLock) { trust in
-                        HStack {
-                            VStack(alignment: .leading, spacing: 1) {
-                                Text(verbatim: trust.displayName).font(.system(size: 13))
-                                Text(verbatim: trust.keyName).font(.system(size: 11)).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Button("Remove") { agent.revokeTrust(id: trust.id) }
-                        }
-                    }
-                }
-            } header: {
-                Text("Trusted until the vault locks")
-            }
-
-            Section {
-                if agent.accessLog.events.isEmpty {
-                    Text("No SSH requests yet.")
-                        .font(.caption).foregroundStyle(.secondary)
-                } else {
-                    ForEach(agent.accessLog.events) { event in
-                        SSHAccessSettingsRow(event: event)
-                    }
-                    Button("Clear Log") { agent.clearAccessLog() }
-                }
-            } header: {
-                Text("SSH access")
-            }
+                Button("Manage App Access…") { model.requestedSection = .access; model.bringToFront() }
+                Text("Review SSH permissions, temporary access and request history in Access.")
+                    .font(.caption).foregroundStyle(.secondary)
+            } header: { Text("Access") }
         }
+        .sheet(isPresented: $helperSetup) { TerminalHelperSetup().environment(model) }
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .thinScroller()
@@ -624,76 +628,7 @@ private struct DeveloperSettings: View {
 
 }
 
-/// One SSH access record in Settings: who asked, which key, how it ended, and how long ago (no seconds).
-private struct SSHAccessSettingsRow: View {
-    let event: SSHAccessEvent
 
-    var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: symbol)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 26, height: 26)
-                .background(tint.opacity(0.16), in: .rect(cornerRadius: 7, style: .continuous))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(verbatim: event.appName)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
-                Text("via \(event.via) · \(event.keyName)")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-            Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 4) {
-                Text(label)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(tint)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(tint.opacity(0.16), in: .capsule)
-                Text(verbatim: SSHAccessClock.label(since: event.date))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
-                    .lineLimit(1)
-            }
-        }
-        .padding(.vertical, 2)
-    }
-
-    private var symbol: String {
-        switch event.outcome {
-        case .allowedOnce, .allowedForTenMinutes, .allowedUntilLock, .reusedTrust: "checkmark"
-        case .allowlisted: "checkmark.seal"
-        case .denied: "xmark"
-        case .timedOut: "clock"
-        case .locked: "lock"
-        }
-    }
-
-    private var tint: Color {
-        switch event.outcome {
-        case .allowedOnce, .allowedForTenMinutes, .allowedUntilLock, .allowlisted, .reusedTrust:
-            Color(red: 0.35, green: 0.78, blue: 0.55)
-        case .denied: Color(red: 0.95, green: 0.45, blue: 0.42)
-        case .timedOut: Color(red: 0.95, green: 0.72, blue: 0.38)
-        case .locked: .secondary
-        }
-    }
-
-    private var label: LocalizedStringKey {
-        switch event.outcome {
-        case .allowedOnce: "Allowed once"
-        case .allowedForTenMinutes: "Allowed for 10 minutes"
-        case .allowedUntilLock: "Trusted until lock"
-        case .allowlisted: "Always allowed"
-        case .denied: "Denied"
-        case .timedOut: "Timed out"
-        case .locked: "Vault locked"
-        case .reusedTrust: "Used an existing grant"
-        }
-    }
-}
 
 // MARK: Accounts
 

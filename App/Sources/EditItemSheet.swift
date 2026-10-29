@@ -37,6 +37,8 @@ struct EditItemSheet: View {
         var collectionIds: [String] = []
         var focusTOTP = false
         var importSSH = false
+        var apiKey = false
+        var practiceAPIKey = false
     }
 
     @Environment(AppModel.self) private var model
@@ -46,6 +48,7 @@ struct EditItemSheet: View {
     var prefill: Prefill?
     /// In the detail panel rather than a sheet: Cancel and Save sit at the top, by the title.
     var inPanel = false
+    var onSaved: (() -> Void)? = nil
 
     @State private var name = ""
     @State private var username = ""
@@ -66,6 +69,9 @@ struct EditItemSheet: View {
     /// Card / identity / SSH-key properties by API name.
     @State private var props: [String: String] = [:]
     @State private var customFields: [CustomField] = []
+    @State private var apiPresetFieldIDs: Set<UUID> = []
+    @State private var apiVariableCustomized = false
+    @State private var apiKeyPresentation: Bool?
     @State private var reprompt = false
     @State private var showSecrets = false
     @State private var showGenerator = false
@@ -140,7 +146,9 @@ struct EditItemSheet: View {
 
     /// Not while naming a folder, so Return there makes the folder rather than saving the item.
     private var saveDisabled: Bool {
-        name.trimmingCharacters(in: .whitespaces).isEmpty || newFolderIn != nil || (!mode.isEdit && accountId == nil)
+        let keys = customFields.filter { $0.name == APIKeyTemplate.keyField }
+        let missingAPIKey = isAPIKey && (hasDuplicateAPIFields || apiVariableProblem != nil || keys.count != 1 || !keys.contains { $0.kind == .hidden && !$0.value.isEmpty && !$0.value.utf8.contains(0) && $0.value.utf8.count <= 32_768 })
+        return missingAPIKey || name.trimmingCharacters(in: .whitespaces).isEmpty || newFolderIn != nil || (!mode.isEdit && accountId == nil)
             || (selectsVault && destinationVault == nil)
             || (!mode.isEdit && creationOrganizationID != nil && creationCollectionIDs.isEmpty)
             || movingNeedsCollection || sharedNeedsCollection
@@ -209,7 +217,8 @@ struct EditItemSheet: View {
     }
 
     private var title: LocalizedStringKey {
-        switch mode {
+        if isAPIKey { return mode.isEdit ? "Edit API Key" : "New API Key" }
+        return switch mode {
         case .create(.login): "New Login"
         case .create(.secureNote): "New Secure Note"
         case .create(.card): "New Card"
@@ -221,7 +230,8 @@ struct EditItemSheet: View {
     }
 
     private var symbol: String {
-        switch kind {
+        if isAPIKey { return "key.horizontal" }
+        return switch kind {
         case .unsupported: "questionmark.square"
         case .login: "key.fill"; case .note: "note.text"; case .card: "creditcard.fill"
         case .identity: "person.crop.rectangle.fill"; case .sshKey: "terminal.fill"
@@ -229,7 +239,8 @@ struct EditItemSheet: View {
     }
 
     private var subtitle: LocalizedStringKey {
-        switch kind {
+        if isAPIKey { return "Save a key from your provider, then choose which tool may use it." }
+        return switch kind {
         case .unsupported: "Unsupported item"
         case .login: "A sign-in for a website or app."
         case .note: "Private text, encrypted like everything else."
@@ -392,10 +403,13 @@ struct EditItemSheet: View {
             case .note, .unsupported: EmptyView()
             }
 
-            customFieldsSection
+            if isAPIKey {
+                apiKeySection
+                DisclosureGroup("Additional fields") { customFieldsSection }
+            } else { customFieldsSection }
 
             FormCard(title: "Notes") {
-                SoftEditor(text: $notes, minHeight: kind == .note ? 200 : 80)
+                SoftEditor(text: $notes, minHeight: kind == .note && !isAPIKey ? 200 : 80)
             }
 
             FormCard {
@@ -798,6 +812,7 @@ struct EditItemSheet: View {
     @ViewBuilder private var customFieldsSection: some View {
         FormCard(title: "Custom fields") {
             ForEach($customFields) { $field in
+                if !isAPIKey || !apiPresetFieldIDs.contains(field.id) {
                 HStack(spacing: 8) {
                     TextField("Name", text: $field.name, prompt: Text("Name"))
                         .textFieldStyle(SoftFieldStyle()).frame(width: 130)
@@ -824,6 +839,7 @@ struct EditItemSheet: View {
                     .buttonStyle(.plain).help(Text("Remove"))
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
             Button {
                 withAnimation(.snappy) { customFields.append(CustomField(name: "", value: "", kind: .text)) }
@@ -879,8 +895,96 @@ struct EditItemSheet: View {
 
     // MARK: Load / save
 
+    private var isAPIKey: Bool {
+        if prefill?.apiKey == true { return true }
+        guard apiKeyPresentation ?? model.showsAPIKeyTools else { return false }
+        switch mode {
+        case .edit(let item), .clone(let item): return item.isAPIKey
+        case .create: return false
+        }
+    }
+
+    private func apiField(_ name: String, kind: CustomField.Kind) -> Binding<String> {
+        Binding(get: { customFields.first { apiPresetFieldIDs.contains($0.id) && $0.name == name && $0.kind == kind }?.value ?? "" }, set: { value in
+            if let index = customFields.firstIndex(where: { apiPresetFieldIDs.contains($0.id) && $0.name == name && $0.kind == kind }) {
+                customFields[index].value = value
+            } else {
+                let field = CustomField(name: name, value: value, kind: kind)
+                customFields.append(field); apiPresetFieldIDs.insert(field.id)
+            }
+        })
+    }
+
+    private var hasDuplicateAPIFields: Bool {
+        [APIKeyTemplate.keyField, APIKeyTemplate.serviceField, APIKeyTemplate.environmentField]
+            .contains { name in customFields.filter { $0.name == name }.count > 1 }
+    }
+
+    private var apiService: Binding<String> {
+        Binding(get: { apiField(APIKeyTemplate.serviceField, kind: .text).wrappedValue }, set: { value in
+            apiField(APIKeyTemplate.serviceField, kind: .text).wrappedValue = value
+            if !apiVariableCustomized {
+                apiField(APIKeyTemplate.environmentField, kind: .text).wrappedValue = APIKeyTemplate.suggestedVariable(service: value)
+            }
+        })
+    }
+
+    private var apiVariable: Binding<String> {
+        Binding(get: { apiField(APIKeyTemplate.environmentField, kind: .text).wrappedValue }, set: { value in
+            apiVariableCustomized = true
+            apiField(APIKeyTemplate.environmentField, kind: .text).wrappedValue = value
+        })
+    }
+
+    private var apiVariableProblem: String? { APIKeyTemplate.variableProblem(apiVariable.wrappedValue) }
+
+    private func prepareAPIFields() {
+        guard isAPIKey else { return }
+        if !customFields.contains(where: { $0.name == APIKeyTemplate.serviceField && $0.kind == .text }) {
+            customFields.append(CustomField(name: APIKeyTemplate.serviceField, value: "", kind: .text))
+        }
+        if case .create = mode { apiVariableCustomized = false }
+        else { apiVariableCustomized = customFields.contains { $0.name == APIKeyTemplate.environmentField && $0.kind == .text } }
+        if !customFields.contains(where: { $0.name == APIKeyTemplate.environmentField && $0.kind == .text }) {
+            let service = customFields.first { $0.name == APIKeyTemplate.serviceField && $0.kind == .text }?.value ?? ""
+            customFields.append(CustomField(name: APIKeyTemplate.environmentField, value: APIKeyTemplate.suggestedVariable(service: service), kind: .text))
+        }
+        apiPresetFieldIDs = APIKeyTemplate.primaryFieldIDs(in: customFields)
+    }
+
+    private var apiKeySection: some View {
+        FormCard(title: "API Key") {
+            FormField(label: "Service", note: "The provider that issued this key, for example Anthropic or OpenAI.") {
+                TextField("Service", text: apiService)
+                    .textFieldStyle(SoftFieldStyle()).accessibilityIdentifier("apiKeyService")
+            }
+            FormField(label: "API key", note: "Stored encrypted in your vault. You won't need to paste it each time you launch a tool.") {
+                Group {
+                    if showSecrets { TextField("API key", text: apiField(APIKeyTemplate.keyField, kind: .hidden)) }
+                    else { SecureField("API key", text: apiField(APIKeyTemplate.keyField, kind: .hidden)) }
+                }
+                .textFieldStyle(SoftFieldStyle()).accessibilityIdentifier("apiKeyValue")
+            }
+            FormField(label: "Default environment variable", note: "The name your tool reads, for example OPENAI_API_KEY. You can choose a different name for each tool during setup.") {
+                TextField("API_KEY", text: apiVariable)
+                    .textFieldStyle(SoftFieldStyle()).font(.system(size: 13, design: .monospaced))
+                    .accessibilityIdentifier("apiKeyVariable")
+            }
+            if let problem = apiVariableProblem {
+                Text(verbatim: problem).font(.system(size: 12)).foregroundStyle(.orange)
+                    .accessibilityIdentifier("apiKeyVariableError")
+            }
+            if hasDuplicateAPIFields {
+                Text("An additional field uses the reserved name api-key, service or environment-variable. Rename or remove that duplicate under Additional fields before saving.")
+                    .font(.system(size: 12)).foregroundStyle(.orange)
+            }
+        }
+    }
+
     private func load() {
+        if apiKeyPresentation == nil { apiKeyPresentation = model.showsAPIKeyTools }
         defer {
+            prepareAPIFields()
             // After the fields have settled (pickers tidy their values on appear).
             DispatchQueue.main.async { original = draft }
         }
@@ -902,6 +1006,15 @@ struct EditItemSheet: View {
                 password = prefill.password
                 if !prefill.uri.isEmpty { websites = [WebsiteRow(text: prefill.uri)] }
                 if prefill.importSSH { DispatchQueue.main.async { choosingSSHKey = true } }
+                if prefill.apiKey {
+                    customFields = APIKeyTemplate.fields
+                    if prefill.practiceAPIKey {
+                        for index in customFields.indices {
+                            if customFields[index].name == APIKeyTemplate.keyField { customFields[index].value = "triwarden-preview-only" }
+                            if customFields[index].name == APIKeyTemplate.environmentField { customFields[index].value = "TRIWARDEN_TEST_KEY" }
+                        }
+                    }
+                }
             }
             return
         case .edit(let item): source = item
@@ -991,7 +1104,7 @@ struct EditItemSheet: View {
                 ok = true
             }
         }
-        if ok { close(saved: true) }
+        if ok { onSaved?(); close(saved: true) }
     }
 }
 

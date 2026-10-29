@@ -32,20 +32,35 @@ final class SSHAgentService {
     private var server: SSHAgentServer?
     private var parsed: [String: (pem: String, key: SSHPrivateKey)] = [:]
     private var trust = SSHTrustStore()
+    var activeTrusts: [SSHTrust] { trust.entries.filter { $0.until.map { $0 > .now } ?? true } }
     private let prompts = SSHApprovalQueue()
     private var inflight: [String: Task<(Bool, SSHChoice), Never>] = [:]
     private var inflightPrompt: [String: UUID] = [:]
     private var sessionStarted = Date()
     private var watching = false
     private var authenticating = false
+    private var authentication: LAContext?
+    private var authorizationGeneration = UUID()
+    private var pendingDeadline: ContinuousClock.Instant?
+    private let approvalPanel = SSHApprovalPanel()
+    /// "Details…" in the notch asked for the full card for this prompt.
+    private var windowForPrompt: UUID?
+
+    private func hidePrompt() {
+        approvalPanel.hide()
+        model?.notch?.clearRequest(.ssh)
+    }
     private weak var model: AppModel?
+    private let accessLogFile: URL
+    private let allowlistFile: URL
     /// Self-test hook: skip the card and Touch ID. Arguments stay (key name, peer process name).
     var approveOverride: ((String, String) -> Bool)?
 
-    init(model: AppModel) {
+    init(model: AppModel? = nil, logURL: URL = SSHAgentService.logURL, allowlistURL: URL = SSHAgentService.allowlistURL) {
         self.model = model
-        accessLog = SSHAccessLog.load(from: Self.logURL)
-        allowlist = SSHAllowlist.load(from: Self.allowlistURL)
+        accessLogFile = logURL; allowlistFile = allowlistURL
+        accessLog = SSHAccessLog.load(from: logURL)
+        allowlist = SSHAllowlist.load(from: allowlistURL)
     }
 
     func start(at socket: URL = defaultSocket) {
@@ -68,6 +83,7 @@ final class SSHAgentService {
     }
 
     func stop() {
+        reset()
         server?.stop()
         server = nil
         isRunning = false
@@ -81,15 +97,16 @@ final class SSHAgentService {
         return SSHApprovalEmphasis.leadsWithUntilLock(priorAsks: accessLog.priorAsks(trustKey: pending.trustKey, since: sessionStarted))
     }
 
-    func choose(_ choice: SSHChoice) {
-        Task { await prompts.resolveFront(choice) }
+    func choose(_ choice: SSHChoice, promptID: UUID) {
+        guard pending?.id == promptID else { return }
+        if case .allow = choice, authenticating { return }
+        hidePrompt()
+        Task { await prompts.resolve(choice, for: promptID) }
     }
 
     /// The menu bar or a notification tap brings the waiting card back.
     func reveal() {
-        guard pending != nil else { return }
-        MenuBarOpener.isOpen = false
-        MenuBarOpener.open()
+        presentPending(reveal: true)
     }
 
     func revokeTrust(id: String) {
@@ -98,18 +115,26 @@ final class SSHAgentService {
     }
 
     func clearAccessLog() {
+        do {
+            if FileManager.default.fileExists(atPath: accessLogFile.path) { try FileManager.default.removeItem(at: accessLogFile) }
+        } catch { model?.flash(String(localized: "Couldn't clear the SSH history. The records are still listed.")); return }
         accessLog.clear()
-        try? FileManager.default.removeItem(at: Self.logURL)
         recent = []
     }
 
     /// Forget approvals and parsed keys (on lock). The access log stays.
     func reset() {
+        authorizationGeneration = UUID()
+        authentication?.invalidate()
+        hidePrompt()
+        pending = nil
+        pendingCount = 0
+        pendingDeadline = nil
         parsed = [:]
         trust.reset()
         trustedUntilLock = []
         sessionStarted = .now
-        Task { await prompts.denyAll() }
+        Task { await prompts.denyAll(); await refreshPending() }
     }
 
     // MARK: Agent callbacks
@@ -168,6 +193,7 @@ final class SSHAgentService {
         let prompt = SSHPrompt(id: UUID(), trustKey: requester.trustKey, displayName: requester.displayName,
                                via: requester.via, path: requester.peerPath, keyID: identity.id, keyName: identity.name,
                                appPath: requester.appPath)
+        let generation = authorizationGeneration
         let task = Task { @MainActor in
             async let choice = self.prompts.ask(prompt)
             await Task.yield()
@@ -175,7 +201,7 @@ final class SSHAgentService {
             SSHApprovalNotifier.arm(prompt)
             let decided = await choice
             SSHApprovalNotifier.cancel(prompt.id)
-            let ok = await self.authenticate(decided, requester: requester, identity: identity)
+            let ok = await self.authenticate(decided, requester: requester, identity: identity, generation: generation)
             await self.refreshPending()
             return (ok, decided)
         }
@@ -189,23 +215,26 @@ final class SSHAgentService {
         return ok
     }
 
-    private func authenticate(_ choice: SSHChoice, requester: SSHRequester, identity: SSHAgentServer.Identity) async -> Bool {
-        guard case .allow(let grant) = choice else { return false }
+    private func authenticate(_ choice: SSHChoice, requester: SSHRequester, identity: SSHAgentServer.Identity, generation: UUID) async -> Bool {
+        guard case .allow(let grant) = choice, !authenticating, generation == authorizationGeneration,
+              model?.isUnlocked == true else { return false }
         authenticating = true
-        defer { authenticating = false }
+        hidePrompt()
+        defer { authenticating = false; authentication = nil }
         let context = LAContext()
+        authentication = context
         context.localizedCancelTitle = String(localized: "Deny")
         let reason = String(localized: "allow “\(requester.displayName)” to sign with the SSH key “\(identity.name)”")
         let ok = (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) == true
-        guard ok, model?.isUnlocked == true else { return false }
+        guard ok, model?.isUnlocked == true, generation == authorizationGeneration else { return false }
         if grant == .always {
             var list = allowlist
             list.add(SSHAllowlistEntry(trustKey: requester.trustKey, displayName: requester.displayName))
             allowlist = list
-            try? allowlist.save(to: Self.allowlistURL)
+            try? allowlist.save(to: allowlistFile)
             try? FileManager.default.setAttributes(
                 [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-                ofItemAtPath: Self.allowlistURL.path)
+                ofItemAtPath: allowlistFile.path)
             return true
         }
         let until: Date? = switch grant {
@@ -222,18 +251,56 @@ final class SSHAgentService {
     func revokeAllowlist(trustKey: String) {
         var list = allowlist
         list.remove(trustKey: trustKey)
+        do { try list.save(to: allowlistFile) }
+        catch { model?.flash(String(localized: "Couldn't save the SSH permission change. The permission is still listed.")); return }
         allowlist = list
-        try? allowlist.save(to: Self.allowlistURL)
+        // Removing permanent permission also ends this caller's cached temporary trust.
+        trust.revoke(trustKey: trustKey)
+        trustedUntilLock = trust.untilLock
     }
 
     private func refreshPending() async {
         let snap = await prompts.snapshot()
-        let previous = pending?.id
         pending = snap.current
         pendingCount = snap.count
+        pendingDeadline = snap.deadline
         if pending != nil { ensureWatch() }
-        if let id = pending?.id, id != previous {
-            MenuBarOpener.open()
+        presentPending()
+    }
+
+    private func presentPending(reveal: Bool = false) {
+        guard !authenticating, let prompt = pending, let deadline = pendingDeadline else {
+            hidePrompt()
+            return
+        }
+        if windowForPrompt != prompt.id, let notch = model?.notchForApprovals {
+            approvalPanel.hide()
+            let promptID = prompt.id
+            notch.present(NotchRequest(id: promptID, kind: .ssh, symbol: "key.fill", title: prompt.displayName,
+                subtitle: String(localized: "wants to sign with \(prompt.keyName)"),
+                detail: [prompt.via, (model?.sessions.count ?? 0) > 1
+                    ? model?.items.first { $0.id == prompt.keyID }.flatMap { item in model?.accounts.first { $0.id == item.accountId }?.email }
+                    : nil].compactMap { $0 }.joined(separator: " · "),
+                deadline: Date.now.addingTimeInterval(NotchStatusController.seconds(ContinuousClock.now.duration(to: deadline))),
+                waiting: pendingCount, leadsWithUntilLock: pendingLeadsWithUntilLock) { [weak self] choice in
+                    guard let self else { return }
+                    switch choice {
+                    case .deny: choose(.deny, promptID: promptID)
+                    case .once: choose(.allow(.once), promptID: promptID)
+                    case .tenMinutes: choose(.allow(.tenMinutes), promptID: promptID)
+                    case .untilLock: choose(.allow(.untilLock), promptID: promptID)
+                    case .review:
+                        windowForPrompt = promptID
+                        model?.notch?.clearRequest(.ssh)
+                        presentPending(reveal: true)
+                    }
+                })
+            return
+        }
+        model?.notch?.clearRequest(.ssh)
+        approvalPanel.show(prompt, deadline: deadline, pendingCount: pendingCount,
+                           leadsWithUntilLock: pendingLeadsWithUntilLock, reveal: reveal) { [weak self] choice in
+            self?.choose(choice, promptID: prompt.id)
         }
     }
 
@@ -259,10 +326,10 @@ final class SSHAgentService {
         if recent.count > 8 { recent.removeLast() }
         accessLog.append(SSHAccessEvent(id: UUID(), date: .now, appName: requester.displayName, via: requester.via,
                                          path: requester.peerPath, keyName: key, outcome: outcome, trustKey: requester.trustKey))
-        try? accessLog.save(to: Self.logURL)
+        try? accessLog.save(to: accessLogFile)
         try? FileManager.default.setAttributes(
             [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-            ofItemAtPath: Self.logURL.path)
+            ofItemAtPath: accessLogFile.path)
     }
 
     private static func outcome(ok: Bool, choice: SSHChoice) -> SSHAccessOutcome {

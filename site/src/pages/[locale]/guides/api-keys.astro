@@ -1,0 +1,9 @@
+---
+import ApiKeysGuide from "../../../components/guide/ApiKeysGuide.astro";
+import { LOCALES } from "../../../i18n";
+
+export function getStaticPaths() {
+  return LOCALES.filter((l) => l.id !== "en").map((l) => ({ params: { locale: l.id } }));
+}
+---
+<ApiKeysGuide />

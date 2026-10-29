@@ -19,7 +19,7 @@ DEV_CA  := $(CURDIR)/DevServer/data/root.crt
 SNAP_DIR := $(HOME)/Library/Group Containers/FX3VR69P5K.io.github.sinhong2011.triwarden/snapshots
 
 .DEFAULT_GOAL := help
-.PHONY: help project build run site test bench screenshots license license-keys test-dev selftest selftest-compatibility selftest-cloud snapshots dev-up dev-seed dev-status dev-logs release clean
+.PHONY: help project build run site test bench screenshots license license-keys test-dev selftest selftest-compatibility selftest-secrets selftest-secrets-online selftest-secrets-interactive selftest-secrets-presentation selftest-cloud snapshots dev-up dev-seed dev-status dev-logs release clean
 
 help: ## Show this list
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[1m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -54,6 +54,36 @@ selftest: build ## In-app self-test against the dev server (isolated storage)
 
 selftest-compatibility: build ## Offline checks for unsupported item types (synthetic data, isolated storage)
 	@"$(BIN)" --selftest-compatibility
+
+selftest-secrets: build ## Signed-app Keychain and Secrets profile checks (isolated records, no real vault)
+	@"$(BIN)" --selftest-secrets
+
+.PHONY: selftest-tools-browser selftest-tools-preview
+selftest-tools-browser: build ## Isolated tool search, selection and access-persistence checks
+	@"$(BIN)" --selftest-tools-browser
+
+selftest-tools-preview: build ## Render synthetic light/dark Tools and Access layouts; print the output folder
+	@TRIWARDEN_SNAPSHOT_DIR="$(SNAP_DIR)" "$(BIN)" --selftest-tools-preview
+
+selftest-secrets-online: build ## Native cancellation checks against the dev Vaultwarden at localhost:28880
+	@"$(BIN)" --selftest-secrets-online
+
+selftest-secrets-interactive: build ## Dummy-key native CLI launch; requires your Touch ID or Mac password
+	@"$(BIN)" --selftest-secrets-interactive
+
+.PHONY: selftest-env-reference-interactive selftest-env-import-online
+selftest-env-reference-interactive: build ## Save and launch dummy-key references; requires desktop user authentication
+	@"$(BIN)" --selftest-secrets-env-interactive
+
+selftest-env-import-online: build ## Import two dummy keys into the disposable dev vault; keep the source unchanged
+	@"$(BIN)" --selftest-env-import-online
+
+selftest-secrets-presentation: build ## Check approval-card visibility while Triwarden is in the background (GUI desktop required)
+	@"$(BIN)" --selftest-secrets-presentation
+
+.PHONY: selftest-ssh-presentation
+selftest-ssh-presentation: build ## Check standalone SSH approval without opening the vault (synthetic data, GUI desktop required)
+	@"$(BIN)" --selftest-ssh-presentation
 
 selftest-security: build ## Self-test plus the steps that sign in again (sign-in approval, password and KDF changes)
 	@TRIWARDEN_SELFTEST_SECURITY=1 "$(BIN)" --selftest http://$(DEV_IP):18880 usagi@chiikawarden.test $(DEV_PASSWORD) \

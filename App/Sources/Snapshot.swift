@@ -7,11 +7,253 @@ import TriCrypto
 import SwiftUI
 import TipKit
 import VaultwardenAPI
+import SecretsAgent
 
 /// Debug-only: `Triwarden --snapshot` renders key screens offscreen in light and dark
 /// to PNGs, so UI can be reviewed without screen-recording permission. Exits when done.
 @MainActor
 enum Snapshot {
+    /// Scalable Tools/Access layouts, with isolated accounts and entirely synthetic records.
+    static func runToolsWorkspaceIfRequested() {
+        guard CommandLine.arguments.contains("--selftest-tools-preview") else { return }
+        AccountStore.namespace = "SecretsUXPreview-" + UUID().uuidString
+        AutoFillIdentities.isEnabled = false
+        // TRIWARDEN_SNAPSHOT_DIR (the group container) lets tools outside the sandbox read the renders.
+        let root = ProcessInfo.processInfo.environment["TRIWARDEN_SNAPSHOT_DIR"].map { URL(fileURLWithPath: $0) } ?? FileManager.default.temporaryDirectory
+        let directory = root.appendingPathComponent("tools-workspace-preview-" + UUID().uuidString)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let model = AppModel()
+        model.setPreviewAccounts([SavedAccount(id: "demo", email: "alex@example.com", serverKind: "selfHosted",
+            serverURL: "https://vault.example.com", kdf: .pbkdf2(iterations: 600_000), protectedUserKey: "")])
+        model.previewUnlocked = true; model.phase = .vault
+        model.showsAPIKeyTools = true
+        model.items = ToolsPreviewFixture.keys() + ToolsPreviewFixture.realKeys
+        let profiles = ToolsPreviewFixture.profiles(64)
+        let real = ToolsPreviewFixture.realTools
+        let envImport = try? EnvImportFile(data: Data("OPENAI_API_KEY=test-only-one\nSEARCH_API_KEY=test-only-two\nPORT=3000\nVITE_PUBLIC_KEY=test-only-public\nNODE_OPTIONS=--require=disabled\n".utf8))
+        var long = profiles[0]
+        long.displayName = "Documentation and research assistant for customer support projects across multiple development environments"
+        long.directory = "/Users/alex/Projects/customer-support-and-documentation-assistant/experiments/knowledge-base"
+        var grants = SecretsGrantStore()
+        var target = real[0]; target.executable = "/usr/bin/true"; target.directory = "/tmp"
+        if let launch = try? LaunchIdentity.capture(target) {
+            for n in 0..<2 {
+                let caller = SecretsCallerIdentity(pid: Int32(1200 + n), uid: 501, startedSeconds: 1, startedMicros: 0, codeHash: Data([1]), path: "/bin/zsh")
+                grants.grant(n == 0 ? .tenMinutes : .untilLock, for: .init(caller: caller, helper: "/Applications/Triwarden.app/Contents/MacOS/tw",
+                    revision: "synthetic", credentialFingerprint: "synthetic", launch: launch, tool: real[n].name))
+            }
+        }
+        let sshTrusts = [
+            SSHTrust(trustKey: "terminal", keyID: "fake-github", displayName: "Terminal", keyName: "GitHub development", until: Date.now.addingTimeInterval(600)),
+            SSHTrust(trustKey: "editor", keyID: "fake-server", displayName: "Editor", keyName: "Development server", until: nil),
+            SSHTrust(trustKey: "expired", keyID: "old", displayName: "Expired fixture must stay hidden", keyName: "Expired key", until: Date.now.addingTimeInterval(-1))
+        ]
+        let always = [SSHAllowlistEntry(trustKey: "trusted-terminal", displayName: "Trusted Terminal")]
+        // Typed pieces: one long inferred expression here is past the compiler's type-check budget on CI.
+        let outcomes: [SSHAccessOutcome] = [.allowedOnce, .denied, .timedOut, .allowlisted, .locked,
+                                            .allowedForTenMinutes, .allowedUntilLock, .reusedTrust]
+        let history: [SSHAccessEvent] = (0..<200).map { (n: Int) -> SSHAccessEvent in
+            let date: Date = Date.now.addingTimeInterval(-Double(n * 60))
+            let via: String = n % 2 == 0 ? "ssh" : "git"
+            return SSHAccessEvent(id: UUID(), date: date, appName: "Terminal \(n % 12)", via: via,
+                                  path: "/usr/bin/ssh", keyName: "Development Key \(n % 16)", outcome: outcomes[n % 8])
+        }
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let views: [(String, AnyView, CGSize)] = [
+                ("guide-key", AnyView(ToolSetupGuide(previewStep: .key, previewProfiles: [])), CGSize(width: 640, height: 640)),
+                ("guide-tool", AnyView(ToolSetupGuide(previewStep: .tool, previewProfiles: real)), CGSize(width: 640, height: 640)),
+                ("guide-helper", AnyView(ToolSetupGuide(previewStep: .helper, previewProfiles: real)), CGSize(width: 640, height: 640)),
+                ("guide-launch", AnyView(ToolSetupGuide(previewStep: .launch, previewProfiles: real)), CGSize(width: 640, height: 640)),
+                ("guide-daily", AnyView(ToolSetupGuide(previewStep: .daily, previewProfiles: real)), CGSize(width: 640, height: 640)),
+                ("env-import", AnyView(EnvKeyImportSheet(previewFile: envImport)), CGSize(width: 600, height: 640)),
+                ("env-export", AnyView(EnvReferenceExport(profile: real[2])), CGSize(width: 520, height: 480)),
+                ("env-saved", AnyView(EnvReferenceExport(profile: real[2], previewSavedURL: URL(fileURLWithPath: "/Users/alex/Projects/storefront/.env.triwarden"))), CGSize(width: 520, height: 480)),
+                ("ready-detail", AnyView(ToolLaunchesPane(previewProfiles: [real[2]], previewDetail: true)), CGSize(width: 440, height: 780)),
+                ("repair-key", AnyView(ToolLaunchesPane(previewProfiles: [ToolsPreviewFixture.profiles(4, keys: 1)[3]], previewDetail: true)), CGSize(width: 440, height: 900)),
+                ("repair-paused", AnyView(ToolLaunchesPane(previewProfiles: [real[6]], previewDetail: true)), CGSize(width: 440, height: 900)),
+                ("repair-account", AnyView(ToolLaunchesPane(previewProfiles: [ToolsPreviewFixture.profiles(6, keys: 1)[5]], previewDetail: true)), CGSize(width: 440, height: 900)),
+                ("repair-helper", AnyView(ToolLaunchesPane(previewProfiles: Array(profiles.prefix(1)), previewHelperState: .wrongLink)), CGSize(width: 440, height: 780)),
+                ("repair-helper-detail", AnyView(ToolLaunchesPane(previewProfiles: [real[0]], previewDetail: true, previewHelperState: .wrongLink)), CGSize(width: 440, height: 780)),
+                ("helper-setup", AnyView(TerminalHelperSetup()), CGSize(width: 580, height: 600)),
+                ("launch-advanced", AnyView(ToolLaunchesPane(previewProfiles: Array(profiles.prefix(1)), previewDetail: true, previewAdvanced: true)), CGSize(width: 740, height: 1000)),
+                ("empty", AnyView(ToolLaunchesPane(previewProfiles: [])), CGSize(width: 1040, height: 720)),
+                ("one", AnyView(ToolLaunchesPane(previewProfiles: [real[0]])), CGSize(width: 1040, height: 760)),
+                ("real", AnyView(ToolLaunchesPane(previewProfiles: real)), CGSize(width: 1040, height: 760)),
+                ("ten", AnyView(ToolLaunchesPane(previewProfiles: Array(profiles.prefix(10)))), CGSize(width: 1040, height: 760)),
+                ("64", AnyView(ToolLaunchesPane(previewProfiles: profiles)), CGSize(width: 1100, height: 800)),
+                ("64-compact", AnyView(ToolLaunchesPane(previewProfiles: profiles)), CGSize(width: 440, height: 780)),
+                ("16-key-detail", AnyView(ToolLaunchesPane(previewProfiles: Array(profiles.prefix(1)), previewDetail: true)), CGSize(width: 440, height: 820)),
+                ("no-results", AnyView(ToolLaunchesPane(previewProfiles: profiles, previewQuery: "not-a-saved-tool")), CGSize(width: 1040, height: 760)),
+                ("attention", AnyView(ToolLaunchesPane(previewProfiles: profiles, previewFilter: .attention)), CGSize(width: 1040, height: 760)),
+                ("duplicates", AnyView(ToolLaunchesPane(previewProfiles: profiles, previewQuery: "Shared assistant")), CGSize(width: 1040, height: 760)),
+                ("long", AnyView(ToolLaunchesPane(previewProfiles: [long], previewDetail: true)), CGSize(width: 440, height: 820)),
+                ("access", AnyView(AccessPane(previewProfiles: real, previewGrants: grants.activeGrants(), previewSSHTrusts: sshTrusts, previewAlways: always, previewHistory: history)), CGSize(width: 960, height: 850)),
+                ("access-compact", AnyView(AccessPane(previewProfiles: real, previewGrants: grants.activeGrants(), previewSSHTrusts: sshTrusts, previewAlways: always, previewHistory: history)), CGSize(width: 440, height: 800)),
+                ("history-200", AnyView(AccessPane(previewProfiles: [], previewGrants: [], previewSSHTrusts: [], previewAlways: [], previewHistory: history, previewShowsHistory: true)), CGSize(width: 960, height: 760)),
+                ("notch-collapsed", AnyView(NotchPreview(expanded: false, notch: true, real: real)), CGSize(width: 620, height: 380)),
+                ("notch-expanded", AnyView(NotchPreview(expanded: true, notch: true, real: real)), CGSize(width: 620, height: 380)),
+                ("notch-request", AnyView(NotchPreview(expanded: true, notch: true, real: real, request: true)), CGSize(width: 620, height: 380)),
+                ("notch-capsule", AnyView(NotchPreview(expanded: false, notch: false, real: real)), CGSize(width: 620, height: 380)),
+                ("history-compact", AnyView(AccessPane(previewProfiles: [], previewGrants: [], previewSSHTrusts: [], previewAlways: [], previewHistory: history, previewShowsHistory: true)), CGSize(width: 440, height: 800))
+            ]
+            let only = ProcessInfo.processInfo.environment["TRIWARDEN_TOOLS_PREVIEW_ONLY"]
+            for (stage, view, size) in views where only == nil || only == stage || stage.hasPrefix((only ?? "") + "-") {
+                render(view.background { WindowBackdrop() }.environment(model).environment(\.colorScheme, name == "dark" ? .dark : .light),
+                       size: size, appearance: appearance, to: directory.appendingPathComponent("tools-workspace-" + stage + "-" + name + ".png"))
+            }
+        }
+        if ProcessInfo.processInfo.environment["TRIWARDEN_SNAPSHOT_STDOUT"] == "1" {
+            try? FileManager.default.removeItem(at: directory)
+        } else { print(directory.path) }
+        exit(0)
+    }
+
+    /// Synthetic journey renders, isolated before model construction; no provider, account login or key delivery.
+    static func runAPIKeyJourneyIfRequested() {
+        guard CommandLine.arguments.contains("--selftest-api-key-preview") else { return }
+        AccountStore.namespace = "SecretsUXPreview-" + UUID().uuidString
+        AutoFillIdentities.isEnabled = false
+        let dir = (ProcessInfo.processInfo.environment["TRIWARDEN_SNAPSHOT_DIR"].map { URL(fileURLWithPath: $0) } ?? FileManager.default.temporaryDirectory).appendingPathComponent("api-key-preview-" + UUID().uuidString)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let model = AppModel()
+        model.showsAPIKeyTools = true
+        model.setPreviewAccounts([SavedAccount(id: "demo", email: "alex@example.com", serverKind: "selfHosted",
+            serverURL: "https://vault.example.com", kdf: .pbkdf2(iterations: 600_000), protectedUserKey: "")])
+        model.previewUnlocked = true; model.phase = .vault
+        let item = APIKeyTemplate.fixture
+        var secondKey = VaultItem(id: "search-key-demo", accountId: "demo", kind: .note, name: "Search API · development",
+            username: nil, host: nil, password: nil, totp: nil, notes: nil, favorite: false)
+        secondKey.customFields = [CustomField(name: APIKeyTemplate.keyField, value: "second-test-only", kind: .hidden),
+                                 CustomField(name: APIKeyTemplate.environmentField, value: "SEARCH_API_KEY", kind: .text)]
+        model.items = [item, secondKey]
+        var longVariableItem = item
+        let longVariable = String(repeating: "PROJECT_", count: 15) + "API_KEY"
+        if let index = longVariableItem.customFields.firstIndex(where: { $0.name == APIKeyTemplate.environmentField }) {
+            longVariableItem.customFields[index].value = longVariable
+        }
+        longVariableItem.fields = item.fields.map { field in
+            field.label == APIKeyTemplate.environmentField
+                ? ItemField(label: field.label, value: longVariable, monospaced: true) : field
+        }
+        let reference = ToolLaunchReference(accountID: item.accountId, itemID: item.id)
+        let profile = SecretsProfile(name: "tool-demo", accountID: item.accountId, itemID: item.id,
+            field: .hidden(APIKeyTemplate.keyField), variable: "ANTHROPIC_API_KEY", executable: "/usr/bin/env",
+            arguments: ["node", "scripts/assistant.mjs"], directory: "/Users/alex/Projects/documentation-assistant",
+            displayName: "Documentation assistant")
+        var multiProfile = profile
+        multiProfile.name = "tool-research"; multiProfile.displayName = "Research assistant"
+        multiProfile.additionalBindings = [.init(accountID: "demo", itemID: secondKey.id, field: .hidden(APIKeyTemplate.keyField), variable: "SEARCH_API_KEY")]
+        var prefill = EditItemSheet.Prefill(); prefill.apiKey = true; prefill.accountIDs = ["demo"]
+        for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+            let scheme: ColorScheme = name == "dark" ? .dark : .light
+            let views: [(String, AnyView, CGSize)] = [
+                ("editor", AnyView(EditItemSheet(mode: .create(.secureNote), prefill: prefill, inPanel: true)), CGSize(width: 760, height: 760)),
+                ("key-detail", AnyView(ItemDetail(item: item)), CGSize(width: 720, height: 760)),
+                ("key-detail-compact", AnyView(ItemDetail(item: item)), CGSize(width: 360, height: 800)),
+                ("key-detail-long-variable", AnyView(ItemDetail(item: longVariableItem)), CGSize(width: 480, height: 880)),
+                ("tools-empty", AnyView(ToolLaunchesPane()), CGSize(width: 760, height: 680)),
+                ("setup", AnyView(ToolLaunchSetup(reference: reference)), CGSize(width: 640, height: 720)),
+                ("claude-setup", AnyView(ToolLaunchSetup(reference: reference, previewRecipe: .claudeCode)), CGSize(width: 640, height: 1000)),
+                ("review", AnyView(ToolLaunchSetup(reference: reference, previewReview: true, previewProfile: profile)), CGSize(width: 640, height: 720)),
+                ("saved-tool", AnyView(ToolLaunchesPane(previewProfile: profile, previewDetail: true)), CGSize(width: 760, height: 900)),
+                ("multi-tools", AnyView(ToolLaunchesPane(previewProfiles: [profile, multiProfile])), CGSize(width: 760, height: 1640)),
+                ("multi-tools-compact", AnyView(ToolLaunchesPane(previewProfiles: [multiProfile])), CGSize(width: 440, height: 1240)),
+                ("multi-key-setup", AnyView(ToolLaunchSetup(reference: reference, previewProfile: multiProfile)), CGSize(width: 640, height: 1100)),
+                ("multi-key-review", AnyView(ToolLaunchSetup(reference: reference, previewReview: true, previewProfile: multiProfile)), CGSize(width: 640, height: 1100))
+            ]
+            for (stage, view, size) in views {
+                render(view.background { WindowBackdrop() }.environment(model).environment(\.colorScheme, scheme), size: size, appearance: appearance,
+                       to: dir.appendingPathComponent("api-key-" + stage + "-" + name + ".png"))
+            }
+        }
+        print(dir.path)
+        exit(0)
+    }
+
+    /// Standalone SSH forms only; no vault, private key, agent socket or device authentication.
+    static func runSSHIfRequested() {
+        guard CommandLine.arguments.contains("--selftest-ssh-preview") else { return }
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("ssh-preview-" + UUID().uuidString)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let cases: [(String, NSAppearance.Name, CGSize, Bool, Bool, Int)] = [
+            ("light", .aqua, CGSize(width: 560, height: 660), false, false, 60),
+            ("dark", .darkAqua, CGSize(width: 560, height: 660), false, false, 38),
+            ("compact", .aqua, CGSize(width: 500, height: 460), false, false, 24),
+            ("repeat", .darkAqua, CGSize(width: 560, height: 660), true, false, 18),
+            ("long", .aqua, CGSize(width: 560, height: 660), false, true, 12),
+            ("urgent", .darkAqua, CGSize(width: 500, height: 460), false, false, 5)
+        ]
+        for (name, appearance, size, repeated, long, seconds) in cases {
+            let prompt = SSHPrompt(id: UUID(), trustKey: "synthetic", displayName: long ? "Local development assistant with a long application name" : "Terminal",
+                via: "ssh", path: long ? "/Users/alex/Projects/development-assistant/tools/isolated-environment/bin/ssh" : "/usr/bin/ssh",
+                keyID: "synthetic", keyName: long ? "Development signing key for documentation and customer support projects" : "GitHub · development",
+                appPath: long ? nil : "/System/Applications/Utilities/Terminal.app", waitingCount: repeated ? 3 : 1)
+            render(SSHApprovalView(prompt: prompt, deadline: .now.advanced(by: .seconds(seconds)),
+                                   pendingCount: repeated ? 2 : 1, leadsWithUntilLock: repeated, choose: { _ in })
+                .environment(\.colorScheme, appearance == .darkAqua ? .dark : .light),
+                size: size, appearance: appearance, to: dir.appendingPathComponent("ssh-approval-" + name + ".png"))
+        }
+        print(dir.path)
+        exit(0)
+    }
+
+    /// Reference-only previews: no AppModel, vault, Keychain, live socket or authentication is opened.
+    static func runSecretsIfRequested() {
+        guard CommandLine.arguments.contains("--selftest-secrets-preview") else { return }
+        let dir = (ProcessInfo.processInfo.environment["TRIWARDEN_SNAPSHOT_DIR"].map { URL(fileURLWithPath: $0) } ?? FileManager.default.temporaryDirectory).appendingPathComponent("secrets-preview-" + UUID().uuidString)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let cases: [(String, NSAppearance.Name, CGSize, Bool, Bool, Int)] = [
+                ("light", NSAppearance.Name.aqua, CGSize(width: 600, height: 720), false, false, 60),
+                ("dark", .darkAqua, CGSize(width: 600, height: 720), false, false, 37),
+                ("compact", .aqua, CGSize(width: 540, height: 520), false, false, 24),
+                ("long", .aqua, CGSize(width: 600, height: 720), false, true, 18),
+                ("busy", .darkAqua, CGSize(width: 600, height: 720), true, false, 12),
+                ("urgent", .darkAqua, CGSize(width: 540, height: 520), false, false, 5),
+                ("ten-minutes", .darkAqua, CGSize(width: 600, height: 800), false, false, 48),
+                ("until-lock", .aqua, CGSize(width: 600, height: 800), false, false, 42),
+                ("unverified-caller", .aqua, CGSize(width: 600, height: 720), false, false, 60),
+                ("multi-key", .darkAqua, CGSize(width: 600, height: 920), false, false, 60),
+                ("multi-key-light", .aqua, CGSize(width: 600, height: 920), false, false, 60)
+            ]
+            for (name, appearance, size, busy, long, seconds) in cases {
+                // A real-looking Claude Code launch; the long case keeps the stress test for wrapping.
+                var profile = SecretsProfile(name: "claude-code", accountID: "synthetic", itemID: "synthetic", field: .hidden("api-key"),
+                    variable: "ANTHROPIC_API_KEY", executable: "/usr/bin/env", // capture needs a file that exists on every Mac
+                    arguments: long ? ["node", "./packages/development-assistant/scripts/run-local-agent-with-project-configuration.mjs", "--project", "/Users/alex/Projects/assistant/experiments/customer-support-and-document-search", ""] : ["claude"],
+                    directory: "/tmp", displayName: long ? nil : "Claude Code")
+                if name.hasPrefix("multi-key") {
+                    profile = SecretsProfile(name: "storefront-dev", accountID: "synthetic", itemID: "synthetic", field: .hidden("api-key"),
+                        variable: "STRIPE_SECRET_KEY", executable: "/usr/bin/env", arguments: ["pnpm", "run", "dev"], directory: "/tmp",
+                        displayName: "Storefront dev server",
+                        additionalBindings: [.init(accountID: "synthetic", itemID: "second", field: .hidden("api-key"), variable: "SUPABASE_SERVICE_ROLE_KEY"),
+                                             .init(accountID: "synthetic", itemID: "third", field: .hidden("api-key"), variable: "RESEND_API_KEY")])
+                }
+                let request = SecretsRunRequest(profile: profile, revision: try profile.revision(), launch: try LaunchIdentity.capture(profile))
+                let prompt = SecretsController.Prompt(request: request,
+                    credential: long ? "Development API credential for the local documentation and customer support assistant" : "Anthropic · personal",
+                    account: "alex@example.com · vault.example.com", helper: "/Applications/Triwarden.app/Contents/MacOS/tw",
+                    deadline: .now.advanced(by: .seconds(seconds)),
+                    caller: name == "unverified-caller" ? nil : SecretsCallerIdentity(pid: 1234, uid: 501, startedSeconds: 1,
+                        startedMicros: 0, codeHash: Data([1]), path: "/bin/zsh"),
+                    credentials: name.hasPrefix("multi-key") ? [
+                        .init(name: "Stripe · test mode", account: "alex@example.com · vault.example.com", field: "api-key", variable: "STRIPE_SECRET_KEY"),
+                        .init(name: "Supabase · service role", account: "alex@example.com · vault.example.com", field: "api-key", variable: "SUPABASE_SERVICE_ROLE_KEY"),
+                        .init(name: "Resend", account: "alex@example.com · vault.example.com", field: "api-key", variable: "RESEND_API_KEY")
+                    ] : [])
+                render(SecretsApprovalView(prompt: prompt, authenticating: busy, deny: {}, allow: { _ in },
+                    initialDuration: name == "ten-minutes" ? .tenMinutes : name == "until-lock" ? .untilLock : .once)
+                    .environment(\.colorScheme, appearance == .darkAqua ? .dark : .light),
+                    size: size, appearance: appearance, to: dir.appendingPathComponent("secrets-approval-" + name + ".png"))
+            }
+            print(dir.path)
+            exit(0)
+        } catch {
+            print("Secrets preview failed: \(error.localizedDescription)")
+            exit(1)
+        }
+    }
+
     /// `make snapshots ONLY=login,send`: render only screens whose file name contains one of these (all when empty).
     static let only: [String] = (ProcessInfo.processInfo.environment["TRIWARDEN_SNAPSHOT_ONLY"] ?? "")
         .split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
@@ -1824,3 +2066,37 @@ enum HeadlessIdP {
         return callback
     }
 }
+
+#if DEBUG
+/// The notch status over a strip of menu bar, with a dummy camera housing so the fit can be checked.
+private struct NotchPreview: View {
+    let expanded: Bool
+    let notch: Bool
+    let real: [SecretsProfile]
+    var request = false
+    @State private var state = NotchStatusState()
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            LinearGradient(colors: [.indigo.opacity(0.6), .teal.opacity(0.4)], startPoint: .top, endPoint: .bottom)
+            Rectangle().fill(.bar).frame(height: 32)
+            if notch { UnevenRoundedRectangle(bottomLeadingRadius: 10, bottomTrailingRadius: 10).fill(.black).frame(width: 190, height: 32) }
+            NotchStatusView(state: state).frame(height: 380, alignment: .top)
+        }
+        .onAppear {
+            state.geometry = .init(notchWidth: notch ? 190 : 0, height: 32, hasNotch: notch)
+            state.items = [
+                .init(source: .tool(UUID()), symbol: "sparkles", title: real[0].title, detail: "zsh (PID 4120) · 1 key", expires: .now.addingTimeInterval(9 * 60 + 42)),
+                .init(source: .ssh("gh"), symbol: "key.fill", title: "Terminal", detail: "GitHub development", expires: .now.addingTimeInterval(4 * 60 + 5)),
+                .init(source: .tool(UUID()), symbol: "shippingbox", title: real[2].title, detail: "zsh (PID 3311) · 3 keys", expires: nil)
+            ].sorted { ($0.expires ?? .distantFuture) < ($1.expires ?? .distantFuture) }
+            state.expanded = expanded; state.present = true
+            if request {
+                state.request = NotchRequest(id: UUID(), kind: .ssh, symbol: "key.fill", title: "Terminal",
+                                             subtitle: "wants to sign with GitHub development", detail: "git",
+                                             deadline: .now.addingTimeInterval(42), waiting: 2) { _ in }
+            }
+        }
+    }
+}
+#endif

@@ -117,13 +117,26 @@ struct KeyboardShortcutsView: View {
         Entry(keys: "⌥↵  ⇧⌥↵", title: "Type password / & submit"),
     ])
 
+    /// Approval cards, in a window or the notch. macOS authentication still follows any allow.
+    static let approvals = Group(title: "Approval requests", symbol: "checkmark.shield", entries: [
+        Entry(keys: "↵", title: "Allow (the highlighted choice)"),
+        Entry(keys: "Esc", title: "Deny"),
+    ])
+
+    static let notch = Group(title: "Notch status", symbol: "rectangle.topthird.inset.filled", entries: [
+        Entry(keys: "-click", title: "Open or close the list"),
+        Entry(keys: "-drag", title: "Move it anywhere"),
+    ])
+
     private var catalog: [Group] {
-        [Self.window, Self.item, Self.search, Self.palette, Self.otherApp, Self.passwordField, everywhere]
+        [Self.window, Self.item, Self.search, Self.palette, Self.otherApp, Self.passwordField, Self.approvals, Self.notch, everywhere]
     }
 
     private func matching(_ group: Group) -> Group? {
         let q = query.trimmingCharacters(in: .whitespaces)
         guard !q.isEmpty else { return group }
+        // A group's own name ("Approval requests", "Anywhere on your Mac") finds all of it.
+        if String(localized: group.title).localizedStandardContains(q) { return group }
         let entries = group.entries.filter {
             String(localized: $0.title).localizedStandardContains(q) || $0.keys.localizedStandardContains(q)
         }
@@ -225,7 +238,8 @@ struct KeyboardShortcutsView: View {
         .background { GlassPanelMaterial() }
         .clipShape(.rect(cornerRadius: 22, style: .continuous))
         .onAppear {
-            practice.entries = catalog.flatMap(\.entries)
+            // These answer only on their own cards; matching them here would light rows the panel can't act on.
+            practice.entries = catalog.filter { $0.id != Self.approvals.id && $0.id != Self.notch.id }.flatMap(\.entries)
             practice.onMatch = { ids in
                 if !query.isEmpty { query = "" }
                 practiceIDs = ids
@@ -645,6 +659,8 @@ struct KeyCombo: View {
                     if let word = parts.word {
                         if word == "click" {
                             KeyCap(symbol: "cursorarrow.click", label: "click")
+                        } else if word == "drag" {
+                            KeyCap(symbol: "hand.draw", label: "drag")
                         } else {
                             Text(verbatim: word).font(.system(size: 11.5)).foregroundStyle(.secondary)
                         }

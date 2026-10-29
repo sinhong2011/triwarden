@@ -1,0 +1,162 @@
+# Local API credentials
+
+Triwarden can launch saved tools with the explicitly selected API keys from your Bitwarden or Vaultwarden vault. Keys stay out of your shell startup file, launch arguments, project configuration and normal clipboard workflow.
+
+You can save **up to 64 tools**, each with **up to 16 credential bindings**. Each launch needs all selected accounts unlocked and a successful online refresh of each account. The first launch asks for approval and Touch ID or your Mac login password; you can choose one launch, 10 minutes, or until the vault locks. It does not use Bitwarden Secrets Manager. This is a credential-manager and launch feature; it does not run an API proxy.
+
+## Save a key and provide it to a tool
+
+1. In the vault, choose **New API Key** from the **+** or **File** menu. Give it a recognizable name, enter the service and paste the key issued by that provider. Confirm **Default environment variable**, for example `ANTHROPIC_API_KEY`, then save. Service suggestions update until you edit this name yourself; changing the service then keeps your custom name. The preset uses a standard Secure Note with hidden `api-key`, text `service`, and text `environment-variable` custom fields, so other Bitwarden/Vaultwarden clients can still manage it.
+2. Open the saved key and choose **Provide to Tool…**. You can find these items under **All Items → API Keys**. No Settings page or manually created custom field is needed.
+3. Give the tool a name you'll recognize, such as “Documentation assistant”. Under **What do you want to run?**, choose a recipe: Claude Code, Codex CLI, Gemini CLI, Cursor CLI, Aider, OpenCode, an npm, pnpm or Bun development project (`run dev`), a Node.js script, a Python script, a Python script with uv (`uv run <script>`), or **Other program**. Then select the project folder. **Find Installed Program** fills common program paths when available; use **Choose…** if it cannot find the program.
+4. Check **Environment variable for this tool**. It starts with the saved key's default; older keys without this metadata use the service suggestion. The Claude Code, Codex CLI, Gemini CLI and Cursor CLI recipes suggest `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY` and `CURSOR_API_KEY`. Other recipes keep the key's default. Match your tool's configuration. The form shows **selected key → variable → tool**. A tool-specific override leaves the key's vault default unchanged. This field takes a variable name, never the credential value. Invalid syntax and program-control names such as `PATH` or `NODE_OPTIONS` cannot be saved as defaults. Advanced options expose individual arguments without evaluating shell text.
+5. If the tool needs more keys, use **Additional keys for this tool → Add Key** and set the exact variable expected for each. Variable names must be different within a tool. Choose **Review**, inspect the complete executable, arguments, folder and every key binding, then **Save Tool**. New setups keep existing tools. To change an existing setup, use its **Edit Setup…** action in Tools. **Back** returns to editing without losing input.
+6. **Tools** shows the saved tool and the command to launch it again. Install the bundled `tw` helper once. Open **Install Terminal Helper…** from the tool, the app menu or the command palette, or **Terminal Helper Setup…** in Tools options or Settings → Developer. **Copy & Open Terminal** copies the install command and opens Terminal. Paste it, press Return and enter your Mac password. The sandboxed app cannot write `/usr/local/bin` itself. The setup window detects the new link automatically. Then copy the launch command shown in Tools. It contains only the generated tool ID, not your key:
+
+   ```sh
+   tw run --profile tool-EXAMPLE
+   ```
+
+   Use the exact command displayed in your app. `profile` is the CLI's internal identifier; the app shows your chosen tool name. A ready tool also shows a short alias name, `tw-` followed by the tool name in lowercase words, for example `tw-documentation-assistant`. **Copy Alias** copies the `alias` line for your shell startup file.
+7. Review every requested key, account and environment variable, plus the executable, every argument and working directory in the approval card. When all keys come from one account, the card shows “From <account>” once above the keys; otherwise each key shows its account. Under **Allow for**, select **Once**, **10 minutes**, or **Until lock**, confirm the matching button and authenticate with Touch ID or your Mac password. The default is once. The duration stays above the buttons while command details scroll. If the calling process cannot be verified, only once is available.
+
+For subsequent use, run the saved command or alias from your terminal. Update keys in the vault when they change; you do not need to copy them into tool configuration.
+
+An empty **Tools** page offers three starts: **Import from an .env file** (recommended), **Use a key already in the vault**, and **Walk me through it**, which opens the setup guide. With one saved tool, Tools opens straight to its detail. With more, it shows a naturally sorted list; from four tools it adds search and status filters. Search by tool, project folder, key name or variable. Each tool shows one state: **Ready to run**, **Install the terminal helper**, **Paused**, **Account locked** or **Needs attention**. A ready tool leads with its launch command and alias. Any other state explains the problem and offers one fix, such as **Install Terminal Helper…**, **Resume Tool**, **Unlock Account** or **Edit Setup…**. The detail also lists every key-to-variable mapping, with a link to each key in the vault, and the program, arguments, folder and account. The tool's menu provides edit, alias, `.env` references, pause/resume and removal. Wide windows show list and detail together; narrow windows open the selected detail with a back action. **Add Tool** lets you choose a saved API key directly. Removal asks first and affects only the local launch setup; vault keys are kept. Paused settings remain paused when edited.
+
+**Access → Permissions**, beside Tools in the sidebar, lists temporary access. **Tool launches** lists API-key approvals after a successful launch with **10 minutes** or **Until lock**. Each row shows the saved tool, the terminal or launcher process, the number of keys and the remaining time. **End** ends that approval. **SSH signing** lists temporary SSH approvals, also with **End**. **Always allowed** lists permanent SSH apps; **Remove…** asks for confirmation first. **End All Temporary Access…** clears temporary API-key and SSH approvals and cancels pending requests; it keeps Always Allowed apps. Expired approvals disappear. Once-only launches and merely saving a tool never add an API-key permission. There is no permanent API-key whitelist or manual trust-by-name setting.
+
+**History** contains the most recent 200 SSH requests, grouped by day, with search and result filters. API-key launch history is not recorded. **Clear History…** removes records without changing permissions. Settings → Developer retains SSH enable/socket configuration and terminal-helper installation, with a link to Access.
+
+Temporary access belongs to the same **calling process**, exact saved setting, credential and executable/directory identity. The calling process is the kernel-observed immediate parent of the signed bundled `tw`: its PID, start time and running code signature must match. Two processes with the same name cannot share approval, and a new terminal or newly created agent launcher may ask again. It is not a process-name or parent-app-name allowlist. Ten minutes has a fixed deadline that is not extended by reuse. Grants stay only in App memory and are cleared by lock, logout, tool save/pause, denial/cancellation, **End All Temporary Access…** or App exit. A changed credential or target invalidates the old grant on the next refreshed request. Once means exactly one launch; the SSH signing burst does not apply. Revoking or expiring access prevents new deliveries and cannot recall keys already supplied to running programs.
+
+An environment variable name is not a unique key identifier. Different projects may all expect `API_KEY` while using different vault items. Triwarden uses the explicitly saved tool binding to select the item and variable; it does not infer access from a process name or intercept arbitrary programs asking for environment variables. Start a tool with its saved `tw run` command to receive the approved key. Changing a key's default variable later does not rewrite an already saved tool binding; edit that tool setup and review its actual name separately.
+
+The approval window uses the same forms and buttons as the rest of Triwarden. Resize it or scroll to inspect long commands; each argument is shown separately without truncation. Expand **Requested by** to inspect the helper's full path. The actions stay at the bottom, and Return does not approve a launch in the window. Escape or **Deny** cancels it.
+
+## Access status and notch approvals
+
+Settings → Developer → **Access status** has two options. Both are on by default on a Mac with a notch and off otherwise, until you change them.
+
+**Show active access at the top of the screen** shows a small status while a tool or SSH app holds temporary access. It shows the time left. Point at it for a moment, or click it, to open a list. Each row has **End**, and **Open Access** opens the Access page. **Position** offers **At the notch**, **Top left**, **Top right** and **Where I drag it**; dragging the status selects the last one. On a Mac without a notch, the status sits below the menu bar. The status hides while another app is full screen. If another app's window covers the notch, the status moves to the top right. While access is active, the menu bar menu also has a **Show Active Access** button. The status needs no extra macOS permission. It shows tool, app and key names, never key values.
+
+**Show approval requests** offers **In a window** and **In the notch**. In the notch, SSH signing requests and tool launches with one key from a verified launcher ask at the top of the screen. The request offers **Deny**, **Details…**, **10 min**, **Until Lock** and **Allow Once**. Return chooses the highlighted option and Esc denies. A repeated SSH request in the same unlock highlights **Until Lock** instead of **Allow Once**. **Details…** opens the full approval window. Tools with several keys, unverified launchers, and requests while another app is full screen still use the window. Touch ID or your Mac password is still required after every choice to allow.
+
+## Existing or advanced bindings
+
+Existing single-tool files remain readable and keep their CLI names and protected revisions; saving migrates the file to a bounded catalog without dropping the old tool. The advanced editor lets you select an exact saved tool and preserves its additional bindings. **Settings → Secrets → Advanced Launch Settings…** remains a reference-only recovery editor for a login password or another uniquely named hidden field, and manual command configuration. It never accepts a raw credential value. Ordinary API-key setup starts in the vault and Tools.
+
+The CLI replaces itself with the saved program. Interactive input, Ctrl-C and the program's exit code behave as they do in an ordinary terminal launch. The Secrets profile has its own enable switch and authorization; the general “Answer the tw command” setting and its cached approvals do not grant `tw run` access.
+
+Use the `tw` inside the same app bundle as the running Triwarden. A symlink to it is supported. Copied, unsigned, modified or mismatched helpers fail signature validation. The transport accepts correctly sealed ad-hoc counterpart signatures; signed official builds additionally require matching Team IDs. Source builds also need valid Data Protection Keychain entitlements to save the profile confirmation. Ad-hoc signing alone does not grant that access.
+
+## What is passed to the program
+
+Only the selected credential and a small set of basic user, terminal, locale and temporary-directory settings are inherited. `PATH` is set to:
+
+```text
+/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+```
+
+Other exported API keys, proxy configuration and runtime-control variables are omitted. Bindings such as `PATH`, `DYLD_*`, `NODE_OPTIONS`, `PYTHONPATH` and `BASH_ENV` are rejected. If a tool needs additional configuration variables, this initial version may not fit it yet.
+
+The key is delivered through authenticated local IPC, briefly held by `tw`, then placed in the launched program's environment. It is not written to a temporary `.env` file or printed by `tw run`. The invoking shell does not receive the variable.
+
+**The receiving program can read, save, print or send the key.** Its descendants inherit it, and other processes running as the same macOS user may be able to inspect process environments. This is not a sandbox. Triwarden does not capture or sanitize arbitrary program output.
+
+Locking Triwarden cancels pending approvals and stops new deliveries. Delivery commits when the approved response is written to the local socket; bytes already sent cannot be recalled. A program that already received a key can keep or transmit a copy, even beyond its own lifetime. Revoke a key at its provider if you need to invalidate it.
+
+## Approval and troubleshooting
+
+- Commands are saved through guided tool setup or Advanced Launch Settings. `tw run --profile NAME -- arbitrary-command` is intentionally rejected, regardless of whether the caller has a terminal. A TTY does not prove a request came from a human.
+- A launch asks again unless the same calling process has a current temporary approval for exactly this key and command. One request can wait at a time. Denying, closing or timing out a request clears temporary access and introduces a short cooldown to reduce repeated prompts.
+- Requests expire after 60 seconds, including refresh time. The footer's countdown ring shows the actual seconds remaining and turns orange for the last five seconds. It continues during macOS authentication and uses the same monotonic deadline as authorization. Closing the terminal or disconnecting cancels the request.
+- For an API-key preset, repair an empty key or duplicate field in its vault editor before opening **Provide to Tool…** again. The warning points to **Additional fields**, where duplicates remain editable. For a legacy binding, select the exact field again under **Settings → Secrets → Advanced Launch Settings…**. There is no fuzzy fallback to another field.
+- Trashed, archived, unsupported and inaccessible items cannot be used. Items requiring an additional master-password re-prompt are unsupported by `tw run` in this release; their protection is not bypassed.
+- If the vault cannot refresh online, nothing starts. There is no silent cache fallback in this version.
+- If the executable or working directory changes during approval, the CLI refuses to launch. Run the command again after checking the change.
+- Updating a key in the vault takes effect on the next successfully refreshed launch. Restart existing programs to give them the new value.
+- The App pins the entire reference-only tool catalog in its Data Protection Keychain group. Saving one tool cannot approve unreviewed external edits to another. Pins are computed from the exact in-memory snapshot being saved, never by rereading the writable file after saving. A missing/unavailable pin fails closed. If settings are corrupted or cannot be safely recovered, **Reset Tool Setups…** removes local setups after explicit confirmation and keeps vault keys.
+- Multiple credentials are delivered together or not at all. A missing/renamed/duplicate field, locked account, failed refresh, invalid variable, or combined value size over 32 KiB prevents exec. The CLI rejects missing or additional response variables and inherits no unrelated exported keys.
+- Changing a profile cancels an outstanding approval. Other Bitwarden clients can continue to manage the underlying standard vault item.
+
+Executable checks compare canonical path, file identity, permissions, timestamps and content digest immediately before execution. macOS public APIs still require path-based exec, so there is a final replacement race. Interpreters, scripts, dependencies, plugins and project code are not verified by the executable check. Approve only commands and projects you intend to trust.
+
+## Move away from `.zshrc`
+
+Save the key to the vault and verify the new launch workflow first. Then remove its literal assignment/export from `~/.zshrc` and other plaintext configuration. Start a fresh terminal or explicitly clear old exported variables: editing the file does not clear already-running shells.
+
+An alias containing only `tw run --profile agent-dev` is fine. Do not replace a literal key with an automatic `tw get` export in `.zshrc`: that would load it into every interactive shell again.
+
+There is no automatic `.zshrc` importer in this release. If a key previously reached Git, a conversation, or a log, replace it at the provider; moving it into the vault does not invalidate the old value.
+
+## Scope and next steps
+
+The current feature covers local environment injection, multiple tools, and multiple key bindings. Tools can export a reference-only `.env.triwarden` file for `tw run --env-file FILE`. All references must match a saved tool before the normal approval and launch checks run. See the [environment reference file guide](local-secrets-dx.md#use-an-environment-reference-file). Tools can also import keys from an existing plaintext `.env` file into the vault; see [Import keys from an existing .env file](local-secrets-dx.md#import-keys-from-an-existing-env-file). Tested editor integrations and API-key launch history remain later work. An already-running editor cannot acquire a new environment merely because another process ran `tw`.
+
+A service-specific proxy could keep original provider keys out of supported tools, but network proxying is outside this feature's current product scope. Triwarden remains a credential manager and explicitly authorized launcher. SSH private keys continue to use the existing SSH agent.
+
+### Why this is different from an SSH agent
+
+An agent can either deliver a credential or perform an operation for a client. The current `tw run` feature does the former: after approval, the authenticated CLI briefly receives the raw key and injects it into the target environment. A program, dependency or plugin running there can copy or transmit that key. Temporary approval limits future deliveries, not the lifetime of an already delivered provider credential. Same-user inspection and the final path-based exec race remain outside this feature's isolation guarantees.
+
+SSH agents perform signing operations without giving the private key to the requesting client. Removing access prevents future signing through the agent; it does not undo an established connection. An authorized malicious client may still misuse the operations permitted during its authorization. See the [OpenSSH agent manual](https://man.openbsd.org/ssh-agent.1).
+
+For HTTP bearer API keys, an analogous operation broker is a provider-specific local proxy: the tool receives a scoped local token and endpoint, while Triwarden authenticates requests to a fixed provider upstream. This keeps the provider key out of that tool's environment, but the local token still permits API consumption and must be revocable, bounded and protected. It does not sandbox the tool or protect a fully compromised Mac. Provider requests already accepted cannot be undone, and revocation cannot guarantee refunds or reverse side effects.
+
+Endpoint customization makes this practical for some clients. Claude Code documents [gateway support](https://code.claude.com/docs/en/llm-gateway), including keeping provider keys at the gateway. The [official OpenAI Python SDK](https://github.com/openai/openai-python#configuring-the-http-client) documents `base_url` / `OPENAI_BASE_URL`. These configuration capabilities do not establish Triwarden compatibility: no proxy adapter is implemented or validated yet. Unsupported clients must never silently fall back from promised proxy isolation to raw-key delivery.
+
+## Developer validation
+
+Run `make selftest-tools-browser` for isolated search, status, sorting, selection and SSH-permission persistence checks. Run `make selftest-tools-preview` to render synthetic Tools/Access screens in light/dark appearances and wide/compact layouts; it prints the output folder. These fixtures cover 0/1/10/64 tools, 16 keys per tool, duplicate names, missing/locked items and 200 SSH records. They do not open a real vault, grant access or replace manual keyboard and account-navigation acceptance.
+
+Run `swift test --package-path Packages/VaultCore` for the launch policy and synthetic signed-process transport/exec tests. Run `make selftest-secrets` for actual Keychain and native profile checks in a signed Debug build. The diagnostic uses an empty, disposable account namespace and a UUID-scoped Keychain record, checks that the bundled CLI cannot read or overwrite the App's record, and removes its test data before exit. It does not open a real vault or request device-owner authentication.
+
+For native tests against the documented disposable Vaultwarden dev account, first forward the dev server to a loopback port in a separate terminal:
+
+```sh
+ssh -N -L 127.0.0.1:28880:127.0.0.1:18880 m1pro
+```
+
+Then run `make selftest-secrets-online`. It logs into the seeded `usagi@chiikawarden.test` dev account with the documented dev password, creates one uniquely named dummy credential, and exercises the real bundled CLI and native controller. Denial, CLI disconnection, profile changes and account locking must prevent exec. The test checks server-side item cleanup after online refresh, removes its local records, and restores the login preferences it changed. Each cancellation retains the normal cooldown.
+
+Run `make selftest-secrets-interactive` for the successful launch. Its isolated UI fixture preselects **Trust Until Lock**; normal app launches still default to once. Review the `canary` approval card, confirm its matching button and complete the normal Touch ID/Mac-password step yourself within 60 seconds. You may change the duration. The child checks only the dummy value, writes a disposable success marker and exits with status 37; no provider API is called. After a timed choice the diagnostic checks a repeated launch without another prompt, revokes the grant, then denies a new request and checks that no command starts. Once requires a new prompt instead. Both commands are Debug-only and use a separate account namespace, profile/socket directory and Keychain service. They accept only a loopback dev server; `TRIWARDEN_SECRETS_TEST_PORT` can change its port. Stop the forward when finished. If multiple development copies share the bundle ID, UI automation can select another copy: do not operate that copy or count its main window as the diagnostic card.
+
+Run `make selftest-secrets-presentation` on an unlocked GUI desktop to check that the card remains onscreen without taking the foreground app or opening ordinary windows. It uses the same isolated dev-account flow, attempts a focus handoff to Finder, records the actual foreground app (activation is cooperative), checks active-Space/occlusion and the nonactivating/fullscreen-auxiliary window configuration, then denies and cleans up. This does not exercise actual fullscreen or every Spaces arrangement. The card stays visible while another app is in front; denial, timeout, disconnect and account locking still close it. A screenshot of the window by itself does not prove it is actually visible on the desktop.
+
+For a manual guided-setup HTTP exercise, `scripts/local-secrets-journey.py` is a stdlib Python client and loopback-only fake-key API for the existing usagi **Anthropic API Key — Demo (fake)** example. Its launcher refuses a different item ID, variable or script. It never uses a provider API. Start the fixture from the checkout:
+
+```sh
+/usr/bin/python3 scripts/local-secrets-journey.py server
+```
+
+In the key's **Provide to Tool** form, select **Python script**, this script's absolute path, the checkout as project folder and `ANTHROPIC_API_KEY`. Review and save; do not replace another saved tool without reviewing that replacement. From another terminal, run:
+
+```sh
+/usr/bin/python3 scripts/local-secrets-journey.py launch --expect allow --repeat 2
+```
+
+Choose a temporary scope and authenticate on the first request. The second CLI has the same signed Python launcher, so it can reuse that scope. Separate invocations of the launcher create different calling processes and should ask again. `--expect deny` requires the actual denial error and zero child/API activity; `--expect blocked` checks zero activity for paused/locked cases. JSONL receipts under `build/local-secrets-journey/` contain counts, booleans and timings, never credentials. The child verifies the cwd, confirms unrelated-key/runtime-control sentinels are absent and authenticates an actual HTTP request using its delivered variable. The CLI is invoked from this checkout's signed bundle, without changing global helper installation. Stop the fixture server when finished. This tests a development client, not a provider SDK, a third-party AI CLI, or a paid API call.
+
+If no card appears, check that the Mac running Triwarden is unlocked and that a local or remote desktop session is available. Diagnostic runs report a Keychain status code if profile confirmation cannot be written; `-25308` means interaction was not allowed. No profile confirmation or credential delivery is bypassed when Keychain is unavailable.
+
+The signed Debug binary's `--selftest-secrets-preview` mode renders synthetic light, dark, compact, long-command, authentication-in-progress and last-five-seconds layouts. It opens no vault, Keychain or socket and never authenticates. Use `TRIWARDEN_SNAPSHOT_STDOUT=1` with the existing snapshot stream to export these images without accessing the App container directly.
+
+`--selftest-api-key-preview` renders the vault preset, key detail, first-use tool page, setup, review and saved-tool page in light and dark appearances. It constructs an isolated synthetic model, disables live profile configuration and does not log in or deliver a credential. The focused native UI tests in `CISmokeTests` cover the vault entry, key-to-tool entry and advanced reference editor using `--demo`.
+
+Before release, verify the complete native flow with a disposable vault item:
+
+1. In a test account, create a Secure Note with a hidden field named `api-key` and the dummy value `triwarden-test-only`.
+2. Save an enabled profile named `canary`, binding that field to `TRIWARDEN_TEST_KEY`. Select `/bin/sh` with working directory `/tmp` and two separate arguments: `-c`, then the following literal command:
+
+   ```sh
+   test "${TRIWARDEN_TEST_KEY:-}" = triwarden-test-only && printf '%s\n' 'credential received'
+   ```
+
+   This explicitly selected shell is only a test target. The command checks the dummy value without printing it or making an API request.
+3. Run `tw run --profile canary`, review the saved launch, allow it and complete Touch ID/Mac-password authentication. Expect `credential received` and exit status zero.
+4. Repeat and deny the request. After each cooldown, also check locking the account and closing the invoking terminal while approval is pending. None should launch the target or leave an approval available to a later request.
+5. Disconnect the network and confirm refresh failure prevents launch. Restore connectivity, rename the field in the vault, refresh, and confirm launch fails until the exact field is selected and saved again.
+6. Disable the profile and save, then delete the disposable vault item when finished. Automated checks do not replace this real-account and authentication pass.
+
+See the [design](plans/2026-10-19-local-secrets-agent-design.md) and [implementation plan](plans/2026-10-19-local-secrets-agent-implementation.md).
