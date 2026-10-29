@@ -12,9 +12,13 @@ const home = page ? localeHref(locale) : "";
 
 const rel = await latestRelease();
 const dmg = rel?.dmg ?? SITE.download;
+// Guide kickers read "Guide · SSH agent"; the footer shows the part after the dot.
+const guideName = (kicker: string) => kicker.split(" · ").pop()!;
 const links = [
   [m.foot_download(), dmg],
   [m.foot_pricing(), localeHref(locale, "pricing/")],
+  [guideName(m.ak_kicker()), localeHref(locale, "guides/api-keys/")],
+  [guideName(m.g_kicker()), localeHref(locale, "guides/ssh-agent/")],
   [m.foot_source(), SITE.repo],
   [m.foot_security(), SITE.security],
   [m.foot_terms(), localeHref(locale, "license-terms/")],

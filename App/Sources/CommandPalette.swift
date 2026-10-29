@@ -323,12 +323,12 @@ struct CommandPalette: View {
         }
         var choices = grants.enumerated().map { index, grant in
             SSHPaletteChoice(id: "ssh-\(index)", prompt: prompt, title: grant.1, symbol: grant.2, showsIdentity: index == 0) {
-                agent.choose(.allow(grant.0))
+                agent.choose(.allow(grant.0), promptID: prompt.id)
                 close()
             }
         }
         choices.append(SSHPaletteChoice(id: "ssh-deny", prompt: prompt, title: "Deny", symbol: "xmark.circle", showsIdentity: false) {
-            agent.choose(.deny)
+            agent.choose(.deny, promptID: prompt.id)
             close()
         })
         return Section(title: String(localized: "SSH request"), entries: choices.map(Entry.ssh))
@@ -886,6 +886,14 @@ struct CommandPalette: View {
                                keywords: ["add", "password", "create"]) { create(.login) },
                 PaletteCommand(id: "new-note", title: String(localized: "New Secure Note"), symbol: "note.text", shortcut: "⇧⌘N",
                                keywords: ["add", "create"]) { create(.secureNote) },
+                PaletteCommand(id: "new-api-key", title: String(localized: "New API Key"), symbol: "key.horizontal",
+                               keywords: ["secret", "token", "provider", "add"]) { model.bringToFront(); model.beginAPIKey() },
+                PaletteCommand(id: "tools-projects", title: String(localized: "Tools"), symbol: "terminal",
+                               keywords: ["api", "key", "secret", "profile", "agent"]) { go(.toolLaunches) },
+                PaletteCommand(id: "install-tw", title: String(localized: "Install Terminal Helper"), symbol: "terminal",
+                               keywords: ["tw", "cli", "command line", "path", "helper", "shell"]) { model.showHelperSetup() },
+                PaletteCommand(id: "app-access", title: String(localized: "Access"), symbol: "checkmark.shield",
+                               keywords: ["ssh", "permissions", "trust", "history", "revoke"]) { go(.access) },
                 PaletteCommand(id: "new-card", title: String(localized: "New Card"), symbol: "creditcard", shortcut: "⌥⌘B",
                                keywords: ["add", "credit"]) { create(.card) },
                 PaletteCommand(id: "new-identity", title: String(localized: "New Identity"), symbol: "person.crop.rectangle", shortcut: "⌥⌘I",
@@ -918,7 +926,7 @@ struct CommandPalette: View {
             let places: [(VaultSection, String)] = [
                 (.all, String(localized: "All Items")), (.favorites, String(localized: "Favorites")), (.logins, String(localized: "Logins")),
                 (.passkeys, String(localized: "Passkeys")), (.cards, String(localized: "Cards")), (.identities, String(localized: "Identities")),
-                (.notes, String(localized: "Secure Notes")), (.sshKeys, String(localized: "SSH Keys")), (.archive, String(localized: "Archive")),
+                (.notes, String(localized: "Secure Notes")), (.apiKeys, String(localized: "API Keys")), (.sshKeys, String(localized: "SSH Keys")), (.archive, String(localized: "Archive")),
                 (.trash, String(localized: "Trash")),
             ]
             for (section, name) in places {
@@ -968,7 +976,15 @@ struct CommandPalette: View {
                                    keywords: ["preferences"]) {
             model.showSettings()
         })
-        return list
+        #if DEBUG
+        list.append(PaletteCommand(id: "debug-notch", title: "Show Notch Status Demo", symbol: "rectangle.topthird.inset.filled",
+                                   keywords: ["notch", "access", "trigger", "debug"]) { model.showNotchDemo() })
+        #endif
+        if model.showsAPIKeyTools, model.isUnlocked {
+            list.append(PaletteCommand(id: "tools-guide", title: String(localized: "API Key Setup Guide"), symbol: "questionmark.circle",
+                keywords: ["learn", "tools", "start", "tutorial"]) { model.showToolGuide() })
+        }
+        return model.showsAPIKeyTools ? list : list.filter { !["new-api-key", "tools-projects", "install-tw", "go-apiKeys"].contains($0.id) }
     }
 }
 

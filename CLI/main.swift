@@ -1,6 +1,11 @@
 import Darwin
 import Foundation
 import SSHAgent
+import SecretsAgent
+#if DEBUG
+import LocalAuthentication
+import Security
+#endif
 
 // `tw` — talks to the running Triwarden app. Secrets need the vault unlocked and an approval
 // (Touch ID or the Mac password) in the app.
@@ -8,6 +13,10 @@ import SSHAgent
 let usage = """
 usage: tw <command> [arguments]
 
+  run                      choose a saved tool in this terminal
+  run --profile ID         launch an exact saved tool from Tools in Triwarden
+  run --env-file FILE      launch a saved tool from its .env.triwarden references
+  tools list               list saved tool names and exact launch commands
   status                    whether the vault is unlocked
   list [query]              items (name, username/site); needs approval
   get <item> [--field F]    print a field: password (default), username, uri, notes, totp, or a custom field
@@ -131,6 +140,132 @@ if first == "install-chrome" {
 if first == "install-firefox" {
     guard args.count == 1 else { fail("usage: tw install-firefox", code: 64) }
     installFirefoxHost()
+}
+#if DEBUG
+// Diagnostic-only: verify that this helper cannot read or overwrite a disposable App-owned record.
+// Never accept a production service name, request a real credential, or print returned data.
+if first == "--selftest-secrets-keychain" {
+    let prefix = "io.github.sinhong2011.triwarden.secrets.selftest."
+    guard args.count == 2, args[1].hasPrefix(prefix), UUID(uuidString: String(args[1].dropFirst(prefix.count))) != nil else {
+        fail("Expected an isolated self-test Keychain service.", code: 64)
+    }
+    let context = LAContext()
+    context.interactionNotAllowed = true
+    let query: [String: Any] = [
+        kSecClass as String: kSecClassGenericPassword,
+        kSecAttrService as String: args[1],
+        kSecAttrAccount as String: "local-profile",
+        kSecAttrAccessGroup as String: "FX3VR69P5K.io.github.sinhong2011.triwarden.shared",
+        kSecUseDataProtectionKeychain as String: true,
+        kSecUseAuthenticationContext as String: context,
+        kSecReturnData as String: true,
+        kSecMatchLimit as String: kSecMatchLimitOne
+    ]
+    var result: CFTypeRef?
+    let status = SecItemCopyMatching(query as CFDictionary, &result)
+    var updateQuery = query
+    updateQuery.removeValue(forKey: kSecReturnData as String)
+    updateQuery.removeValue(forKey: kSecMatchLimit as String)
+    let updateStatus = SecItemUpdate(updateQuery as CFDictionary,
+                                    [kSecValueData as String: Data("synthetic-write-must-be-denied".utf8)] as CFDictionary)
+    let readDenied = status == errSecMissingEntitlement || status == errSecItemNotFound
+    let writeDenied = updateStatus == errSecMissingEntitlement || updateStatus == errSecItemNotFound
+    exit(readDenied && writeDenied ? 0 : 1)
+}
+#endif
+var runStore = SecretsProfileStore.shared
+var runArguments = Array(args.dropFirst())
+var isRun = first == "run"
+var isTools = first == "tools"
+#if DEBUG
+var selectionProbe = false
+// Only a UUID-scoped disposable socket/profile can be selected by the native online diagnostic.
+// The regular run path still ignores caller-supplied sockets and always uses its saved profile.
+if ["--selftest-secrets-run", "--selftest-secrets-run-env", "--selftest-secrets-tools", "--selftest-secrets-select", "--selftest-secrets-env"].contains(first) {
+    guard args.count == 2, UUID(uuidString: args[1]) != nil else { fail("Expected a self-test UUID.", code: 64) }
+    let root = runStore.directory.deletingLastPathComponent().appendingPathComponent("S" + args[1].prefix(8))
+    guard (try? String(contentsOf: root.appendingPathComponent("test-id"), encoding: .utf8)) == args[1] else {
+        fail("The isolated self-test marker is missing.", code: 64)
+    }
+    runStore = SecretsProfileStore(directory: root.appendingPathComponent("p"))
+    runArguments = ["--profile", "canary"]
+    selectionProbe = first == "--selftest-secrets-select" || first == "--selftest-secrets-env"
+    isRun = first == "--selftest-secrets-run" || first == "--selftest-secrets-run-env" || selectionProbe
+    isTools = !isRun
+    if isTools { runArguments = ["list"] }
+    if selectionProbe { runArguments = [] }
+    if first == "--selftest-secrets-env" || first == "--selftest-secrets-run-env" {
+        runArguments = ["--env-file", root.appendingPathComponent(".env.triwarden").path]
+    }
+}
+#endif
+if isTools {
+    do {
+        try SavedToolCommands.validateListArguments(runArguments)
+        print(try SavedToolCommands.list(runStore.loadAll()))
+        exit(0)
+    } catch { fail(error.localizedDescription) }
+}
+if isRun {
+    do {
+        let store = runStore
+        let selected: SecretsProfile?
+        var referenceFile: EnvReferenceFile?
+        let name: String
+        if runArguments.isEmpty {
+            guard let choice = try TerminalToolSelection.choose(profiles: store.loadAll()) else {
+                FileHandle.standardError.write(Data("Launch cancelled.\n".utf8))
+                exit(130)
+            }
+            selected = choice; name = choice.name
+        } else {
+            selected = nil
+            switch try RunArguments.source(runArguments) {
+            case .profile(let id): name = id
+            case .environmentFile(let path):
+                let file = try EnvReferenceFile.read(URL(fileURLWithPath: path))
+                referenceFile = file; name = file.toolID
+            }
+        }
+        let profile = try store.load(named: name)
+        try referenceFile?.validate(against: profile)
+        guard selected == nil || selected == profile else {
+            throw SecretsFailure("The tool settings changed during selection. Use tw run to select the tool again.")
+        }
+        guard profile.enabled, profile.name == name else {
+            throw SecretsFailure("Open Tools in Triwarden to review or resume the requested tool.")
+        }
+        #if DEBUG
+        // The isolated selection diagnostic stops before identity checks, IPC, or credential access.
+        if selectionProbe { print("Selected saved tool: " + profile.name); exit(0) }
+        #endif
+        // Resolve only the saved absolute executable. A caller-supplied PATH cannot choose the target.
+        let identity = try LaunchIdentity.capture(profile)
+        #if DEBUG
+        if first == "--selftest-secrets-run" || first == "--selftest-secrets-run-env" {
+            // Catch an unusable fixture working directory before asking for authentication.
+            let directoryFD = open(identity.directory, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+            guard directoryFD >= 0 else { throw SecretsFailure("The self-test helper cannot open its working directory (OS error \(errno)).") }
+            close(directoryFD)
+        }
+        #endif
+        let request = SecretsRunRequest(profile: profile, revision: try profile.revision(), launch: identity)
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        guard proc_pidpath(getpid(), &buffer, UInt32(buffer.count)) > 0 else {
+            throw SecretsFailure(TerminalHelperInstallation.repairLink)
+        }
+        let ownPath = URL(fileURLWithPath: String(decoding: buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }, as: UTF8.self)).resolvingSymlinksInPath()
+        guard ownPath.lastPathComponent == "tw", ownPath.deletingLastPathComponent().lastPathComponent == "MacOS" else {
+            throw SecretsFailure(TerminalHelperInstallation.repairLink)
+        }
+        let app = ownPath.deletingLastPathComponent().appendingPathComponent("Triwarden")
+        // Deliberately ignore TW_SOCKET for credential delivery. Authenticate the App, too.
+        let response = try SecretsClient.request(request, socket: store.socketURL, expectedApp: app)
+        let values = try response.validatedValues(for: request)
+        guard try store.load(named: name) == profile else { throw SecretsFailure("The tool settings changed during approval. Start the launch again.") }
+        let environment = try LaunchPolicy.environment(parent: ProcessInfo.processInfo.environment, values: values)
+        try SecretsExec.replace(profile: profile, identity: identity, environment: environment)
+    } catch { fail(error.localizedDescription) }
 }
 guard let command = CLIRequest.Command(rawValue: first) else { fail("unknown command “\(first)”\n\n" + usage, code: 64) }
 args.removeFirst()

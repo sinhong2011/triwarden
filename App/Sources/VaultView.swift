@@ -100,7 +100,7 @@ struct VaultView: View {
 
     /// An item's detail is showing, with its actions in the header.
     private var detailHasActions: Bool { isItemSection && model.selectedItem != nil && (!compact || depth == 2) }
-    private var isItemSection: Bool { ![.codes, .generator, .sends, .watchtower].contains(section) }
+    private var isItemSection: Bool { ![.codes, .generator, .sends, .watchtower, .toolLaunches, .access].contains(section) }
     private var maxDepth: Int { isItemSection ? (model.selectedItem == nil && model.newItemForm == nil ? 1 : 2) : 1 }
 
     /// The sidebar's choice; leaving a new item with input in it asks first.
@@ -207,6 +207,8 @@ struct VaultView: View {
         case .codes: CodesPane()
         case .generator: GeneratorPane()
         case .sends: SendsPane()
+        case .toolLaunches: ToolLaunchesPane()
+        case .access: AccessPane()
         default:
             WatchtowerView { item in
                 section = .section(item.isDeleted ? .trash : .all)
@@ -231,6 +233,14 @@ struct VaultView: View {
                 AccountUnlockPane(account: account) // the account in focus is locked: unlock it right here
                     .id(account.id)
                     .transition(.opacity)
+            } else if section == .section(.apiKeys), filtered.isEmpty, query.isEmpty {
+                ContentUnavailableView {
+                    Label("API Keys", systemImage: "key.horizontal")
+                } description: {
+                    Text("Save a provider key here, then choose which tool may use it.")
+                } actions: {
+                    Button("Add API Key") { model.beginAPIKey() }.buttonStyle(.appPrimary)
+                }
             } else {
                 ItemColumn(items: items, isTrash: section == .section(.trash), selection: Binding(get: { model.selectedID }, set: { id in
                     // Picking an item leaves a new item's form (asking first when it has input).
@@ -321,11 +331,19 @@ struct VaultView: View {
             }
         }
         .animation(.snappy(duration: 0.25), value: model.selectedID)
+        .sheet(item: $model.toolLaunchReference) { reference in
+            ToolLaunchSetup(reference: reference).environment(model)
+                .modifier(LiveAppearance()).modifier(ReducedMotionPolicy())
+        }
         .onChange(of: section) {
             query = "" // a filter belongs to the list it was typed in
             // A tool page has no detail panel for a new item's form.
             if !isItemSection { model.closeNewItemForm(restoringSelection: false) }
             if compact { depth = model.newItemForm == nil ? 1 : 2 } // picked a section: slide to it (or stay on the form)
+            if isItemSection, let destination = model.requestedVaultItem, model.selectedID == destination.itemID {
+                if compact { depth = 2 }
+                model.requestedVaultItem = nil
+            }
         }
         .onChange(of: model.selectedItem == nil) { _, none in if none, depth == 2, model.newItemForm == nil { depth = 1 } }
         // The system sidebar toggle on a narrow window: show the strip's sidebar pane instead.
@@ -341,8 +359,13 @@ struct VaultView: View {
         }
         .onChange(of: model.sidebarSearchRequest) { query = "" }
         .onChange(of: model.requestedSection) { _, requested in
-            if let requested { section = requested; model.requestedSection = nil }
+            if let requested {
+                section = model.showsNavigation(requested) ? requested : .section(.all)
+                model.requestedSection = nil
+            }
         }
+        // Its own function: inline, this chain is past the compiler's type-check budget on CI (Xcode 26).
+        .modifier(APIKeyNavigation(section: $section, query: $query, depth: $depth, compact: compact, hideIfIdle: hideToolPagesIfIdle))
         .onChange(of: model.requestedFilter) { _, requested in
             guard let requested else { return }
             model.requestedFilter = nil
@@ -407,8 +430,18 @@ struct VaultView: View {
         .onChange(of: model.items.isEmpty) { _, empty in if !empty { selectFirst() } }
     }
 
-    /// ⌘F: to the list's search field (from a tool page, back to All Items first).
+    /// ⌘F searches the current management workspace without leaving it.
+    private func hideToolPagesIfIdle() {
+        // A visibility change must not discard an import, a key draft, or a nested guide sheet.
+        guard !model.showsAPIKeyTools, !model.showsNavigation(section), !model.showingToolGuide, !model.showingHelperSetup,
+              model.newItemForm == nil, model.toolLaunchReference == nil,
+              model.mainWindow?.attachedSheet == nil else { return }
+        section = .section(.all)
+    }
+
     private func focusSearch() {
+        if section == .toolLaunches { model.wantsToolsSearchFocus = true; return }
+        if section == .access { model.wantsAccessSearchFocus = true; return }
         if !isItemSection { section = .section(.all) }
         if compact { depth = 1 }
         model.wantsSearchFocus = true
@@ -435,6 +468,8 @@ enum SidebarSelection: Hashable {
     case sends
     case generator
     case codes
+    case toolLaunches
+    case access
 
     /// The vault a row stands for ("personal" or an organization id), for the vault filter.
     var vaultKey: String? {
@@ -449,7 +484,7 @@ enum SidebarSelection: Hashable {
         switch self {
         case .folders: !item.isDeleted && !item.isArchived && item.folderName != nil
         case .codes: !item.isDeleted && !item.isArchived && item.hasTOTP
-        case .watchtower, .sends, .generator: false
+        case .watchtower, .sends, .generator, .toolLaunches, .access: false
         case .account(let id): !item.isDeleted && !item.isArchived && item.accountId == id
         case .section(let s): s.includes(item)
         case .folder(let path): !item.isDeleted && !item.isArchived && (item.folderName == path || item.folderName?.hasPrefix(path + "/") == true)
@@ -461,15 +496,16 @@ enum SidebarSelection: Hashable {
 }
 
 enum VaultSection: Hashable, CaseIterable {
-    case all, favorites, logins, passkeys, cards, identities, notes, sshKeys, archive, trash
+    case all, favorites, logins, passkeys, cards, identities, notes, apiKeys, sshKeys, archive, trash
 
     /// Shown nested under All Items: narrower views of the same items.
-    static let underAll: [VaultSection] = [.favorites, .logins, .passkeys, .cards, .identities, .notes, .sshKeys]
+    static let underAll: [VaultSection] = [.favorites, .logins, .passkeys, .cards, .identities, .notes, .apiKeys, .sshKeys]
 
     var title: LocalizedStringKey {
         switch self {
         case .all: "All Items"; case .favorites: "Favorites"; case .logins: "Logins"; case .passkeys: "Passkeys"
         case .sshKeys: "SSH Keys"; case .cards: "Cards"; case .identities: "Identities"; case .notes: "Secure Notes"
+        case .apiKeys: "API Keys"
         case .archive: "Archive"; case .trash: "Trash"
         }
     }
@@ -478,6 +514,7 @@ enum VaultSection: Hashable, CaseIterable {
         switch self {
         case .all: "square.grid.2x2"; case .favorites: "star"; case .logins: "key"; case .passkeys: "person.badge.key"
         case .sshKeys: "terminal"; case .cards: "creditcard"; case .identities: "person.crop.rectangle"; case .notes: "note.text"
+        case .apiKeys: "key.horizontal"
         case .archive: "archivebox"; case .trash: "trash"
         }
     }
@@ -498,6 +535,7 @@ enum VaultSection: Hashable, CaseIterable {
         case .cards: return item.kind == .card
         case .identities: return item.kind == .identity
         case .notes: return item.kind == .note
+        case .apiKeys: return item.isAPIKey
         }
     }
 }
@@ -564,7 +602,7 @@ private struct Sidebar: View {
     private var entries: [SidebarEntry] {
         var list: [SidebarEntry] = []
         list.append(SidebarEntry(destination: .section(.all), expanded: $typesExpanded))
-        if typesExpanded { list += VaultSection.underAll.map { SidebarEntry(destination: .section($0), parent: .section(.all)) } }
+        if typesExpanded { list += VaultSection.underAll.filter { model.showsNavigation(.section($0)) }.map { SidebarEntry(destination: .section($0), parent: .section(.all)) } }
         if !model.visibleOrganizations.isEmpty {
             list.append(SidebarEntry(destination: .myVault))
             for org in model.visibleOrganizations {
@@ -574,7 +612,7 @@ private struct Sidebar: View {
                 if !tree.isEmpty, !closed.contains(key) { shared(tree, org: org, parent: .organization(org.id), into: &list) }
             }
         }
-        list += [.sends, .codes, .generator, .watchtower].map { SidebarEntry(destination: $0) }
+        list += [SidebarSelection.sends, .codes, .generator, .toolLaunches, .access, .watchtower].filter { model.showsNavigation($0) }.map { SidebarEntry(destination: $0) }
         let folders = FolderNode.tree(model.folders)
         list.append(SidebarEntry(destination: .folders, expanded: folders.isEmpty ? nil : $foldersExpanded))
         if !folders.isEmpty, foldersExpanded { own(folders, parent: .folders, into: &list) }
@@ -655,7 +693,7 @@ private struct Sidebar: View {
                     VStack(spacing: 0) {
                         row(.all, in: items, expanded: $typesExpanded)
                         SidebarFold(expanded: typesExpanded) {
-                            ForEach(VaultSection.underAll, id: \.self) { row($0, in: items, depth: 1) }
+                            ForEach(VaultSection.underAll.filter { model.showsNavigation(.section($0)) }, id: \.self) { row($0, in: items, depth: 1) }
                         }
                     }
                     // Where items live: your own vault, then each shared vault (opening onto its shared folders). A
@@ -676,6 +714,8 @@ private struct Sidebar: View {
                     tool("One-Time Codes", symbol: "clock.badge.checkmark", .codes,
                          count: items.count(where: { !$0.isDeleted && !$0.isArchived && $0.totp != nil }))
                     tool("Generator", symbol: "dice", .generator)
+                    if model.showsAPIKeyTools { tool("Tools", symbol: "terminal", .toolLaunches) }
+                    tool("Access", symbol: "checkmark.shield", .access)
                     tool("Watchtower", symbol: "checkmark.shield", .watchtower, count: model.watchtowerIssueCount)
                     // Your own ways of sorting items, and items set aside: kept (Archive) or on their way out (Trash).
                     SidebarHeading(title: "Manage")
@@ -1273,6 +1313,9 @@ private struct NewItemButton: View {
         ActionMenu(entries: [
             ActionMenuEntry(title: String(localized: "New Login"), symbol: "key", shortcut: "⌘N") { model.beginEditing(EditRequest(mode: .create(.login))) },
             ActionMenuEntry(title: String(localized: "New Secure Note"), symbol: "note.text", shortcut: "⇧⌘N") { model.beginEditing(EditRequest(mode: .create(.secureNote))) },
+        ] + (model.showsAPIKeyTools ? [
+            ActionMenuEntry(title: String(localized: "New API Key"), symbol: "key.horizontal") { model.beginAPIKey() }
+        ] : []) + [
             ActionMenuEntry(title: String(localized: "New Card"), symbol: "creditcard", shortcut: "⌥⌘B") { model.beginEditing(EditRequest(mode: .create(.card))) },
             ActionMenuEntry(title: String(localized: "New Identity"), symbol: "person.crop.rectangle", shortcut: "⌥⌘I") { model.beginEditing(EditRequest(mode: .create(.identity))) },
             ActionMenuEntry(title: String(localized: "New SSH Key"), symbol: "terminal", shortcut: "⌥⌘K") { model.beginEditing(EditRequest(mode: .create(.sshKey))) },
@@ -1475,7 +1518,7 @@ private struct SSHRequestsPopover: View {
             }
             if let prompt = agent.pending {
                 SSHApprovalCard(prompt: prompt, leadsWithUntilLock: agent.pendingLeadsWithUntilLock) { choice in
-                    agent.choose(choice)
+                    agent.choose(choice, promptID: prompt.id)
                 }
             }
             if !agent.trustedUntilLock.isEmpty {
@@ -2770,6 +2813,82 @@ struct ItemDetail: View {
     @State private var dropping = false
     /// Revealed by the eye, or by holding ⌥.
     private var secretsVisible: Bool { revealToggle || optionPeek }
+    private var displayFields: [ItemField] {
+        item.fields.map { field in
+            guard item.isAPIKey, model.showsAPIKeyTools else { return field }
+            let label: String
+            switch field.label {
+            case APIKeyTemplate.keyField: label = String(localized: "API key")
+            case APIKeyTemplate.serviceField: label = String(localized: "Service")
+            case APIKeyTemplate.environmentField: label = String(localized: "Default environment variable")
+            default: return field
+            }
+            return ItemField(label: label, value: field.value, secret: field.secret, monospaced: field.monospaced)
+        }
+    }
+
+    private var toolAccessCard: some View {
+        FormCard {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Image(systemName: "terminal")
+                        .font(.system(size: 14)).foregroundStyle(.secondary)
+                        .accessibilityHidden(true)
+                    Text("Use with a tool").font(.system(size: 15, weight: .semibold))
+                }
+                Text("Start a tool with this key, without copying it.")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .bottom, spacing: 16) {
+                    toolVariableBadge.fixedSize(horizontal: true, vertical: false)
+                    Spacer(minLength: 0)
+                    provideToToolButton
+                }
+                VStack(alignment: .leading, spacing: 12) {
+                    toolVariableBadge
+                    provideToToolButton
+                }
+            }
+
+            Label("You choose how long this tool can use the key.", systemImage: "lock.shield")
+                .font(.system(size: 11)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            if item.reprompt {
+                Text("Tool launches don't yet support this item's additional master-password prompt. Its protection will not be bypassed.")
+                    .font(.system(size: 12)).foregroundStyle(.orange)
+            }
+        }
+    }
+
+    private var toolVariableBadge: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text("Default variable").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+            Text(verbatim: item.apiKeyVariable)
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 10).padding(.vertical, 7)
+                .background(Color.formInputFill, in: .rect(cornerRadius: 8))
+        }
+    }
+
+    private var provideToToolButton: some View {
+        Button { model.provideKeyToTool(item) } label: {
+            HStack(spacing: 8) {
+                Text("Provide to Tool…")
+                Image(systemName: "arrow.right").font(.system(size: 10, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
+        }
+        .buttonStyle(.appPrimary)
+        .accessibilityLabel(Text("Provide to Tool…"))
+        .accessibilityIdentifier("provideAPIKeyToTool")
+    }
 
     /// Holding ⌥ alone peeks. A quick tap does nothing; letting go waits, then the mask rolls back.
     private func setOptionPeek(_ held: Bool) {
@@ -2817,9 +2936,13 @@ struct ItemDetail: View {
                 }
                 HeroCard(item: item, reveal: secretsVisible)
 
-                if !item.fields.isEmpty {
+                if model.showsAPIKeyTools, item.isAPIKey, !item.isDeleted, !item.isArchived {
+                    toolAccessCard
+                }
+
+                if !displayFields.isEmpty {
                     VStack(spacing: 0) {
-                        ForEach(Array(item.fields.enumerated()), id: \.element.id) { index, field in
+                        ForEach(Array(displayFields.enumerated()), id: \.element.id) { index, field in
                             FieldLine(item: item, field: field, reveal: secretsVisible)
                                 .overlay(alignment: .top) { if index > 0 { Divider().opacity(0.6).padding(.leading, 16) } }
                         }
@@ -3186,7 +3309,7 @@ private struct HeroCard: View {
                     .shadow(color: .black.opacity(style.dark ? 0.3 : 0.08), radius: 6, y: 3)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.name).font(.system(size: 30, weight: .heavy)).tracking(-0.8).lineLimit(1)
-                    let subtitle = item.kind == .login ? (item.host ?? "")
+                    let subtitle = item.isAPIKey && model.showsAPIKeyTools ? item.apiKeyService : item.kind == .login ? (item.host ?? "")
                         : [item.username, item.host].compactMap { $0 }.joined(separator: " · ")
                     if !subtitle.isEmpty {
                         Text(verbatim: subtitle).foregroundStyle(style.muted).lineLimit(1)
@@ -4541,3 +4664,49 @@ struct SidebarCalmSelection: NSViewRepresentable {
         }
     }
 }
+
+/// API-key navigation for the vault window: following a request to show a key, hiding Tools and Access when the
+/// feature is turned off, and the guide and helper sheets.
+private struct APIKeyNavigation: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var section: SidebarSelection
+    @Binding var query: String
+    @Binding var depth: Int
+    let compact: Bool
+    let hideIfIdle: () -> Void
+
+    func body(content: Content) -> some View {
+        @Bindable var model = model
+        return content
+            .onChange(of: model.showsAPIKeyTools) { _, visible in
+                if !visible { hideIfIdle() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEndSheetNotification)) { _ in hideIfIdle() }
+            .onChange(of: model.newItemForm == nil) { _, closed in if closed { hideIfIdle() } }
+            .onChange(of: model.toolLaunchReference == nil) { _, closed in if closed { hideIfIdle() } }
+            .onChange(of: model.showingToolGuide) { _, showing in if !showing { hideIfIdle() } }
+            .onChange(of: model.requestedVaultItem) { _, destination in
+                guard let destination else { return }
+                guard let item = model.items.first(where: { $0.accountId == destination.accountID && $0.id == destination.itemID }),
+                      model.isUnlocked(destination.accountID), !item.isDeleted, !item.isArchived else {
+                    model.requestedVaultItem = nil
+                    model.flash(String(localized: "This key is no longer available. Unlock its account and try again."))
+                    return
+                }
+                model.accountFocus = destination.accountID
+                model.clearSearchFilters()
+                query = ""
+                let target = SidebarSelection.section(item.isAPIKey && model.showsAPIKeyTools ? .apiKeys : .all)
+                let changesSection = section != target
+                section = target
+                model.selectedID = item.id
+                if !changesSection {
+                    if compact { depth = 2 }
+                    model.requestedVaultItem = nil
+                }
+            }
+            .sheet(isPresented: $model.showingToolGuide) { ToolSetupGuide().environment(model) }
+            .sheet(isPresented: $model.showingHelperSetup) { TerminalHelperSetup().environment(model) }
+    }
+}
+

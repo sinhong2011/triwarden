@@ -6,6 +6,7 @@ import Observation
 import SwiftUI
 import UserNotifications
 import VaultwardenAPI
+import SecretsAgent
 
 /// Drives the item form in the detail panel.
 struct EditRequest: Identifiable {
@@ -162,6 +163,14 @@ final class AppModel {
     var wantsSearchFocus = false
     /// Focus the OTP page's own search field after navigation.
     var wantsCodesSearchFocus = false
+    var wantsToolsSearchFocus = false
+    var wantsAccessSearchFocus = false
+    var requestedToolSelection: String?
+    struct VaultItemDestination: Equatable {
+        let accountID: String
+        let itemID: String
+    }
+    var requestedVaultItem: VaultItemDestination?
 
     /// Whether an item passes the search filters (the vault itself is `vaultFilter`'s).
     func passesSearchFilters(_ item: VaultItem) -> Bool {
@@ -295,6 +304,8 @@ final class AppModel {
     }
     /// Non-nil while an item form is open in the detail panel (new, clone, or edit).
     var editing: EditRequest?
+    /// A credential reference for guided local tool setup; never a copied key value.
+    var toolLaunchReference: ToolLaunchReference?
     /// The form in the detail panel, if one is open.
     var newItemForm: EditRequest? { editing }
     /// The form has input in it (it reports this), so leaving it asks first.
@@ -461,9 +472,29 @@ final class AppModel {
     /// Whether any locked account can be opened with Touch ID (unlock screen).
     var touchIDEnabled = false
 
-    /// Serves SSH key items to ssh/git while unlocked (Settings › SSH).
+    /// Serves SSH key items to ssh/git while unlocked (setup in Developer settings; permissions in Access).
     @ObservationIgnored private(set) var sshAgent: SSHAgentService!
     @ObservationIgnored private(set) var cli: CLIBridge!
+    @ObservationIgnored private(set) var secrets: SecretsController!
+    @ObservationIgnored private var notchStatus: NotchStatusController?
+    /// The notch, when it is set to take approval requests and can be seen now.
+    var notchForApprovals: NotchStatusController? { notchStatus?.canPresentRequest() == true ? notchStatus : nil }
+    var notch: NotchStatusController? { notchStatus }
+    /// The menu bar's way into the notch list, for anyone not using a pointer.
+    func revealAccessStatus() {
+        if let notchStatus { notchStatus.reveal() } else { requestedSection = .access; bringToFront() }
+    }
+    #if DEBUG
+    func showNotchDemo() { notchStatus?.showDemo() }
+    #endif
+    @ObservationIgnored private let developerPreferences: UserDefaults?
+    static let apiKeyToolsPreference = "showLocalAPIKeyTools"
+    /// A visibility preference, not a permission or a switch for configured launch services.
+    var showsAPIKeyTools = false {
+        didSet { developerPreferences?.set(showsAPIKeyTools, forKey: Self.apiKeyToolsPreference) }
+    }
+    var showingToolGuide = false
+    var showingHelperSetup = false
     let updates: Updater
     /// Fork-style licensing: everything works unregistered; official builds remind now and then.
     let license = License()
@@ -471,10 +502,11 @@ final class AppModel {
     /// The app's live model, for App Intents and the CLI bridge.
     nonisolated(unsafe) static weak var current: AppModel?
 
-    init() {
+    init(secretsFactory: ((AppModel) -> SecretsController)? = nil) {
         // No updater while testing, rendering snapshots, previewing or showing the demo vault.
         let quiet = CommandLine.arguments.contains { ["--selftest", "--snapshot"].contains($0) || $0.hasPrefix("--selftest") || $0.hasPrefix("--demo") }
             || ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+        developerPreferences = quiet ? nil : .standard
         updates = Updater(start: !quiet)
         AttachmentFiles.wipe() // leftovers from a crash
         Self.current = self
@@ -483,7 +515,12 @@ final class AppModel {
             || ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1" // Xcode canvas
         if !tooling, UserDefaults.standard.bool(forKey: Pref.sshAgent) { sshAgent.start() }
         cli = CLIBridge(model: self)
+        secrets = secretsFactory?(self) ?? SecretsController(model: self, start: !tooling && !CommandLine.arguments.contains(where: { $0.hasPrefix("--demo") }))
+        let saved = developerPreferences?.object(forKey: Self.apiKeyToolsPreference) as? Bool
+        showsAPIKeyTools = ToolGuide.showsTools(saved: saved, hasTools: !secrets.profiles.isEmpty || secrets.lastError != nil)
+        if saved == nil { developerPreferences?.set(showsAPIKeyTools, forKey: Self.apiKeyToolsPreference) }
         if !tooling { cli.refreshRunning() }
+        if !tooling { notchStatus = NotchStatusController(model: self) }
         if !tooling {
             trackForegroundApps()
             // The palette and its global shortcut from launch, not from when a window first appears (the app may
@@ -1001,6 +1038,7 @@ final class AppModel {
     /// Sign one account out on this Mac: forget its session, cached vault, token and Touch ID.
     /// With no id: the account the unlock screen shows.
     func logOut(_ accountId: String? = nil) {
+        secrets?.reset()
         guard let id = accountId ?? unlockTarget?.id else { return }
         if let session = session(for: id) { session.close() }
         sessions.removeAll { $0.id == id }
@@ -1646,6 +1684,7 @@ final class AppModel {
 
     /// Locks one account; the others stay open.
     func lock(_ accountId: String) {
+        secrets?.reset()
         IconStore.shared.clearMemory()
         ItemSort.forgetLetters()
         session(for: accountId)?.close()
@@ -2326,6 +2365,7 @@ final class AppModel {
         AttachmentFiles.wipe()
         sshAgent?.reset()
         cli?.reset()
+        secrets?.reset()
         hiddenInbox = []
         breachCounts = nil
         breachesCheckedAt = nil

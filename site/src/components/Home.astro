@@ -12,6 +12,8 @@ import Palette from "./Palette.astro";
 import SearchFeature from "./SearchFeature.astro";
 import Speed from "./Speed.astro";
 import MacRows from "./MacRows.astro";
+import Developers from "./Developers.astro";
+import Tagline from "./Tagline.astro";
 import Generator from "./Generator.astro";
 import Watchtower from "./Watchtower.astro";
 import More from "./More.astro";
@@ -52,7 +54,7 @@ const jsonLd = [
   {
     "@context": "https://schema.org",
     "@type": "FAQPage",
-    mainEntity: [1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
+    mainEntity: [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
       "@type": "Question",
       name: t[`faq${n}_q`](),
       acceptedAnswer: { "@type": "Answer", text: t[`faq${n}_a`]({ ...price, email: SITE.supportEmail }) },
@@ -66,16 +68,18 @@ const jsonLd = [
     <Hero />
     <Marquee />
     <Screens />
+    <Tagline />
     <SearchFeature />
     <Palette />
     <MacRows />
+    <Developers />
     <Guards />
-    <Speed />
-    <Generator />
     <Watchtower />
+    <Generator />
+    <Speed />
     <More />
-    <PricingSummary />
     <Film />
+    <PricingSummary />
     <Faq />
     <Closing />
   </main>

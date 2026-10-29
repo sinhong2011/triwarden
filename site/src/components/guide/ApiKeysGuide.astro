@@ -1,0 +1,203 @@
+---
+/** Guide: API keys from the vault to local tools. Same shape as SshGuide: set up, everyday use, approvals and
+    safety, the notch, fixes. Screens are real app renders (src/shots.ts), never imitated. */
+import Base from "../../layouts/Base.astro";
+import Nav from "../Nav.astro";
+import Footer from "../Footer.astro";
+import Shot from "../Shot.astro";
+import Term from "./Term.astro";
+import Flow from "./Flow.astro";
+import { m } from "../../paraglide/messages.js";
+import { SITE } from "../../config";
+import { latestRelease } from "../../release";
+import { currentLocale, localeHref } from "../../i18n";
+
+const PAGE = "guides/api-keys/";
+const dmg = (await latestRelease())?.dmg ?? SITE.download;
+const locale = currentLocale();
+const origin = Astro.site?.origin ?? "";
+const title = `${m.ak_kicker()} — Triwarden`;
+const jsonLd = [
+  {
+    "@context": "https://schema.org",
+    "@type": "TechArticle",
+    headline: `${m.ak_h1_1()} ${m.ak_h1_2()}`,
+    description: m.ak_meta(),
+    url: `${origin}${localeHref(locale, PAGE)}`,
+    image: `${origin}${import.meta.env.BASE_URL}assets/og.jpg`,
+    inLanguage: locale.lang,
+    about: { "@type": "SoftwareApplication", name: "Triwarden", operatingSystem: "macOS 26 or later" },
+  },
+  {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Triwarden", item: `${origin}${localeHref(locale)}` },
+      { "@type": "ListItem", position: 2, name: m.ak_kicker(), item: `${origin}${localeHref(locale, PAGE)}` },
+    ],
+  },
+];
+const t = m as unknown as Record<string, () => string>;
+const link = "inline-flex items-center gap-1.5 text-[15px] font-medium text-ink underline decoration-line-2 underline-offset-4 transition-[text-decoration-color] duration-300 ease-(--ease-base) hover:decoration-ink";
+---
+<Base title={title} description={m.ak_meta()} page={PAGE} jsonLd={jsonLd}>
+  <Nav page={PAGE} />
+  <main id="main" class="guide">
+    <header class="mx-auto max-w-(--max) px-(--gutter) pt-[150px] pb-[clamp(48px,6vw,80px)]">
+      <div data-reveal-group class="max-w-[860px]">
+        <p class="kicker">{m.ak_kicker()}</p>
+        <h1 class="guide-title m-0 font-serif text-[clamp(56px,8vw,120px)] leading-[.92] font-normal tracking-[-.03em]">{m.ak_h1_1()}<br /><em class="text-ink-3">{m.ak_h1_2()}</em></h1>
+        <p class="mt-8 max-w-[620px] text-[clamp(17px,1.4vw,20px)] text-ink-2" set:html={m.ak_lede()} />
+      </div>
+      <div class="mt-[clamp(28px,3.6vw,48px)]"><Flow client={m.ak_flow_tool()} socket="tw run" back={m.ak_flow_keys()} caption={m.ak_flow_caption()} /></div>
+    </header>
+
+    <!-- Set up -->
+    <section class="mx-auto max-w-(--max) px-(--gutter) py-[clamp(48px,6vw,88px)]">
+      <div data-reveal-group>
+        <p class="kicker">{m.g_setup_kicker()}</p>
+        <h2>{m.ak_setup_title_1()}<br /><em>{m.ak_setup_title_2()}</em></h2>
+      </div>
+      <ol class="guide-steps">
+        <li class="guide-step">
+          <div class="guide-step__text" data-reveal-group>
+            <span class="guide-step__no">01</span>
+            <h3>{m.ak_s1_t()}</h3>
+            <p set:html={m.ak_s1_b()} />
+            <p class="guide-tip" set:html={m.ak_s1_tip()} />
+          </div>
+          <div class="guide-shot guide-shot--narrow" data-rise><Shot name="tw-env-import" alt={m.alt_tw_env()} /></div>
+        </li>
+        <li class="guide-step">
+          <div class="guide-step__text" data-reveal-group>
+            <span class="guide-step__no">02</span>
+            <h3>{m.ak_s2_t()}</h3>
+            <p set:html={m.ak_s2_b()} />
+          </div>
+          <div class="guide-shot guide-shot--narrow" data-rise><Shot name="tw-guide-tool" alt={m.alt_tw_guide()} /></div>
+        </li>
+        <li class="guide-step">
+          <div class="guide-step__text" data-reveal-group>
+            <span class="guide-step__no">03</span>
+            <h3>{m.ak_s3_t()}</h3>
+            <p set:html={m.ak_s3_b()} />
+            <p class="guide-tip" set:html={m.ak_s3_note()} />
+          </div>
+          <div class="grid gap-5">
+            <div class="guide-shot guide-shot--narrow" data-rise><Shot name="tw-ready-detail" alt={m.alt_tw_detail()} /></div>
+            <Term title="~/.zshrc" noCopy lines={[{ out: "alias tw-claude-code='tw run --profile tool-…'" }]} />
+          </div>
+        </li>
+        <li class="guide-step">
+          <div class="guide-step__text" data-reveal-group>
+            <span class="guide-step__no">04</span>
+            <h3>{m.ak_s4_t()}</h3>
+            <p set:html={m.ak_s4_b()} />
+          </div>
+          <div class="grid gap-5">
+            <Term lines={["tw-claude-code", { note: "# Triwarden: approve “Claude Code” with Touch ID" }]} />
+            <div class="guide-shot guide-shot--narrow" data-rise><Shot name="tw-approval" alt={m.alt_tw_approval()} /></div>
+          </div>
+        </li>
+      </ol>
+    </section>
+
+    <!-- Everyday use -->
+    <section class="bg-paper-2/60 px-(--gutter) py-[clamp(48px,6vw,88px)]">
+      <div class="mx-auto max-w-(--max)">
+        <div data-reveal-group>
+          <p class="kicker">{m.g_cases_kicker()}</p>
+          <h2>{m.ak_cases_title_1()}<br /><em>{m.ak_cases_title_2()}</em></h2>
+        </div>
+        <div class="guide-cases">
+          <article class="guide-case guide-case--wide" data-rise>
+            <h3>{m.ak_c1_t()}</h3><p set:html={m.ak_c1_b()} />
+            <div class="guide-shot mt-5"><Shot name="tw-real" alt={m.alt_tw_real()} /></div>
+          </article>
+          <article class="guide-case" data-rise>
+            <h3>{m.ak_c2_t()}</h3><p set:html={m.ak_c2_b()} />
+            <Term lines={["tw-storefront-dev-server", { note: "# Triwarden: approve “Storefront dev server” with Touch ID" }]} />
+          </article>
+          <article class="guide-case" data-rise>
+            <h3>{m.ak_c3_t()}</h3><p set:html={m.ak_c3_b()} />
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Approvals and safety -->
+    <section class="mx-auto grid max-w-(--max) gap-[6vw] px-(--gutter) py-[clamp(48px,6vw,88px)] lg:grid-cols-[minmax(0,1.1fr)_minmax(0,.9fr)]">
+      <div>
+        <div data-reveal-group>
+          <p class="kicker">{m.g_appr_kicker()}</p>
+          <h2>{m.ak_appr_title_1()}<br /><em>{m.ak_appr_title_2()}</em></h2>
+          <p class="mt-6 max-w-[560px] text-lg text-ink-2" set:html={m.ak_appr_b()} />
+        </div>
+        <dl class="guide-options" data-rise>
+          {[[m.ak_appr_o1(), m.ak_appr_o1_b()], [m.ak_appr_o2(), m.ak_appr_o2_b()], [m.ak_appr_o3(), m.ak_appr_o3_b()]].map(([term, desc]) => (
+            <div><dt>{term}</dt><dd>{desc}</dd></div>
+          ))}
+        </dl>
+        <p class="guide-tip mt-6 max-w-[560px]" set:html={m.ak_appr_scope()} />
+      </div>
+      <aside class="guide-safety" data-rise>
+        <p class="kicker text-[#7F95A7]!">{m.g_sec_kicker()}</p>
+        <ul>
+          {[m.ak_sec_1(), m.ak_sec_2(), m.ak_sec_3()].map((s) => (
+            <li><svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M10 2.5l6 2.3v5c0 3.6-2.5 6.3-6 7.7-3.5-1.4-6-4.1-6-7.7v-5Z" fill="none" stroke="currentColor" stroke-width="1.5"/></svg><span>{s}</span></li>
+          ))}
+        </ul>
+      </aside>
+    </section>
+
+    <!-- Active access and the notch -->
+    <section class="bg-paper-2/60 px-(--gutter) py-[clamp(48px,6vw,88px)]">
+      <div class="mx-auto max-w-(--max)">
+        <div data-reveal-group>
+          <p class="kicker">{m.ak_notch_kicker()}</p>
+          <h2>{m.ak_notch_title_1()}<br /><em>{m.ak_notch_title_2()}</em></h2>
+          <p class="mt-6 max-w-[620px] text-lg text-ink-2" set:html={m.ak_notch_b()} />
+        </div>
+        <div class="guide-pair mt-10">
+          <div class="guide-shot" data-rise><Shot name="tw-notch-expanded" alt={m.alt_tw_notch()} /></div>
+          <div class="guide-shot" data-rise><Shot name="tw-notch-request" alt={m.alt_tw_notch_req()} /></div>
+        </div>
+        <p class="guide-tip mt-6 max-w-[680px]" set:html={m.ak_notch_req()} />
+        <div class="guide-shot mt-8" data-rise><Shot name="tw-access" alt={m.alt_tw_access()} /></div>
+      </div>
+    </section>
+
+    <!-- Fixes -->
+    <section class="mx-auto max-w-(--max) px-(--gutter) py-[clamp(48px,6vw,88px)] pb-[clamp(64px,9vw,120px)]">
+      <div data-reveal-group>
+        <p class="kicker">{m.g_tr_kicker()}</p>
+        <h2>{m.g_tr_title_1()}<br /><em>{m.g_tr_title_2()}</em></h2>
+      </div>
+      <div class="mt-10 border-t border-line-2">
+        {[1, 2, 3, 4].map((n) => (
+          <details class="faq group border-b border-line-2">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-6 py-5 text-[17px] font-medium [&::-webkit-details-marker]:hidden">
+              {t[`ak_tr${n}_q`]()}
+              <span aria-hidden="true" class="relative size-4 shrink-0 before:absolute before:inset-x-0 before:top-1/2 before:h-[1.5px] before:-translate-y-1/2 before:bg-ink after:absolute after:inset-y-0 after:left-1/2 after:w-[1.5px] after:-translate-x-1/2 after:bg-ink after:transition-transform after:duration-500 after:ease-(--ease-base) group-open:after:scale-y-0"></span>
+            </summary>
+            <div data-faq-body><p class="m-0 max-w-[680px] pb-5 text-[16.5px] text-ink-2" set:html={t[`ak_tr${n}_a`]()} /></div>
+          </details>
+        ))}
+      </div>
+      <a class:list={["mt-8", link]} href={localeHref(locale, "guides/ssh-agent/")}>{m.ak_ssh_link()} <span aria-hidden="true">→</span></a>
+      <div class="guide-cta" data-rise>
+        <div>
+          <h3>{m.g_cta_t()}</h3>
+          <p>{m.ak_cta_b()}</p>
+        </div>
+        <a class="btn btn--fill" href={dmg} data-dmg="">{m.hero_download()}</a>
+      </div>
+    </section>
+  </main>
+  <Footer page={PAGE} />
+</Base>
+
+<script>
+  import "../../scripts/page";
+  import "../../scripts/guide";
+</script>

@@ -1,0 +1,31 @@
+---
+/** The core benefit in large type. Words start muted and turn to full ink one at a time as the section scrolls
+    through the viewport (scripts/tagline.ts). Words are split at build time with Intl.Segmenter, so Chinese, Japanese
+    and Thai, which have no spaces, still reveal word by word. */
+import { m } from "../paraglide/messages.js";
+import { currentLocale } from "../i18n";
+
+const segmenter = new Intl.Segmenter(currentLocale().lang, { granularity: "word" });
+// Words with any punctuation that follows them, then the whitespace between: [word, gap][].
+const words = (text: string) => {
+  const out: [string, string][] = [];
+  for (const s of segmenter.segment(text)) {
+    if (s.isWordLike || !out.length) out.push([s.segment, ""]);
+    else if (/^\s+$/.test(s.segment)) out[out.length - 1][1] += s.segment;
+    else if (out[out.length - 1][1]) out.push([s.segment, ""]);
+    else out[out.length - 1][0] += s.segment;
+  }
+  return out;
+};
+const lines = [words(m.tagline_1()), words(m.tagline_2())];
+---
+<section class="tagline mx-auto max-w-(--max) px-(--gutter) py-[clamp(80px,11vw,160px)]" data-tagline>
+  <h2 class="mx-auto max-w-[680px] text-center text-4xl! leading-[1.08]! md:text-5xl! lg:text-6xl!">
+    {lines.map((line, i) => {
+      const body = line.map(([w, gap]) => <><span class="tagline__word">{w}</span>{gap}</>);
+      return i === 0 ? <span class="block">{body}</span> : <em class="mt-2 block">{body}</em>;
+    })}
+  </h2>
+</section>
+
+<script>import "../scripts/tagline";</script>

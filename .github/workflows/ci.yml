@@ -271,7 +271,8 @@ jobs:
             -resultBundlePath build/ci/ui-smoke.xcresult \
             -only-testing:TriwardenUITests/CISmokeTests test 2>&1 | tee build/ci/ui-smoke.log | tail -30
           xcrun xcresulttool get test-results summary --path build/ci/ui-smoke.xcresult > build/ci/ui-summary.json
-          python3 -c 'import json; s=json.load(open("build/ci/ui-summary.json")); assert s["passedTests"] == 2 and s["failedTests"] == 0, s'
+          # Every smoke test must run and pass; a count of zero means the bundle ran nothing.
+          python3 -c 'import json; s=json.load(open("build/ci/ui-summary.json")); assert s["passedTests"] >= 6 and s["failedTests"] == 0, s'
       # Run after ad-hoc signing: changing the executable's signature after it creates Keychain items
       # would prompt for access in the UI tests.
       - name: Offline compatibility self-test
