@@ -49,11 +49,14 @@ enum Snapshot {
             SSHTrust(trustKey: "expired", keyID: "old", displayName: "Expired fixture must stay hidden", keyName: "Expired key", until: Date.now.addingTimeInterval(-1))
         ]
         let always = [SSHAllowlistEntry(trustKey: "trusted-terminal", displayName: "Trusted Terminal")]
-        let history = (0..<200).map { n in
-            SSHAccessEvent(id: UUID(), date: Date.now.addingTimeInterval(-Double(n * 60)), appName: "Terminal \(n % 12)", via: n % 2 == 0 ? "ssh" : "git",
-                           path: "/usr/bin/ssh", keyName: "Development Key \(n % 16)",
-                           outcome: [SSHAccessOutcome.allowedOnce, .denied, .timedOut, .allowlisted, .locked,
-                                     .allowedForTenMinutes, .allowedUntilLock, .reusedTrust][n % 8])
+        // Typed pieces: one long inferred expression here is past the compiler's type-check budget on CI.
+        let outcomes: [SSHAccessOutcome] = [.allowedOnce, .denied, .timedOut, .allowlisted, .locked,
+                                            .allowedForTenMinutes, .allowedUntilLock, .reusedTrust]
+        let history: [SSHAccessEvent] = (0..<200).map { (n: Int) -> SSHAccessEvent in
+            let date: Date = Date.now.addingTimeInterval(-Double(n * 60))
+            let via: String = n % 2 == 0 ? "ssh" : "git"
+            return SSHAccessEvent(id: UUID(), date: date, appName: "Terminal \(n % 12)", via: via,
+                                  path: "/usr/bin/ssh", keyName: "Development Key \(n % 16)", outcome: outcomes[n % 8])
         }
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             let views: [(String, AnyView, CGSize)] = [
@@ -210,7 +213,8 @@ enum Snapshot {
                 ("ten-minutes", .darkAqua, CGSize(width: 600, height: 800), false, false, 48),
                 ("until-lock", .aqua, CGSize(width: 600, height: 800), false, false, 42),
                 ("unverified-caller", .aqua, CGSize(width: 600, height: 720), false, false, 60),
-                ("multi-key", .darkAqua, CGSize(width: 600, height: 920), false, false, 60)
+                ("multi-key", .darkAqua, CGSize(width: 600, height: 920), false, false, 60),
+                ("multi-key-light", .aqua, CGSize(width: 600, height: 920), false, false, 60)
             ]
             for (name, appearance, size, busy, long, seconds) in cases {
                 // A real-looking Claude Code launch; the long case keeps the stress test for wrapping.
@@ -218,7 +222,7 @@ enum Snapshot {
                     variable: "ANTHROPIC_API_KEY", executable: "/usr/bin/env", // capture needs a file that exists on every Mac
                     arguments: long ? ["node", "./packages/development-assistant/scripts/run-local-agent-with-project-configuration.mjs", "--project", "/Users/alex/Projects/assistant/experiments/customer-support-and-document-search", ""] : ["claude"],
                     directory: "/tmp", displayName: long ? nil : "Claude Code")
-                if name == "multi-key" {
+                if name.hasPrefix("multi-key") {
                     profile = SecretsProfile(name: "storefront-dev", accountID: "synthetic", itemID: "synthetic", field: .hidden("api-key"),
                         variable: "STRIPE_SECRET_KEY", executable: "/usr/bin/env", arguments: ["pnpm", "run", "dev"], directory: "/tmp",
                         displayName: "Storefront dev server",
@@ -232,7 +236,7 @@ enum Snapshot {
                     deadline: .now.advanced(by: .seconds(seconds)),
                     caller: name == "unverified-caller" ? nil : SecretsCallerIdentity(pid: 1234, uid: 501, startedSeconds: 1,
                         startedMicros: 0, codeHash: Data([1]), path: "/bin/zsh"),
-                    credentials: name == "multi-key" ? [
+                    credentials: name.hasPrefix("multi-key") ? [
                         .init(name: "Stripe · test mode", account: "alex@example.com · vault.example.com", field: "api-key", variable: "STRIPE_SECRET_KEY"),
                         .init(name: "Supabase · service role", account: "alex@example.com · vault.example.com", field: "api-key", variable: "SUPABASE_SERVICE_ROLE_KEY"),
                         .init(name: "Resend", account: "alex@example.com · vault.example.com", field: "api-key", variable: "RESEND_API_KEY")
