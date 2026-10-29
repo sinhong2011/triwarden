@@ -58,6 +58,8 @@ struct TriwardenApp: App {
                                                   serverURL: "https://vault.home.arpa", kdf: .pbkdf2(iterations: 600_000),
                                                   protectedUserKey: "")])
             demo.previewUnlocked = true
+            // API-key pages start hidden for new users; UI tests of those pages ask for them explicitly.
+            if CommandLine.arguments.contains("--show-api-key-tools") { demo.showsAPIKeyTools = true }
             demo.phase = .vault
             _model = State(initialValue: demo)
             DemoShots.runIfRequested(demo)
