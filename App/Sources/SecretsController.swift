@@ -218,7 +218,7 @@ final class SecretsController: NSObject, NSWindowDelegate {
                                  helper: peer.executable.path, deadline: deadline, caller: caller, credentials: credentials)
                 choice = await withCheckedContinuation { continuation in
                     answer = continuation
-                    showPanel()
+                    presentApproval()
                 }
             }
             guard let choice, ContinuousClock.now < deadline, current(request, peer: peer) else {
@@ -281,6 +281,8 @@ final class SecretsController: NSObject, NSWindowDelegate {
     }
 
     private func complete(_ duration: SecretsGrantDuration?) {
+        model?.notch?.clearRequest(.tool)
+        windowRequested = false
         authentication?.invalidate(); authentication = nil
         authenticating = false
         pending = nil
@@ -307,6 +309,34 @@ final class SecretsController: NSObject, NSWindowDelegate {
         }
         let data = try JSONEncoder().encode(scope)
         return HMAC<SHA256>.authenticationCode(for: data, using: fingerprintKey).map { String(format: "%02x", $0) }.joined()
+    }
+
+    @ObservationIgnored private var windowRequested = false
+
+    /// A single key for a verified launcher can be answered in the notch. More keys, or a launcher Triwarden
+    /// couldn't verify, always get the full card.
+    private func presentApproval() {
+        guard let prompt = pending, !windowRequested, prompt.caller != nil, prompt.request.profile.bindings.count == 1,
+              let notch = model?.notchForApprovals else { showPanel(); return }
+        let profile = prompt.request.profile, id = prompt.request.nonce
+        notch.present(NotchRequest(id: id, kind: .tool, symbol: ToolGlyph.symbol(profile), title: profile.title,
+            subtitle: String(localized: "wants \(prompt.credentials.first?.name ?? prompt.credential)"),
+            detail: [ToolLaunchesPane.abbreviated(prompt.request.launch.directory),
+                     (model?.sessions.count ?? 0) > 1 ? prompt.credentials.first?.account ?? prompt.account : nil]
+                .compactMap { $0 }.joined(separator: " · "),
+            deadline: Date.now.addingTimeInterval(NotchStatusController.seconds(ContinuousClock.now.duration(to: prompt.deadline)))) { [weak self] choice in
+                guard let self else { return }
+                switch choice {
+                case .deny: deny()
+                case .once, .tenMinutes, .untilLock:
+                    model?.notch?.markBusy(id)
+                    allow(choice == .once ? .once : choice == .tenMinutes ? .tenMinutes : .untilLock)
+                case .review:
+                    windowRequested = true
+                    model?.notch?.clearRequest(.tool)
+                    showPanel()
+                }
+            })
     }
 
     private func showPanel() {

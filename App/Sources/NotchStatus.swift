@@ -12,6 +12,8 @@ struct NotchAccessItem: Identifiable, Equatable {
     let detail: String
     /// Nil lasts until the vault locks.
     let expires: Date?
+    /// The vault account the keys come from, when more than one is signed in (an email, or "2 accounts").
+    var account: String? = nil
     var id: String {
         switch source {
         case .tool(let id): "tool-" + id.uuidString
@@ -77,6 +79,8 @@ struct NotchGeometry: Equatable {
                  : CGSize(width: 212, height: height)
     }
 
+    var request: CGSize { CGSize(width: max(collapsed.width, Self.expandedWidth), height: height + 132) }
+
     func expanded(rows: Int) -> CGSize {
         // The soonest approval is the hero; the rest sit in a list under it.
         let others = max(0, rows - 1)
@@ -127,6 +131,23 @@ final class NotchOccupancy {
     }
 }
 
+/// An approval waiting for an answer, shown in the notch instead of a window. References and names only.
+struct NotchRequest: Identifiable {
+    enum Kind { case ssh, tool }
+    enum Choice { case deny, once, tenMinutes, untilLock, review }
+    let id: UUID
+    let kind: Kind
+    let symbol: String
+    let title: String
+    let subtitle: String
+    let detail: String
+    let deadline: Date
+    var waiting = 1
+    var leadsWithUntilLock = false
+    var busy = false
+    let choose: (Choice) -> Void
+}
+
 @MainActor @Observable
 final class NotchStatusState {
     var items: [NotchAccessItem] = []
@@ -136,6 +157,8 @@ final class NotchStatusState {
     var alignment: HorizontalAlignment = .center
     /// False while growing out of the notch and while shrinking back into it.
     var present = false
+    /// Shown in place of the list until answered.
+    var request: NotchRequest?
 }
 
 /// Shows active temporary access at the notch while there is any. Hovering opens the list, where each approval
@@ -176,9 +199,19 @@ final class NotchStatusController {
             self?.demo = []; self?.refresh()
         }
     }
+
+    /// A sample SSH request; any answer just clears it.
+    func showRequestDemo() {
+        present(NotchRequest(id: UUID(), kind: .ssh, symbol: "key.fill", title: "Terminal", subtitle: "wants to sign with GitHub development",
+                             detail: "git", deadline: .now.addingTimeInterval(60), waiting: 2) { [weak self] _ in self?.clearRequest(.ssh) })
+    }
     #endif
 
-    static var enabled: Bool { UserDefaults.standard.object(forKey: Pref.accessStatus) as? Bool ?? true }
+    /// A built-in display with a camera housing: the notch features start on there, and off on other Macs,
+    /// until the user chooses in Settings.
+    static var macHasNotch: Bool { NSScreen.screens.contains { $0.safeAreaInsets.top > 0 } }
+
+    static var enabled: Bool { UserDefaults.standard.object(forKey: Pref.accessStatus) as? Bool ?? macHasNotch }
 
     init(model: AppModel) {
         self.model = model
@@ -211,6 +244,10 @@ final class NotchStatusController {
         if CommandLine.arguments.contains("--notch-demo") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in self?.showDemo() }
             // Remote checks without pointer access: `notifyutil -p io.github.sinhong2011.triwarden.notch.expand`.
+            observers.append(DistributedNotificationCenter.default().addObserver(
+                forName: .init("io.github.sinhong2011.triwarden.notch.request"), object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.showRequestDemo() }
+            })
             for (name, open) in [("expand", true), ("collapse", false)] {
                 observers.append(DistributedNotificationCenter.default().addObserver(
                     forName: .init("io.github.sinhong2011.triwarden.notch." + name), object: nil, queue: .main) { [weak self] _ in
@@ -243,7 +280,12 @@ final class NotchStatusController {
         let fresh = items.filter { !known.contains($0.id) }
         known = Set(items.map(\.id))
         state.items = items
-        guard !items.isEmpty, !fullScreen else { hide(); return }
+        if let request = state.request, fullScreen || !Self.hostsApprovals {
+            // Somewhere the notch can't be seen: answer in a window instead.
+            state.request = nil
+            request.choose(.review)
+        }
+        guard !items.isEmpty || state.request != nil, !fullScreen else { hide(); return }
         if panel != nil, position != NotchPosition.current { place() }
         show()
         if started, !fresh.isEmpty { announce() }
@@ -252,6 +294,14 @@ final class NotchStatusController {
 
     static func items(_ model: AppModel) -> [NotchAccessItem] {
         let profiles = Dictionary(model.secrets.profiles.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+        // Name the account only when there is more than one to tell apart.
+        let several = model.sessions.count > 1
+        func account(_ ids: [String]) -> String? {
+            guard several else { return nil }
+            let unique = Array(Set(ids))
+            if unique.count > 1 { return String(localized: "\(unique.count) accounts") }
+            return unique.first.flatMap { id in model.accounts.first { $0.id == id }?.email }
+        }
         let tools = model.secrets.activeGrants.map { grant in
             let profile = profiles[grant.tool]
             let count = profile?.bindings.count ?? 0
@@ -259,16 +309,18 @@ final class NotchStatusController {
             return NotchAccessItem(source: .tool(grant.id), symbol: profile.map(ToolGlyph.symbol) ?? "terminal",
                                    title: profile?.title ?? String(localized: "Unavailable tool"),
                                    detail: [grant.caller.label, keys].compactMap { $0 }.joined(separator: " · "),
-                                   expires: grant.deadline.map { Date.now.addingTimeInterval(Self.seconds(ContinuousClock.now.duration(to: $0))) })
+                                   expires: grant.deadline.map { Date.now.addingTimeInterval(Self.seconds(ContinuousClock.now.duration(to: $0))) },
+                                   account: account(profile?.bindings.map(\.accountID) ?? []))
         }
-        let ssh = model.sshAgent.activeTrusts.map {
-            NotchAccessItem(source: .ssh($0.id), symbol: "key.fill", title: $0.displayName, detail: $0.keyName, expires: $0.until)
+        let ssh = model.sshAgent.activeTrusts.map { trust in
+            NotchAccessItem(source: .ssh(trust.id), symbol: "key.fill", title: trust.displayName, detail: trust.keyName, expires: trust.until,
+                            account: account(model.items.filter { $0.id == trust.keyID }.map(\.accountId)))
         }
         // Soonest to end first; until-lock approvals after the timed ones.
         return (tools + ssh).sorted { ($0.expires ?? .distantFuture) < ($1.expires ?? .distantFuture) }
     }
 
-    private static func seconds(_ duration: Duration) -> TimeInterval {
+    static func seconds(_ duration: Duration) -> TimeInterval {
         let parts = duration.components
         return TimeInterval(parts.seconds) + TimeInterval(parts.attoseconds) / 1e18
     }
@@ -290,7 +342,8 @@ final class NotchStatusController {
                                        drag: { [weak self] in self?.drag($0) },
                                        end: { [weak self] in self?.end($0) }, openAccess: { [weak self] in self?.openAccess() })
                 .modifier(ReducedMotionPolicy())
-            let host = NSHostingView(rootView: view)
+            let host = NotchHostingView(rootView: AnyView(view))
+            host.shape = { [weak self] in self?.hitRect() ?? .zero }
             // The controller sizes the panel; SwiftUI must not resize it to the content's ideal size.
             host.sizingOptions = []
             panel.contentView = host
@@ -327,8 +380,8 @@ final class NotchStatusController {
 
     /// True when another app is full screen on the status's screen. A full-screen window covers the whole
     /// frame, menu bar included.
-    private func checkFullScreen() {
-        guard let screen = screen ?? NSScreen.main else { return }
+    func checkFullScreen() {
+        guard let screen = screen ?? NSScreen.screens.first else { return }
         let front = NSWorkspace.shared.frontmostApplication?.processIdentifier
         let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
         let mainHeight = NSScreen.screens.first?.frame.height ?? screen.frame.height
@@ -360,9 +413,11 @@ final class NotchStatusController {
             if NotchOccupancy.shared.owner != nil { position = .topRight }
         }
         let screen: NSScreen? = switch position {
-        case .notch: NSScreen.screens.first { $0.safeAreaInsets.top > 0 } ?? NSScreen.main
-        case .custom: NotchPosition.savedOrigin.flatMap { point in NSScreen.screens.first { $0.frame.insetBy(dx: -1, dy: -1).contains(point) } } ?? NSScreen.main
-        case .topLeft, .topRight: NSScreen.main
+        // Without a notch, the screen with the menu bar: the key window's screen moves with focus, and a status
+        // on a side display goes unseen.
+        case .notch: NSScreen.screens.first { $0.safeAreaInsets.top > 0 } ?? NSScreen.screens.first
+        case .custom: NotchPosition.savedOrigin.flatMap { point in NSScreen.screens.first { $0.frame.insetBy(dx: -1, dy: -1).contains(point) } } ?? NSScreen.screens.first
+        case .topLeft, .topRight: NSScreen.screens.first
         }
         guard let screen else { return }
         self.screen = screen
@@ -373,9 +428,17 @@ final class NotchStatusController {
         resize(animated: false)
     }
 
+    /// The panel is sized to the largest shape it may show, so SwiftUI can animate the outline freely inside it
+    /// instead of the window jumping. Clicks outside the visible shape pass through to whatever is underneath.
+    private var canvas: CGSize {
+        let g = state.geometry
+        let largest = [g.collapsed, g.expanded(rows: state.items.count), state.request != nil ? g.request : .zero]
+        return CGSize(width: largest.map(\.width).max() ?? 0, height: (largest.map(\.height).max() ?? 0) + 30)
+    }
+
     private func resize(animated: Bool) {
         guard let panel, let screen else { return }
-        let size = state.expanded ? state.geometry.expanded(rows: state.items.count) : state.geometry.collapsed
+        let size = canvas
         var top = state.geometry.hasNotch ? screen.frame.maxY : screen.visibleFrame.maxY - 6
         let margin: CGFloat = 10
         var x = switch position {
@@ -391,12 +454,6 @@ final class NotchStatusController {
             x = min(max(x, visible.minX), visible.maxX - size.width)
         }
         panel.setFrame(NSRect(x: x, y: top - size.height, width: size.width, height: size.height), display: true, animate: animated)
-        #if DEBUG
-        if CommandLine.arguments.contains("--notch-demo") {
-            NSLog("notch: screen=%@ safeTop=%.0f geometry=%@ expanded=%d frame=%@", NSStringFromRect(screen.frame), screen.safeAreaInsets.top,
-                  String(describing: state.geometry), state.expanded ? 1 : 0, NSStringFromRect(panel.frame))
-        }
-        #endif
     }
 
     private func startTicker() {
@@ -454,12 +511,8 @@ final class NotchStatusController {
         pendingCollapse?.cancel()
         pendingCollapse = Task { [weak self] in
             try? await Task.sleep(for: delay)
-            guard let self, !Task.isCancelled, !hovering else { return }
+            guard let self, !Task.isCancelled, !hovering, state.request == nil else { return }
             state.expanded = false
-            // Let the shape shrink before the window does.
-            try? await Task.sleep(for: .milliseconds(420))
-            guard !Task.isCancelled, !state.expanded else { return }
-            resize(animated: false)
         }
     }
 
@@ -492,6 +545,47 @@ final class NotchStatusController {
 
     var hasItems: Bool { !state.items.isEmpty }
 
+    // MARK: Requests
+
+    static var hostsApprovals: Bool { (UserDefaults.standard.string(forKey: Pref.approvalStyle) ?? defaultApprovalStyle) == "notch" }
+    static var defaultApprovalStyle: String { macHasNotch ? "notch" : "window" }
+
+    /// The notch can take a request now: chosen in Settings, and not hidden behind a full-screen app.
+    func canPresentRequest() -> Bool {
+        checkFullScreen()
+        return Self.hostsApprovals && !fullScreen && !NSScreen.screens.isEmpty
+    }
+
+    /// Shows or updates a waiting request. The same request refreshing (a new waiting count) keeps its state.
+    func present(_ request: NotchRequest) {
+        var request = request
+        if let current = state.request, current.id == request.id { request.busy = current.busy }
+        let fresh = state.request?.id != request.id
+        state.request = request
+        show()
+        state.expanded = true
+        resize(animated: false)
+        if fresh {
+            // The panel takes keys only while asking, so Return and Esc answer without clicking.
+            (panel as? NotchPanel)?.acceptsKey = true
+            panel?.makeKey()
+        }
+    }
+
+    func markBusy(_ id: UUID) {
+        if state.request?.id == id { state.request?.busy = true }
+    }
+
+    func clearRequest(_ kind: NotchRequest.Kind) {
+        guard state.request?.kind == kind else { return }
+        state.request = nil
+        (panel as? NotchPanel)?.acceptsKey = false
+        panel?.resignKey()
+        state.expanded = false
+        refresh()
+        resize(animated: false)
+    }
+
     /// A new approval opens the list briefly, so the user sees what just got access.
     private func announce() {
         expand()
@@ -515,10 +609,34 @@ final class NotchStatusController {
         hovering = false
         collapse(after: .zero)
     }
+
+    /// The visible shape, in the hosting view's coordinates (origin bottom-left).
+    private func hitRect() -> CGRect {
+        let g = state.geometry
+        let size = state.request != nil ? g.request : state.expanded ? g.expanded(rows: state.items.count) : g.collapsed
+        let canvas = canvas
+        let x: CGFloat = switch state.alignment {
+        case .leading: 0
+        case .trailing: canvas.width - size.width
+        default: (canvas.width - size.width) / 2
+        }
+        return CGRect(x: x, y: canvas.height - size.height, width: size.width, height: size.height)
+    }
+}
+
+/// Passes clicks and hover outside the drawn shape through, so the transparent part of the panel never blocks
+/// the menu bar or windows below.
+private final class NotchHostingView: NSHostingView<AnyView> {
+    var shape: () -> CGRect = { .zero }
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let local = convert(point, from: superview)
+        return shape().contains(local) ? super.hitTest(point) : nil
+    }
 }
 
 private final class NotchPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
+    var acceptsKey = false
+    override var canBecomeKey: Bool { acceptsKey }
     override var canBecomeMain: Bool { false }
 }
 
@@ -568,11 +686,17 @@ struct NotchStatusView: View {
             return geometry.hasNotch ? CGSize(width: geometry.notchWidth + NotchGeometry.shoulder * 2, height: geometry.height)
                                      : CGSize(width: 44, height: 10)
         }
+        if state.request != nil { return geometry.request }
         return state.expanded ? geometry.expanded(rows: state.items.count) : geometry.collapsed
     }
     private var bottomRadius: CGFloat { state.expanded ? 36 : geometry.hasNotch ? 10 : geometry.height / 2 }
     private var shoulder: CGFloat { state.expanded ? 14 : NotchGeometry.shoulder }
-    private var spring: Animation { .spring(response: 0.42, dampingFraction: 0.78) }
+    /// One spring for size, corners and content, so they move as one. Interruptible: reversing mid-way carries
+    /// the current velocity instead of restarting.
+    private var spring: Animation { .interpolatingSpring(mass: 1, stiffness: 260, damping: 26) }
+    private var contentIn: AnyTransition {
+        .modifier(active: NotchContentReveal(progress: 0), identity: NotchContentReveal(progress: 1))
+    }
     private var inset: CGFloat { geometry.hasNotch ? shoulder : 0 }
 
     var body: some View {
@@ -582,25 +706,32 @@ struct NotchStatusView: View {
                 // Open, the hero says the same thing larger, so the strip steps back to leave the camera clear.
                 band.frame(height: geometry.height).opacity(state.present && !state.expanded ? 1 : 0)
                     .contentShape(.rect).onTapGesture(perform: toggle)
-                    .gesture(DragGesture(minimumDistance: 4, coordinateSpace: .global)
+                    .gesture(DragGesture(minimumDistance: 12, coordinateSpace: .global)
                         .onChanged { _ in drag(.changed) }.onEnded { _ in drag(.ended) })
-                if state.expanded {
-                    list.transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: -8)).animation(spring.delay(0.06)),
-                                                removal: .opacity.animation(.easeOut(duration: 0.12))))
+                if let request = state.request {
+                    NotchRequestCard(request: request)
+                        .transition(.asymmetric(insertion: contentIn.animation(spring.delay(0.05)),
+                                                removal: contentIn.animation(.easeIn(duration: 0.1))))
+                } else if state.expanded {
+                    list.transition(.asymmetric(insertion: contentIn.animation(spring.delay(0.05)),
+                                                removal: contentIn.animation(.easeIn(duration: 0.1))))
                 }
             }.padding(.horizontal, inset)
         }
-        .frame(width: size.width, height: size.height)
+        .frame(width: size.width, height: size.height, alignment: .top)
         .clipShape(outline)
-        .shadow(color: .black.opacity(state.expanded ? 0.35 : 0), radius: 18, y: 8)
+        .compositingGroup()
+        .shadow(color: .black.opacity(state.expanded || state.request != nil ? 0.35 : 0), radius: 18, y: 8)
         .contentShape(outline)
         .onHover(perform: hover)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: Alignment(horizontal: state.alignment, vertical: .top))
         .environment(\.colorScheme, .dark)
         .opacity(state.present || geometry.hasNotch ? 1 : 0)
         .animation(spring, value: state.expanded)
-        .animation(.spring(response: 0.36, dampingFraction: 0.84), value: state.present)
+        .animation(spring, value: state.present)
         .animation(spring, value: state.items.map(\.id))
+        .animation(spring, value: state.request?.id)
+        .animation(spring, value: state.request?.busy)
     }
 
     private var outline: AnyShape {
@@ -679,7 +810,8 @@ struct NotchStatusView: View {
                         Text("Until lock").font(.system(size: 30, weight: .bold, design: .rounded)).foregroundStyle(.white)
                     }
                 }
-                Text(verbatim: item.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                Text(verbatim: [item.detail, item.account].compactMap { $0 }.joined(separator: " · "))
+                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.45)).lineLimit(1).truncationMode(.middle)
             }
             Spacer(minLength: 8)
             VStack(spacing: 8) {
@@ -802,7 +934,8 @@ private struct NotchRow<Glyph: View, Countdown: View, End: View>: View {
             glyph
             VStack(alignment: .leading, spacing: 1) {
                 Text(verbatim: item.title).font(.system(size: 12, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
-                Text(verbatim: item.detail).font(.system(size: 11)).foregroundStyle(.white.opacity(0.45)).lineLimit(1)
+                Text(verbatim: [item.detail, item.account].compactMap { $0 }.joined(separator: " · "))
+                    .font(.system(size: 11)).foregroundStyle(.white.opacity(0.45)).lineLimit(1).truncationMode(.middle)
             }
             Spacer(minLength: 8)
             countdown
@@ -834,3 +967,96 @@ private struct NotchEndButton: View {
         .animation(.easeOut(duration: 0.12), value: hovered)
     }
 }
+
+/// An approval answered in the notch: who asks for what, the time left, and the choices. Return allows (once, or
+/// until lock when that leads), Esc denies, and Details opens the full card. macOS authentication still follows.
+private struct NotchRequestCard: View {
+    let request: NotchRequest
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: request.symbol).font(.system(size: 15, weight: .semibold)).foregroundStyle(.white.opacity(0.9))
+                    .frame(width: 38, height: 38).background(.white.opacity(0.12), in: .rect(cornerRadius: 11, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: request.title).font(.system(size: 14, weight: .semibold)).foregroundStyle(.white).lineLimit(1)
+                    Text(verbatim: request.subtitle).font(.system(size: 12)).foregroundStyle(.white.opacity(0.6)).lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                countdown
+            }
+            HStack(spacing: 6) {
+                Text(verbatim: request.detail).lineLimit(1).truncationMode(.middle)
+                if request.waiting > 1 {
+                    Text(verbatim: "·")
+                    Text("\(request.waiting - 1) more waiting")
+                }
+            }.font(.system(size: 11)).foregroundStyle(.white.opacity(0.4))
+            if request.busy {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small).tint(.white)
+                    Text("Confirm with Touch ID or your password…").font(.system(size: 12, weight: .medium)).foregroundStyle(.white.opacity(0.75))
+                }.frame(height: 30)
+            } else {
+                HStack(spacing: 6) {
+                    pill("Deny", style: .quiet) { request.choose(.deny) }.keyboardShortcut(.cancelAction)
+                    pill("Details…", style: .text) { request.choose(.review) }
+                    Spacer(minLength: 4)
+                    pill("10 min", style: .quiet) { request.choose(.tenMinutes) }
+                    if request.leadsWithUntilLock {
+                        pill("Once", style: .quiet) { request.choose(.once) }
+                        pill("Until Lock", style: .primary) { request.choose(.untilLock) }.keyboardShortcut(.defaultAction)
+                    } else {
+                        pill("Until Lock", style: .quiet) { request.choose(.untilLock) }
+                        pill("Allow Once", style: .primary) { request.choose(.once) }.keyboardShortcut(.defaultAction)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 22).padding(.bottom, 18).padding(.top, 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(Text(verbatim: request.title + ", " + request.subtitle))
+    }
+
+    private var countdown: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            let left = max(0, Int(request.deadline.timeIntervalSince(context.date).rounded(.up)))
+            HStack(spacing: 6) {
+                Text(verbatim: "\(left)s").font(.system(size: 12, weight: .semibold, design: .rounded)).monospacedDigit()
+                    .foregroundStyle(left <= 10 ? Color.orange : .white.opacity(0.7))
+                    .contentTransition(.numericText(countsDown: true))
+                ZStack {
+                    Circle().stroke(.white.opacity(0.12), lineWidth: 2.5)
+                    Circle().trim(from: 0, to: min(1, Double(left) / 60))
+                        .stroke(left <= 10 ? Color.orange : .white.opacity(0.8), style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                }.frame(width: 16, height: 16)
+            }.animation(.linear(duration: 1), value: left)
+        }
+    }
+
+    private enum PillStyle { case primary, quiet, text }
+
+    private func pill(_ title: LocalizedStringKey, style: PillStyle, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title).font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(style == .primary ? Color.black : .white.opacity(style == .text ? 0.55 : 0.9))
+                .padding(.horizontal, style == .text ? 4 : 12).padding(.vertical, 7)
+                .background(style == .primary ? AnyShapeStyle(Color.white) : AnyShapeStyle(.white.opacity(style == .text ? 0 : 0.12)), in: Capsule())
+                .fixedSize()
+        }.buttonStyle(.plain)
+    }
+}
+
+/// Content arriving in the notch: fades in, rises from slightly smaller and loses a little blur, the way the
+/// shape around it settles.
+private struct NotchContentReveal: ViewModifier {
+    let progress: Double
+    func body(content: Content) -> some View {
+        content
+            .opacity(progress)
+            .scaleEffect(0.94 + 0.06 * progress, anchor: .top)
+            .blur(radius: (1 - progress) * 6)
+    }
+}
+

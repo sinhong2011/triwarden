@@ -89,6 +89,7 @@ enum Snapshot {
                 ("history-200", AnyView(AccessPane(previewProfiles: [], previewGrants: [], previewSSHTrusts: [], previewAlways: [], previewHistory: history, previewShowsHistory: true)), CGSize(width: 960, height: 760)),
                 ("notch-collapsed", AnyView(NotchPreview(expanded: false, notch: true, real: real)), CGSize(width: 620, height: 380)),
                 ("notch-expanded", AnyView(NotchPreview(expanded: true, notch: true, real: real)), CGSize(width: 620, height: 380)),
+                ("notch-request", AnyView(NotchPreview(expanded: true, notch: true, real: real, request: true)), CGSize(width: 620, height: 380)),
                 ("notch-capsule", AnyView(NotchPreview(expanded: false, notch: false, real: real)), CGSize(width: 620, height: 380)),
                 ("history-compact", AnyView(AccessPane(previewProfiles: [], previewGrants: [], previewSSHTrusts: [], previewAlways: [], previewHistory: history, previewShowsHistory: true)), CGSize(width: 440, height: 800))
             ]
@@ -2068,6 +2069,7 @@ private struct NotchPreview: View {
     let expanded: Bool
     let notch: Bool
     let real: [SecretsProfile]
+    var request = false
     @State private var state = NotchStatusState()
 
     var body: some View {
@@ -2085,6 +2087,11 @@ private struct NotchPreview: View {
                 .init(source: .tool(UUID()), symbol: "shippingbox", title: real[2].title, detail: "zsh (PID 3311) · 3 keys", expires: nil)
             ].sorted { ($0.expires ?? .distantFuture) < ($1.expires ?? .distantFuture) }
             state.expanded = expanded; state.present = true
+            if request {
+                state.request = NotchRequest(id: UUID(), kind: .ssh, symbol: "key.fill", title: "Terminal",
+                                             subtitle: "wants to sign with GitHub development", detail: "git",
+                                             deadline: .now.addingTimeInterval(42), waiting: 2) { _ in }
+            }
         }
     }
 }

@@ -43,6 +43,13 @@ final class SSHAgentService {
     private var authorizationGeneration = UUID()
     private var pendingDeadline: ContinuousClock.Instant?
     private let approvalPanel = SSHApprovalPanel()
+    /// "Details…" in the notch asked for the full card for this prompt.
+    private var windowForPrompt: UUID?
+
+    private func hidePrompt() {
+        approvalPanel.hide()
+        model?.notch?.clearRequest(.ssh)
+    }
     private weak var model: AppModel?
     private let accessLogFile: URL
     private let allowlistFile: URL
@@ -93,7 +100,7 @@ final class SSHAgentService {
     func choose(_ choice: SSHChoice, promptID: UUID) {
         guard pending?.id == promptID else { return }
         if case .allow = choice, authenticating { return }
-        approvalPanel.hide()
+        hidePrompt()
         Task { await prompts.resolve(choice, for: promptID) }
     }
 
@@ -119,7 +126,7 @@ final class SSHAgentService {
     func reset() {
         authorizationGeneration = UUID()
         authentication?.invalidate()
-        approvalPanel.hide()
+        hidePrompt()
         pending = nil
         pendingCount = 0
         pendingDeadline = nil
@@ -212,7 +219,7 @@ final class SSHAgentService {
         guard case .allow(let grant) = choice, !authenticating, generation == authorizationGeneration,
               model?.isUnlocked == true else { return false }
         authenticating = true
-        approvalPanel.hide()
+        hidePrompt()
         defer { authenticating = false; authentication = nil }
         let context = LAContext()
         authentication = context
@@ -263,9 +270,34 @@ final class SSHAgentService {
 
     private func presentPending(reveal: Bool = false) {
         guard !authenticating, let prompt = pending, let deadline = pendingDeadline else {
-            approvalPanel.hide()
+            hidePrompt()
             return
         }
+        if windowForPrompt != prompt.id, let notch = model?.notchForApprovals {
+            approvalPanel.hide()
+            let promptID = prompt.id
+            notch.present(NotchRequest(id: promptID, kind: .ssh, symbol: "key.fill", title: prompt.displayName,
+                subtitle: String(localized: "wants to sign with \(prompt.keyName)"),
+                detail: [prompt.via, (model?.sessions.count ?? 0) > 1
+                    ? model?.items.first { $0.id == prompt.keyID }.flatMap { item in model?.accounts.first { $0.id == item.accountId }?.email }
+                    : nil].compactMap { $0 }.joined(separator: " · "),
+                deadline: Date.now.addingTimeInterval(NotchStatusController.seconds(ContinuousClock.now.duration(to: deadline))),
+                waiting: pendingCount, leadsWithUntilLock: pendingLeadsWithUntilLock) { [weak self] choice in
+                    guard let self else { return }
+                    switch choice {
+                    case .deny: choose(.deny, promptID: promptID)
+                    case .once: choose(.allow(.once), promptID: promptID)
+                    case .tenMinutes: choose(.allow(.tenMinutes), promptID: promptID)
+                    case .untilLock: choose(.allow(.untilLock), promptID: promptID)
+                    case .review:
+                        windowForPrompt = promptID
+                        model?.notch?.clearRequest(.ssh)
+                        presentPending(reveal: true)
+                    }
+                })
+            return
+        }
+        model?.notch?.clearRequest(.ssh)
         approvalPanel.show(prompt, deadline: deadline, pendingCount: pendingCount,
                            leadsWithUntilLock: pendingLeadsWithUntilLock, reveal: reveal) { [weak self] choice in
             self?.choose(choice, promptID: prompt.id)

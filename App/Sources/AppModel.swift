@@ -477,6 +477,9 @@ final class AppModel {
     @ObservationIgnored private(set) var cli: CLIBridge!
     @ObservationIgnored private(set) var secrets: SecretsController!
     @ObservationIgnored private var notchStatus: NotchStatusController?
+    /// The notch, when it is set to take approval requests and can be seen now.
+    var notchForApprovals: NotchStatusController? { notchStatus?.canPresentRequest() == true ? notchStatus : nil }
+    var notch: NotchStatusController? { notchStatus }
     /// The menu bar's way into the notch list, for anyone not using a pointer.
     func revealAccessStatus() {
         if let notchStatus { notchStatus.reveal() } else { requestedSection = .access; bringToFront() }

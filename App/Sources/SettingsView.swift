@@ -489,7 +489,8 @@ private struct DeveloperSettings: View {
     @AppStorage(Pref.cli) private var cliEnabled = false
     @AppStorage(Pref.cliApprovalSeconds) private var cliApprovalSeconds = 0
     @AppStorage(Pref.browser) private var browserEnabled = false
-    @AppStorage(Pref.accessStatus) private var accessStatus = true
+    @AppStorage(Pref.accessStatus) private var accessStatus = NotchStatusController.macHasNotch
+    @AppStorage(Pref.approvalStyle) private var approvalStyle = NotchStatusController.defaultApprovalStyle
     @AppStorage(Pref.accessStatusPosition) private var accessStatusPosition = NotchPosition.notch.rawValue
 
     @State private var helperSetup = false
@@ -525,6 +526,14 @@ private struct DeveloperSettings: View {
                         Label("\(owner) is using the notch, so the status shows at the top right instead.", systemImage: "info.circle")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                }
+                Picker("Show approval requests", selection: $approvalStyle) {
+                    Text("In a window").tag("window")
+                    Text("In the notch").tag("notch")
+                }.accessibilityIdentifier("approvalStyle")
+                if approvalStyle == "notch" {
+                    Text("SSH signing, and tools that use one key, ask in the notch. Tools with several keys, unverified launchers and full-screen apps still use the window. Touch ID or your password is still required.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
             } header: { Text("Access status") } footer: {
                 Text("While a tool or app has temporary access, a small status sits at the top of the screen. Point at it to see what has access and end it. Without a notch, it floats below the menu bar.")

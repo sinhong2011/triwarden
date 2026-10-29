@@ -20,6 +20,7 @@ enum Pref {
     static let browser = "browser"                       // answer the Safari/Chrome extension
     static let accessStatus = "accessStatus"             // temporary access shows at the notch (on unless turned off)
     static let accessStatusPosition = "accessStatusPosition" // NotchPosition: "notch" | "topLeft" | "topRight" | "custom"
+    static let approvalStyle = "approvalStyle"               // "window" (default) | "notch": where approval requests appear
     static let accessStatusOrigin = "accessStatusOrigin"     // "x,y": top centre of the dragged status, in screen points
     static let checkUpdates = "checkUpdates"             // opt-in: look at GitHub's latest release daily
     static let hideFromCapture = "hideFromCapture"       // windows stay out of screen sharing, recordings and screenshots
