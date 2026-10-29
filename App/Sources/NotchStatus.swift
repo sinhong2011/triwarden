@@ -209,19 +209,26 @@ final class NotchStatusController {
 
     /// A built-in display with a camera housing: the notch features start on there, and off on other Macs,
     /// until the user chooses in Settings.
-    static var macHasNotch: Bool { NSScreen.screens.contains { $0.safeAreaInsets.top > 0 } }
+    /// Read once screens are known and refreshed when they change, never from inside a defaults notification:
+    /// AppKit's first `NSScreen.screens` registers defaults inside a dispatch_once, and reading screens again from
+    /// the change it posts locks that once recursively (a launch-time crash, seen in CI's demo launch).
+    static private(set) var macHasNotch = false
+    private static func readScreens() { macHasNotch = NSScreen.screens.contains { $0.safeAreaInsets.top > 0 } }
 
     static var enabled: Bool { UserDefaults.standard.object(forKey: Pref.accessStatus) as? Bool ?? macHasNotch }
 
     init(model: AppModel) {
         self.model = model
+        Self.readScreens()
         observe()
         let center = NotificationCenter.default
+        // Settings changes arrive here too. Hop to the next turn so nothing runs inside the poster's own work
+        // (see `macHasNotch`).
         observers.append(center.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refresh() }
+            DispatchQueue.main.async { self?.refresh() }
         })
         observers.append(center.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.place() }
+            MainActor.assumeIsolated { Self.readScreens(); self?.place() }
         })
         let workspace = NSWorkspace.shared.notificationCenter
         for name in [NSWorkspace.activeSpaceDidChangeNotification, NSWorkspace.didActivateApplicationNotification] {
