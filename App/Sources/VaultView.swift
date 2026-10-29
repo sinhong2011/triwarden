@@ -364,33 +364,8 @@ struct VaultView: View {
                 model.requestedSection = nil
             }
         }
-        .onChange(of: model.showsAPIKeyTools) { _, visible in
-            if !visible { hideToolPagesIfIdle() }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEndSheetNotification)) { _ in hideToolPagesIfIdle() }
-        .onChange(of: model.newItemForm == nil) { _, closed in if closed { hideToolPagesIfIdle() } }
-        .onChange(of: model.toolLaunchReference == nil) { _, closed in if closed { hideToolPagesIfIdle() } }
-        .onChange(of: model.showingToolGuide) { _, showing in if !showing { hideToolPagesIfIdle() } }
-        .onChange(of: model.requestedVaultItem) { _, destination in
-            guard let destination else { return }
-            guard let item = model.items.first(where: { $0.accountId == destination.accountID && $0.id == destination.itemID }),
-                  model.isUnlocked(destination.accountID), !item.isDeleted, !item.isArchived else {
-                model.requestedVaultItem = nil
-                model.flash(String(localized: "This key is no longer available. Unlock its account and try again."))
-                return
-            }
-            model.accountFocus = destination.accountID
-            model.clearSearchFilters()
-            query = ""
-            let target = SidebarSelection.section(item.isAPIKey && model.showsAPIKeyTools ? .apiKeys : .all)
-            let changesSection = section != target
-            section = target
-            model.selectedID = item.id
-            if !changesSection {
-                if compact { depth = 2 }
-                model.requestedVaultItem = nil
-            }
-        }
+        // Its own function: inline, this chain is past the compiler's type-check budget on CI (Xcode 26).
+        .modifier(APIKeyNavigation(section: $section, query: $query, depth: $depth, compact: compact, hideIfIdle: hideToolPagesIfIdle))
         .onChange(of: model.requestedFilter) { _, requested in
             guard let requested else { return }
             model.requestedFilter = nil
@@ -402,8 +377,6 @@ struct VaultView: View {
             if show { section = .generator; model.showingGenerator = false }
         }
         .sheet(item: $model.repromptRequest) { request in RepromptSheet(request: request) }
-        .sheet(isPresented: $model.showingToolGuide) { ToolSetupGuide().environment(model) }
-        .sheet(isPresented: $model.showingHelperSetup) { TerminalHelperSetup().environment(model) }
         .sheet(item: $model.signInPrompt) { prompt in SignInApprovalSheet(prompt: prompt) }
         .sheet(isPresented: Binding(get: { model.eventLogFor != nil }, set: { if !$0 { model.eventLogFor = nil } })) {
             if let id = model.eventLogFor { EventLogSheet(organizationId: id) }
@@ -4691,3 +4664,49 @@ struct SidebarCalmSelection: NSViewRepresentable {
         }
     }
 }
+
+/// API-key navigation for the vault window: following a request to show a key, hiding Tools and Access when the
+/// feature is turned off, and the guide and helper sheets.
+private struct APIKeyNavigation: ViewModifier {
+    @Environment(AppModel.self) private var model
+    @Binding var section: SidebarSelection
+    @Binding var query: String
+    @Binding var depth: Int
+    let compact: Bool
+    let hideIfIdle: () -> Void
+
+    func body(content: Content) -> some View {
+        @Bindable var model = model
+        return content
+            .onChange(of: model.showsAPIKeyTools) { _, visible in
+                if !visible { hideIfIdle() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: NSWindow.didEndSheetNotification)) { _ in hideIfIdle() }
+            .onChange(of: model.newItemForm == nil) { _, closed in if closed { hideIfIdle() } }
+            .onChange(of: model.toolLaunchReference == nil) { _, closed in if closed { hideIfIdle() } }
+            .onChange(of: model.showingToolGuide) { _, showing in if !showing { hideIfIdle() } }
+            .onChange(of: model.requestedVaultItem) { _, destination in
+                guard let destination else { return }
+                guard let item = model.items.first(where: { $0.accountId == destination.accountID && $0.id == destination.itemID }),
+                      model.isUnlocked(destination.accountID), !item.isDeleted, !item.isArchived else {
+                    model.requestedVaultItem = nil
+                    model.flash(String(localized: "This key is no longer available. Unlock its account and try again."))
+                    return
+                }
+                model.accountFocus = destination.accountID
+                model.clearSearchFilters()
+                query = ""
+                let target = SidebarSelection.section(item.isAPIKey && model.showsAPIKeyTools ? .apiKeys : .all)
+                let changesSection = section != target
+                section = target
+                model.selectedID = item.id
+                if !changesSection {
+                    if compact { depth = 2 }
+                    model.requestedVaultItem = nil
+                }
+            }
+            .sheet(isPresented: $model.showingToolGuide) { ToolSetupGuide().environment(model) }
+            .sheet(isPresented: $model.showingHelperSetup) { TerminalHelperSetup().environment(model) }
+    }
+}
+
