@@ -1,7 +1,7 @@
 # Start a saved tool from Terminal
 
 New to this feature? Start with the [guided setup](local-api-keys-getting-started.md).
-Enable **Settings > Developer > Show API key tools**, then open the **Setup Guide** from Tools.
+Enable **Settings > Developer > Show API key tools**, then open **Tools** and select **Walk me through it**.
 This visibility preference is off for new users. Existing saved tool setups keep their entry after upgrading.
 
 ## Set up a tool
@@ -14,8 +14,23 @@ This visibility preference is off for new users. Existing saved tool setups keep
 6. Review the selected keys and command.
 7. Save the tool.
 
-Recipes include Claude Code, npm projects, Node.js scripts, Python scripts, and other programs.
-Triwarden looks for installed programs in fixed locations.
+Recipes:
+
+| Recipe | Program | Suggested variable |
+| --- | --- | --- |
+| Claude Code | `claude` | `ANTHROPIC_API_KEY` |
+| Codex CLI | `codex` | `OPENAI_API_KEY` |
+| Gemini CLI | `gemini` | `GEMINI_API_KEY` |
+| Cursor CLI | `cursor-agent` | `CURSOR_API_KEY` |
+| Aider | `aider` | The key's default |
+| OpenCode | `opencode` | The key's default |
+| npm, pnpm or Bun development project | `npm run dev`, `pnpm run dev`, `bun run dev` | The key's default |
+| Node.js script | `node <script>` | The key's default |
+| Python script | `python3 <script>` | The key's default |
+| Python script with uv | `uv run <script>` | The key's default |
+| Other program | You choose | The key's default |
+
+Select **Find Installed Program** to look for the program in fixed locations.
 It does not run a detected program or evaluate shell startup files during discovery.
 Use **Choose…** if it cannot find your program.
 Script recipes require you to select the script.
@@ -23,8 +38,8 @@ Your custom tool name and variable name remain when you switch recipes.
 The app replaces values that still match the previous recipe's suggestion.
 Existing saved tools keep their exact paths, arguments, and bindings.
 
-The Claude Code recipe suggests `ANTHROPIC_API_KEY`.
 An API key can override Claude Code subscription authentication and incur API charges.
+The Codex CLI recipe has the same warning for a ChatGPT plan.
 Confirm the account before use.
 See [Anthropic's authentication explanation](https://support.claude.com/en/articles/12304248-manage-api-key-environment-variables-in-claude-code).
 The recipe does not verify provider credentials or establish compatibility with every client version.
@@ -33,17 +48,20 @@ The recipe does not verify provider credentials or establish compatibility with 
 
 1. Open **Tools** in Triwarden.
 2. Open the **Tools options** menu (…). Select **Terminal Helper Setup…**.
-3. Check the install location and the helper path.
-4. Select **Copy Install Command**.
-5. Paste the command into Terminal and run it.
+3. Select **Copy & Open Terminal**. Triwarden copies the install command and opens Terminal.
+4. Paste the command with Command-V and press Return.
+5. Enter your Mac password.
 
+The setup window detects the new link automatically and shows **tw is installed**.
+Expand **Show command** to read the command before you run it.
 The install location is `/usr/local/bin/tw`.
+The sandboxed app cannot write to `/usr/local/bin`, so the install step runs in Terminal.
 The command creates a link to the helper in the current app.
 It replaces an existing link at that location.
 It refuses to replace a regular file or folder.
 Move the app to its permanent location before you install the helper.
 
-You can also open helper setup while you configure a tool or from **Settings > Developer**.
+You can also open helper setup from **Install Terminal Helper…** in the app menu, from the command palette, while you configure a tool, or from **Settings > Developer**.
 The setup window checks the app signature and the link destination.
 It gives a repair instruction if the helper is missing, unsigned, or from another app.
 These setup checks do not replace the signature checks for each launch.
@@ -54,18 +72,18 @@ Triwarden does not change your shell startup files.
 
 ## Copy a launch
 
-1. Select the saved tool in **Tools**.
-2. Check the tool name, then select **Copy Launch**.
+1. Select the saved tool in **Tools**. With only one saved tool, Tools opens it directly.
+2. Check that the state is **Ready to run**. Select **Copy** beside the launch command.
 3. Paste the command into Terminal and run it.
 
-The selected tool name identifies the launch. The copy confirmation shows that name.
+The copy confirmation shows the tool name.
 The copied shell command uses its stable ID, for example:
 
 ```sh
 tw run --profile tool-123
 ```
 
-Open **Launch details** to see the exact shell command and the saved executable.
+The **Details** section shows the saved program, arguments, folder, and account.
 Duplicate display names do not change the selected ID.
 
 ## Choose a tool in Terminal
@@ -89,11 +107,12 @@ Command overrides remain disabled.
 
 ## Repair a setup
 
-Tools shows a setup action if the terminal helper needs attention.
-A working helper adds no status row.
-The check runs again when you return to Triwarden or close helper setup.
+Each tool shows one state: **Ready to run**, **Install the terminal helper**, **Paused**, **Account locked**, or **Needs attention**.
+Every state except **Ready to run** explains the problem and shows one action to fix it.
+The helper check runs again when you return to Triwarden or close helper setup.
 It does not prove that a key, provider account, or project script works.
 
+- Select **Install Terminal Helper…** if `tw` is missing or links to another app.
 - Select **Resume Tool** for a paused tool.
 - Select **Unlock Account** for a locked account.
 - Select **Add Account…** if the required account is absent from this Mac.
@@ -105,21 +124,21 @@ The review step shows the replacement key and the retained variable name before 
 
 ## Use a shell alias
 
-Open the tool options menu (…) or **Launch details**.
-Select **Copy Shell Alias** to copy a suggested alias:
+A ready tool shows its alias name under **Shortcut**.
+Select **Copy Alias**, or **Copy Shell Alias** in the tool's menu (…), to copy the definition:
 
 ```sh
 alias tw-my-assistant='tw run --profile tool-123'
 ```
 
-Paste this definition into your terminal.
+Add this definition to `~/.zshrc` and open a new terminal.
 Then start the tool with `tw-my-assistant`.
+The name is `tw-` followed by the tool name in lowercase ASCII letters and digits, joined with hyphens.
 Change the alias name if another tool uses it.
 The `tw-` prefix reduces conflicts with common commands.
 Names without ASCII letters or digits use the tool ID as the suggested alias name.
 
-The alias applies to the current shell session.
-To keep it, add the definition to your shell startup file yourself.
+You can also paste the definition into a terminal for the current session only.
 Triwarden does not write the definition to that file.
 The definition contains a tool ID, not a key value.
 A tool name change does not change an existing alias.
@@ -148,13 +167,16 @@ It still requires vault access approval.
 
 Once remains the initial approval choice.
 The user can select 10 minutes or Until lock.
-This change adds no permanent API-key permission or API-key history.
+Touch ID or the Mac password confirms every choice to allow.
+With **Show approval requests** set to **In the notch**, a tool with one key from a verified launcher asks at the top of the screen.
+Several keys, an unverified launcher, or a full-screen app use the approval window.
+There is no permanent API-key permission or API-key history.
 Lock and revoke stop future delivery. They cannot recover keys that a program already received.
 
 ## Use an environment reference file
 
 1. Select a saved tool in **Tools**.
-2. Open its options menu (…) or **Launch details**.
+2. Open its menu (…).
 3. Select **Save .env References…**.
 4. Select **Save File…**. Check the destination in the file picker.
 5. Keep the `.env.triwarden` suffix. Save the file in your project.
@@ -240,22 +262,25 @@ See the [acceptance record](plans/2026-10-24-env-reference-acceptance.md).
 
 1. Unlock the destination account.
 2. Open **Tools**. Open **Tools options** (…) and select **Import .env File…**.
-3. Select **Choose .env File…**. Select one local file.
+   On an empty Tools page, select **Import from an .env file**.
+3. Select **Choose…**. Select one local file.
 4. Check the destination account and project name.
 5. Review the variable names. Select only the keys you want to save.
-6. Select **Save Selected Keys**.
+6. Select **Save 1 Key** or **Save N Keys**.
 7. Wait for Triwarden to confirm the saved values through online sync.
 8. Select **Set Up Tool…**. Choose the installed program and review all selected keys.
-9. Save the tool. Copy its launch and test it in Terminal.
+9. Save the tool. The import window then shows its launch command. Copy it and test it in Terminal.
 
-The empty Tools view also has an **Import .env File…** action.
+The window shows three steps: **Choose keys**, **Save to vault**, and **Use with a tool**.
+Your `.env` file is only read. Triwarden never changes it or your shell settings.
 The preview masks every value. It shows variable names, not key values or value lengths.
 Suggestions use names and URL structure. They do not prove that a value is public or secret.
 Public prefixes and ordinary settings start unselected. You can select supported settings if the tool needs them.
 Program-control variables cannot supply keys.
 
 Each selected value becomes an API-key Secure Note in the selected personal vault.
-The item name uses the project name and variable name.
+The item name uses the project name and variable name, for example `Storefront · STRIPE_SECRET_KEY`.
+The project name starts as the file's folder name.
 The hidden `api-key` field contains the value. The `environment-variable` field contains the exact variable name.
 A `triwarden-import-id` custom field identifies this batch for confirmation.
 Other Bitwarden clients show ordinary Secure Notes and custom fields.
@@ -281,8 +306,8 @@ This releases references to these values. It does not guarantee that memory copi
 ### Remove old plaintext after testing
 
 The importer keeps the source file unchanged. It creates no plaintext backup or temporary plaintext file.
-After the saved launch works, remove the imported assignments with your editor. Keep the settings your project still needs.
-Remove the whole assignment. Do not leave `API_KEY=`: some dotenv loaders can replace the supplied key with this empty value.
+After the saved launch works, delete each imported line with your editor. Keep the settings your project still needs.
+Delete the whole line, not just the value. Do not leave `API_KEY=`: an empty assignment can override the key that Triwarden supplies.
 Test the saved launch again after the edit.
 Check old shell settings and other copies separately. This import does not remove values from those locations or from Git history.
 

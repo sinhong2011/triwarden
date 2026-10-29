@@ -1,0 +1,93 @@
+---
+/** Developer features in one place: API keys from the vault to local tools (save → give to a tool → approve →
+    see and end access), then the SSH agent and the tw command, which used to sit in MacRows. */
+import SectionHead from "./SectionHead.astro";
+import Shot from "./Shot.astro";
+import type { ShotName } from "../shots";
+import { m } from "../paraglide/messages.js";
+import { currentLocale, localeHref } from "../i18n";
+
+const locale = currentLocale();
+const apiGuide = localeHref(locale, "guides/api-keys/");
+const sshGuide = localeHref(locale, "guides/ssh-agent/");
+const code = (s: string) => `<code>${s}</code>`;
+
+// Each step beside the real screen for it. `pos` picks the part of a tall capture that the frame keeps.
+const steps: { title: string; body: string; shot: ShotName; alt: string; pos: string }[] = [
+  { title: m.dev_s1_t(), body: m.dev_s1_b(), shot: "tw-env-import", alt: m.alt_tw_env(), pos: "50% 0%" },
+  { title: m.dev_s2_t(), body: m.dev_s2_b({ var: code("ANTHROPIC_API_KEY") }), shot: "tw-guide-tool", alt: m.alt_tw_guide(), pos: "50% 0%" },
+  { title: m.dev_s3_t(), body: m.dev_s3_b({ alias: code("tw-claude-code") }), shot: "tw-approval", alt: m.alt_tw_approval(), pos: "50% 0%" },
+  { title: m.dev_s4_t(), body: m.dev_s4_b(), shot: "tw-notch-expanded", alt: m.alt_tw_notch(), pos: "50% 30%" },
+];
+const link = "inline-flex items-center gap-1.5 text-[15px] font-medium text-ink underline decoration-line-2 underline-offset-4 transition-[text-decoration-color] duration-300 ease-(--ease-base) hover:decoration-ink";
+---
+<section id="developers" class="mx-auto max-w-(--max) px-(--gutter) py-[clamp(64px,8vw,112px)]">
+  <SectionHead kicker={m.dev_kicker()}>
+    <h2>{m.dev_title_1()}<br /><em>{m.dev_title_2()}</em></h2>
+    <p>{m.dev_lede()}</p>
+  </SectionHead>
+
+  <div class="mt-[clamp(32px,4.5vw,56px)] grid items-center gap-x-[4vw] gap-y-8 *:min-w-0 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,.5fr)]">
+    <div data-rise data-shader="stage" class="stage-backdrop relative isolate overflow-hidden rounded-[clamp(18px,2.4vw,32px)] p-[clamp(12px,2.6vw,36px)] shadow-[0_0_0_1px_var(--color-line)]">
+      <div class="dev-frame"><Shot name="tw-real" alt={m.alt_tw_real()} class="h-auto w-full" /></div>
+    </div>
+    <div data-reveal-group class="grid gap-5">
+      <div class="term rounded-[20px]" aria-hidden="true">
+        <p><b>~</b> tw-claude-code</p>
+        <p class="dim"># Triwarden: Touch ID · Once</p>
+        <p><span class="ok">✓</span> claude</p>
+        <p class="dim">ANTHROPIC_API_KEY → claude only</p>
+      </div>
+      <p class="m-0 text-[15px] leading-relaxed text-ink-2">{m.dev_private()}</p>
+      <a class={link} href={apiGuide}>{m.dev_guide_link()} <span aria-hidden="true">→</span></a>
+    </div>
+  </div>
+
+  <ol class="dev-steps" aria-label={m.dev_steps_label()}>
+    {steps.map((s, i) => (
+      <li class="dev-step" data-rise>
+        <div class="dev-step__text">
+          <span class="dev-step__no" aria-hidden="true">{String(i + 1).padStart(2, "0")}</span>
+          <h3>{s.title}</h3>
+          <p set:html={s.body} />
+        </div>
+        <div class="dev-step__shot" style={`--pos: ${s.pos}`}><Shot name={s.shot} alt={s.alt} /></div>
+      </li>
+    ))}
+  </ol>
+
+  <p class="kicker mt-[clamp(56px,7vw,96px)]">{m.dev_more_kicker()}</p>
+  <ol class="list-none border-t border-line-2 p-0">
+    <li class="row" data-row>
+      <span class="row__no row__no--mono" aria-hidden="true">ssh</span>
+      <div class="row__text">
+        <p class="kicker mb-3!">{m.row_ssh_kicker()}</p>
+        <h3>{m.row_ssh_title()}</h3>
+        <p set:html={m.row_ssh_body({ path: code("~/.ssh"), ssh: code("ssh") })} />
+        <a class:list={["mt-4", link]} href={sshGuide}>{m.g_link()} <span aria-hidden="true">→</span></a>
+      </div>
+      <div class="row__demo term" aria-hidden="true">
+        <p><b>~</b> git commit -S -m "ship it"</p>
+        <p class="dim">Triwarden: approve “github-signing” with Touch ID</p>
+        <p><span class="ok">✓</span> [main 9307fb2] ship it</p>
+        <p class="dim">Good "git" signature, ED25519 key</p>
+      </div>
+    </li>
+    <li class="row" data-row>
+      <span class="row__no row__no--mono" aria-hidden="true">tw</span>
+      <div class="row__text">
+        <p class="kicker mb-3!">{m.row_cli_kicker()}</p>
+        <h3>{m.row_cli_title()}</h3>
+        <p set:html={m.row_cli_body({ tw: code("tw") })} />
+      </div>
+      <div class="row__demo term" aria-hidden="true">
+        <p><b>~</b> tw code github</p>
+        <p data-code="GitHub" class="big">000 000</p>
+        <p><b>~</b> tw generate --length 32 | pbcopy</p>
+        <p class="dim">Copied. Clears in 90 seconds.</p>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<script>import "../scripts/rows"; import "../scripts/shader";</script>

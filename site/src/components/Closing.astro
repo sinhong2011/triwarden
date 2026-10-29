@@ -20,8 +20,8 @@ const pricing = localeHref(currentLocale(), "pricing/");
     </div>
     <div class="flex flex-wrap gap-3">
       <a class="btn btn--fill" href={dmg} data-dmg="">{m.hero_download()}</a>
-      <a class="btn btn--ghost" href={pricing}>{m.buy_once({ price: SITE.price })}</a>
     </div>
+    <a class="mt-4 inline-block text-[14px] text-ink-2 underline decoration-line-2 underline-offset-[3px] transition-[text-decoration-color] duration-300 ease-(--ease-base) hover:text-ink hover:decoration-ink" href={pricing}>{m.buy_once({ price: SITE.price })}</a>
     <DownloadMeta class="mt-5" />
     <p class="mt-2 mb-0 text-[13px] text-ink-3">{m.close_requires()}</p>
   </div>

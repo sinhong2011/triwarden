@@ -3,7 +3,7 @@ import SectionHead from "./SectionHead.astro";
 import { SITE } from "../config";
 import { m } from "../paraglide/messages.js";
 const t = m as unknown as Record<string, (p?: Record<string, string>) => string>;
-const faqs = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => [t[`faq${n}_q`](), t[`faq${n}_a`]({ price: SITE.price, email: SITE.supportEmail })]);
+const faqs = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [t[`faq${n}_q`](), t[`faq${n}_a`]({ price: SITE.price, email: SITE.supportEmail })]);
 ---
 <section id="faq" class="mx-auto grid max-w-(--max) gap-[6vw] px-(--gutter) py-[clamp(64px,8vw,112px)] lg:grid-cols-[minmax(0,.8fr)_minmax(0,1.2fr)]">
   <SectionHead kicker={m.faq_kicker()}>
