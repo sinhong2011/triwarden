@@ -102,7 +102,7 @@ struct ToolLaunchSetup: View {
                 FormField(label: "What do you want to run?") {
                     SoftMenu(options: [(Optional<ToolLaunchRecipe>.none, String(localized: "Choose a tool…"))] +
                              ToolLaunchRecipe.allCases.map { (Optional($0), $0.localizedTitle) },
-                             selection: Binding(get: { recipe }, set: selectRecipe), accessibilityLabel: "Tool type")
+                             selection: recipeSelection, accessibilityLabel: "Tool type")
                 }
                 if recipe != nil {
                     FormField(label: "Tool name", note: "Use a name you can recognize when this tool requests access.") {
@@ -257,6 +257,12 @@ struct ToolLaunchSetup: View {
                 }.buttonStyle(.appSecondarySmall)
             }
         }
+    }
+
+    /// A plain closure: passing `selectRecipe` itself as the setter crashes Swift 6.3's IR generation (Xcode 26.6)
+    /// in the reabstraction thunk for an optional enum.
+    private var recipeSelection: Binding<ToolLaunchRecipe?> {
+        Binding(get: { recipe }, set: { (selected: ToolLaunchRecipe?) in selectRecipe(selected) })
     }
 
     private func selectRecipe(_ selected: ToolLaunchRecipe?) {
