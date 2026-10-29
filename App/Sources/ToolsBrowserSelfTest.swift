@@ -7,6 +7,52 @@ import VaultwardenAPI
 
 /// Synthetic references and dummy values only; never opens a vault, Keychain or agent socket.
 enum ToolsPreviewFixture {
+    /// Tools people actually set up, with the vault keys they read. Values are dummies.
+    static let realKeys: [VaultItem] = [
+        ("anthropic", "Anthropic · personal", "Anthropic", "ANTHROPIC_API_KEY"),
+        ("openai", "OpenAI · personal", "OpenAI", "OPENAI_API_KEY"),
+        ("gemini", "Google AI Studio", "Gemini", "GEMINI_API_KEY"),
+        ("stripe", "Stripe · test mode", "Stripe", "STRIPE_SECRET_KEY"),
+        ("supabase", "Supabase · service role", "Supabase", "SUPABASE_SERVICE_ROLE_KEY"),
+        ("resend", "Resend", "Resend", "RESEND_API_KEY"),
+        ("huggingface", "Hugging Face", "Hugging Face", "HF_TOKEN"),
+        ("pinecone", "Pinecone", "Pinecone", "PINECONE_API_KEY")
+    ].map { id, name, service, variable in
+        var item = VaultItem(id: "real-" + id, accountId: "demo", kind: .note, name: name,
+                             username: nil, host: nil, password: nil, totp: nil, notes: nil, favorite: false)
+        item.customFields = [CustomField(name: APIKeyTemplate.keyField, value: "dummy-fixture-only", kind: .hidden),
+                             CustomField(name: APIKeyTemplate.serviceField, value: service, kind: .text),
+                             CustomField(name: APIKeyTemplate.environmentField, value: variable, kind: .text)]
+        return item
+    }
+
+    static let realTools: [SecretsProfile] = {
+        func tool(_ name: String, _ title: String, _ executable: String, _ arguments: [String], _ directory: String,
+                  _ keys: [(String, String)], enabled: Bool = true) -> SecretsProfile {
+            let bindings = keys.map { SecretsBinding(accountID: "demo", itemID: "real-" + $0.0, field: .hidden(APIKeyTemplate.keyField), variable: $0.1) }
+            return SecretsProfile(name: name, accountID: "demo", itemID: bindings[0].itemID, field: bindings[0].field,
+                                  variable: bindings[0].variable, executable: executable, arguments: arguments,
+                                  directory: directory, enabled: enabled, displayName: title,
+                                  additionalBindings: bindings.count > 1 ? Array(bindings.dropFirst()) : nil)
+        }
+        return [
+            tool("claude-code", "Claude Code", "/Users/alex/.local/bin/claude", [], "/Users/alex/Projects/storefront",
+                 [("anthropic", "ANTHROPIC_API_KEY")]),
+            tool("codex", "Codex CLI", "/opt/homebrew/bin/codex", [], "/Users/alex/Projects/storefront",
+                 [("openai", "OPENAI_API_KEY")]),
+            tool("storefront-dev", "Storefront dev server", "/opt/homebrew/bin/pnpm", ["run", "dev"], "/Users/alex/Projects/storefront",
+                 [("stripe", "STRIPE_SECRET_KEY"), ("supabase", "SUPABASE_SERVICE_ROLE_KEY"), ("resend", "RESEND_API_KEY")]),
+            tool("gemini", "Gemini CLI", "/opt/homebrew/bin/gemini", [], "/Users/alex/Projects/notes",
+                 [("gemini", "GEMINI_API_KEY")]),
+            tool("aider", "Aider", "/Users/alex/.local/bin/aider", ["--model", "sonnet"], "/Users/alex/Projects/api-server",
+                 [("anthropic", "ANTHROPIC_API_KEY"), ("openai", "OPENAI_API_KEY")]),
+            tool("rag-indexer", "RAG indexer", "/opt/homebrew/bin/uv", ["run", "/Users/alex/Projects/rag/index.py"], "/Users/alex/Projects/rag",
+                 [("openai", "OPENAI_API_KEY"), ("pinecone", "PINECONE_API_KEY"), ("huggingface", "HF_TOKEN")]),
+            tool("email-worker", "Email worker", "/opt/homebrew/bin/bun", ["run", "dev"], "/Users/alex/Projects/email-worker",
+                 [("resend", "RESEND_API_KEY")], enabled: false)
+        ]
+    }()
+
     static func keys(_ count: Int = 16) -> [VaultItem] {
         (0..<count).map { i in
             var item = VaultItem(id: "fixture-key-\(i)", accountId: "demo", kind: .note, name: "Development Key \(i)",

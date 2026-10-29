@@ -17,6 +17,8 @@ struct SavedToolCommandsTests {
         #expect(alias.hasSuffix("='tw run --profile tool-123'"))
         #expect(!alias.contains("$("))
         #expect(try SavedToolCommands.alias(tool(title: "文件助理")).hasPrefix("alias tw-tool-123="))
+        #expect(SavedToolCommands.aliasName(p) == "tw-my-assistant-touch-tmp-not-executed")
+        #expect(SavedToolCommands.aliasName(tool(title: "文件助理")) == "tw-tool-123")
     }
 
     @Test func shellQuoteRoundTripsWithoutEvaluation() throws {

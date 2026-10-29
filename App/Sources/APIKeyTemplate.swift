@@ -88,6 +88,14 @@ extension AppModel {
         }
     }
 
+    /// From the app menu or the palette: the same setup sheet as Tools, over whatever page is open.
+    func showHelperSetup() {
+        guard showsAPIKeyTools else { return }
+        dismissHelpPanels()
+        showingHelperSetup = true
+        bringToFront()
+    }
+
     func showToolGuide() {
         guard showsAPIKeyTools, isUnlocked else { return }
         leaveNewItemForm {

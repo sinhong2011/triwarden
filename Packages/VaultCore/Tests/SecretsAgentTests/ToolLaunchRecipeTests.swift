@@ -18,6 +18,20 @@ struct ToolLaunchRecipeTests {
         #expect(ToolLaunchRecipe.claudeCode.arguments(script: "ignored", extra: []) == [])
         #expect(ToolLaunchRecipe.claudeCode.variable == "ANTHROPIC_API_KEY")
         #expect(ToolLaunchRecipe.custom.variable == nil)
+        #expect(ToolLaunchRecipe.pnpm.arguments(script: "", extra: []) == ["run", "dev"])
+        #expect(ToolLaunchRecipe.uv.arguments(script: "/p/main.py", extra: ["--fast"]) == ["run", "/p/main.py", "--fast"])
+        #expect(ToolLaunchRecipe.codex.arguments(script: "ignored", extra: ["--full-auto"]) == ["--full-auto"])
+    }
+
+    @Test func agentRecipesSuggestTheirProvidersVariable() {
+        #expect(ToolLaunchRecipe.codex.variable == "OPENAI_API_KEY")
+        #expect(ToolLaunchRecipe.gemini.variable == "GEMINI_API_KEY")
+        #expect(ToolLaunchRecipe.cursorAgent.variable == "CURSOR_API_KEY")
+        #expect(ToolLaunchRecipe.aider.variable == nil)
+        #expect(ToolLaunchRecipe.codex.binary == "codex")
+        #expect(ToolLaunchRecipe.cursorAgent.binary == "cursor-agent")
+        #expect(ToolLaunchRecipe.allCases.filter(\.needsScript) == [.node, .python, .uv])
+        #expect(ToolLaunchRecipe.allCases.allSatisfy { $0 == .custom || $0.binary != nil })
     }
 
     @Test func discoveryUsesFixedLocationsWithoutRunningTheProgram() throws {

@@ -403,6 +403,7 @@ struct VaultView: View {
         }
         .sheet(item: $model.repromptRequest) { request in RepromptSheet(request: request) }
         .sheet(isPresented: $model.showingToolGuide) { ToolSetupGuide().environment(model) }
+        .sheet(isPresented: $model.showingHelperSetup) { TerminalHelperSetup().environment(model) }
         .sheet(item: $model.signInPrompt) { prompt in SignInApprovalSheet(prompt: prompt) }
         .sheet(isPresented: Binding(get: { model.eventLogFor != nil }, set: { if !$0 { model.eventLogFor = nil } })) {
             if let id = model.eventLogFor { EventLogSheet(organizationId: id) }
@@ -459,7 +460,7 @@ struct VaultView: View {
     /// ⌘F searches the current management workspace without leaving it.
     private func hideToolPagesIfIdle() {
         // A visibility change must not discard an import, a key draft, or a nested guide sheet.
-        guard !model.showsAPIKeyTools, !model.showsNavigation(section), !model.showingToolGuide,
+        guard !model.showsAPIKeyTools, !model.showsNavigation(section), !model.showingToolGuide, !model.showingHelperSetup,
               model.newItemForm == nil, model.toolLaunchReference == nil,
               model.mainWindow?.attachedSheet == nil else { return }
         section = .section(.all)

@@ -489,6 +489,8 @@ private struct DeveloperSettings: View {
     @AppStorage(Pref.cli) private var cliEnabled = false
     @AppStorage(Pref.cliApprovalSeconds) private var cliApprovalSeconds = 0
     @AppStorage(Pref.browser) private var browserEnabled = false
+    @AppStorage(Pref.accessStatus) private var accessStatus = true
+    @AppStorage(Pref.accessStatusPosition) private var accessStatusPosition = NotchPosition.notch.rawValue
 
     @State private var helperSetup = false
 
@@ -508,6 +510,24 @@ private struct DeveloperSettings: View {
                 }
             } header: { Text("Local API keys") } footer: {
                 Text("Show API Keys, Tools, and API-key actions. Hiding them keeps saved keys and configured launches.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Section {
+                Toggle("Show active access at the top of the screen", isOn: $accessStatus)
+                    .accessibilityIdentifier("showAccessStatus")
+                if accessStatus {
+                    Picker("Position", selection: $accessStatusPosition) {
+                        ForEach(NotchPosition.allCases, id: \.rawValue) { Text(verbatim: $0.title).tag($0.rawValue) }
+                    }.accessibilityIdentifier("accessStatusPosition")
+                    Text("Drag the status to put it anywhere. Choose another position to move it back.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if accessStatusPosition == NotchPosition.notch.rawValue, let owner = NotchOccupancy.shared.owner {
+                        Label("\(owner) is using the notch, so the status shows at the top right instead.", systemImage: "info.circle")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            } header: { Text("Access status") } footer: {
+                Text("While a tool or app has temporary access, a small status sits at the top of the screen. Point at it to see what has access and end it. Without a notch, it floats below the menu bar.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {

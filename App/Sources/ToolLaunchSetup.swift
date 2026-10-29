@@ -110,7 +110,7 @@ struct ToolLaunchSetup: View {
                             .accessibilityIdentifier("toolLaunchName")
                     }
                 }
-                if recipe == .node || recipe == .python {
+                if recipe?.needsScript == true {
                     path("Script", value: $script, directory: false)
                         .onChange(of: script) { _, value in
                             if directory.isEmpty, value.hasPrefix("/") {
@@ -119,9 +119,6 @@ struct ToolLaunchSetup: View {
                         }
                 }
                 if recipe != nil { path("Project folder", value: $directory, directory: true) }
-                if recipe == .npm {
-                    Text("Runs npm run dev in this folder.").font(.system(size: 12)).foregroundStyle(.secondary)
-                }
                 if recipe != nil {
                     path("Program", value: $executable, directory: false)
                     if executable.isEmpty {
@@ -133,9 +130,9 @@ struct ToolLaunchSetup: View {
                             .font(.system(size: 12)).foregroundStyle(.secondary)
                     }
                 }
-                if recipe == .claudeCode {
-                    Text("Use an Anthropic API key. Claude Code can charge this API account instead of your subscription.")
-                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                if let note = recipe?.localizedNote {
+                    Text(verbatim: note).font(.system(size: 12)).foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             if recipe != nil {
@@ -228,6 +225,9 @@ struct ToolLaunchSetup: View {
                 }
                 if recipe == .claudeCode {
                     Text("This launch supplies an Anthropic API key. Claude Code can charge that API account instead of your subscription.")
+                        .font(.system(size: 12)).foregroundStyle(.secondary)
+                } else if recipe == .codex {
+                    Text("This launch supplies an OpenAI API key. Codex can charge that API account instead of your ChatGPT plan.")
                         .font(.system(size: 12)).foregroundStyle(.secondary)
                 }
                 Text(enabled ? "Saving enables local launches for this tool." : "This tool remains paused after saving.")
@@ -325,7 +325,7 @@ struct ToolLaunchSetup: View {
                 throw SecretsFailure("An additional key is unavailable or its account is locked. Unlock the account, or remove and select that key again.")
             }
         }
-        if (recipe == .node || recipe == .python) && script.isEmpty {
+        if recipe?.needsScript == true && script.isEmpty {
             throw SecretsFailure("Choose the script you want this tool to run.")
         }
         try draft.validate()

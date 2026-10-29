@@ -476,6 +476,14 @@ final class AppModel {
     @ObservationIgnored private(set) var sshAgent: SSHAgentService!
     @ObservationIgnored private(set) var cli: CLIBridge!
     @ObservationIgnored private(set) var secrets: SecretsController!
+    @ObservationIgnored private var notchStatus: NotchStatusController?
+    /// The menu bar's way into the notch list, for anyone not using a pointer.
+    func revealAccessStatus() {
+        if let notchStatus { notchStatus.reveal() } else { requestedSection = .access; bringToFront() }
+    }
+    #if DEBUG
+    func showNotchDemo() { notchStatus?.showDemo() }
+    #endif
     @ObservationIgnored private let developerPreferences: UserDefaults?
     static let apiKeyToolsPreference = "showLocalAPIKeyTools"
     /// A visibility preference, not a permission or a switch for configured launch services.
@@ -483,6 +491,7 @@ final class AppModel {
         didSet { developerPreferences?.set(showsAPIKeyTools, forKey: Self.apiKeyToolsPreference) }
     }
     var showingToolGuide = false
+    var showingHelperSetup = false
     let updates: Updater
     /// Fork-style licensing: everything works unregistered; official builds remind now and then.
     let license = License()
@@ -508,6 +517,7 @@ final class AppModel {
         showsAPIKeyTools = ToolGuide.showsTools(saved: saved, hasTools: !secrets.profiles.isEmpty || secrets.lastError != nil)
         if saved == nil { developerPreferences?.set(showsAPIKeyTools, forKey: Self.apiKeyToolsPreference) }
         if !tooling { cli.refreshRunning() }
+        if !tooling { notchStatus = NotchStatusController(model: self) }
         if !tooling {
             trackForegroundApps()
             // The palette and its global shortcut from launch, not from when a window first appears (the app may

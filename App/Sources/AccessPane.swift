@@ -10,6 +10,7 @@ struct AccessPane: View {
     @State private var outcome = HistoryFilter.all
     @State private var revokeAll = false
     @State private var clearHistory = false
+    @State private var removeAlways: SSHAllowlistEntry?
     @FocusState private var searchFocused: Bool
     #if DEBUG
     var previewProfiles: [SecretsProfile]?
@@ -69,9 +70,9 @@ struct AccessPane: View {
         let index = ToolBrowserIndex(profiles: profiles, items: model.items, unlocked: Set(model.sessions.map(\.id)))
         let lookup = Dictionary(index.entries.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         VStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text("Access").font(.system(size: 20, weight: .bold))
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .center) {
+                    Text("Access").font(.system(size: 22, weight: .bold))
                     Spacer()
                     AppSegmented(options: [(false, LocalizedStringKey("Permissions")), (true, "History")], selection: $history)
                         .frame(width: 220)
@@ -80,10 +81,10 @@ struct AccessPane: View {
                         .accessibilityIdentifier("accessTabs")
                 }
                 ViewThatFits(in: .horizontal) {
-                    HStack { search; filters }
-                    VStack { search; HStack { filters; Spacer() } }
+                    HStack(spacing: 8) { search.frame(maxWidth: 360); filters; Spacer(minLength: 0) }
+                    VStack(alignment: .leading, spacing: 8) { search; HStack { filters; Spacer() } }
                 }
-            }.padding(18)
+            }.padding(.horizontal, 24).padding(.top, 20).padding(.bottom, 16)
             Divider().opacity(0.5)
             if history {
                 historyList
@@ -100,13 +101,19 @@ struct AccessPane: View {
             if wants { model.wantsAccessSearchFocus = false; searchFocused = true }
         }
         .onChange(of: showsAPIKeys) { _, visible in if !visible { source = .all } }
-        .confirmationDialog("Revoke all temporary access?", isPresented: $revokeAll) {
-            Button("Revoke Temporary Access", role: .destructive) { model.secrets.reset(); model.sshAgent.reset() }
+        .confirmationDialog("End all temporary access?", isPresented: $revokeAll) {
+            Button("End Temporary Access", role: .destructive) { model.secrets.reset(); model.sshAgent.reset() }
         } message: {
             Text(showsAPIKeys ? "Temporary API-key and SSH approvals will end, and pending requests will be cancelled. Always Allowed SSH apps are kept; remove them separately below. Keys already delivered and established SSH connections cannot be recalled." : "Temporary SSH approvals will end. Always Allowed SSH apps are kept. Established SSH connections cannot be recalled.")
         }
+        .confirmationDialog("Remove this Always Allowed app?", isPresented: Binding(get: { removeAlways != nil }, set: { if !$0 { removeAlways = nil } }),
+                            presenting: removeAlways) { entry in
+            Button("Remove", role: .destructive) { model.sshAgent.revokeAllowlist(trustKey: entry.trustKey) }
+        } message: { entry in
+            Text("\(SecretsController.display(entry.displayName)) will ask again before its next SSH signature.")
+        }
         .confirmationDialog("Clear SSH history?", isPresented: $clearHistory) {
-            Button("Clear SSH History", role: .destructive) { model.sshAgent.clearAccessLog() }
+            Button("Clear History", role: .destructive) { model.sshAgent.clearAccessLog() }
         } message: { Text("This removes the local SSH request history. It does not revoke any permissions.") }
     }
 
@@ -136,68 +143,109 @@ struct AccessPane: View {
         }
         let temporary = source == .apiKeys ? [] : sshTrusts.filter { matches([$0.displayName, $0.keyName]) }
         let persistent = source == .apiKeys ? [] : alwaysAllowed.filter { matches([$0.displayName]) }
-        return VStack(spacing: 0) {
-            HStack {
-                Text("\(api.count + temporary.count + persistent.count) matching permissions").font(.system(size: 11)).foregroundStyle(.secondary)
-                Spacer()
-                Button("Revoke Temporary…") { revokeAll = true }.buttonStyle(.appSecondarySmall)
-                    .disabled(grants.isEmpty && sshTrusts.isEmpty).accessibilityIdentifier("revokeTemporaryAccess")
-            }.padding(.horizontal, 18).padding(.vertical, 12)
-            if api.isEmpty && temporary.isEmpty && persistent.isEmpty {
-                ContentUnavailableView(query.isEmpty && source == .all ? "No active permissions" : "No matching permissions", systemImage: "checkmark.shield",
-                                       description: Text(showsAPIKeys ? "Temporary approvals appear after you allow a launch or SSH signature. Saving a tool does not grant access." : "SSH approvals appear after you allow a signature."))
+        let none = api.isEmpty && temporary.isEmpty && persistent.isEmpty
+        return Group {
+            if none {
+                VStack(spacing: 14) {
+                    Image(systemName: "checkmark.shield").font(.system(size: 30, weight: .light)).foregroundStyle(.secondary)
+                    Text(query.isEmpty && source == .all ? "Nothing has access right now" : "No matching permissions")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(showsAPIKeys ? "When you approve a tool launch or an SSH signature for a while, it appears here so you can end it early. Saving a tool grants nothing."
+                                      : "When you approve an SSH signature for a while, it appears here so you can end it early.")
+                        .font(.system(size: 12)).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 380)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
             } else {
                 ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 16) {
+                    VStack(alignment: .leading, spacing: 28) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(verbatim: summary(api.count + temporary.count, persistent.count))
+                                .font(.system(size: 12)).foregroundStyle(.secondary)
+                            Spacer()
+                            Button("End All Temporary Access…") { revokeAll = true }.buttonStyle(.appSecondarySmall)
+                                .disabled(grants.isEmpty && sshTrusts.isEmpty).accessibilityIdentifier("revokeTemporaryAccess")
+                        }
                         if !api.isEmpty {
-                            sectionTitle("API key delivery", note: "A specific saved tool and launcher process. Delivered keys cannot be recalled.")
-                            ForEach(api) { grant in
-                                let entry = lookup[grant.tool]
-                                VStack(alignment: .leading, spacing: 8) {
-                                    permissionHeader(entry?.profile.title ?? String(localized: "Unavailable tool"), subtitle: grant.caller.label, action: "Revoke") {
+                            group("Tool launches", note: "Each approval covers one saved tool started from one terminal window. Keys already delivered stay with the program.") {
+                                ForEach(api) { grant in
+                                    let entry = lookup[grant.tool]
+                                    permissionRow(symbol: entry.map { ToolGlyph.symbol($0.profile) } ?? "terminal",
+                                                  title: entry?.profile.title ?? String(localized: "Unavailable tool"),
+                                                  subtitle: [grant.caller.label, entry.map { $0.keys.count == 1 ? String(localized: "1 key") : String(localized: "\($0.keys.count) keys") }]
+                                                      .compactMap { $0 }.joined(separator: " · "),
+                                                  expiry: apiExpiry(grant), forever: grant.deadline == nil,
+                                                  action: "End", last: grant.id == api.last?.id) {
                                         model.secrets.revokeGrant(grant.id)
-                                    }
-                                    Label(apiExpiry(grant), systemImage: grant.deadline == nil ? "lock" : "clock")
-                                        .font(.system(size: 12)).foregroundStyle(.secondary)
-                                    if let entry {
-                                        DisclosureGroup("\(entry.keys.count) key bindings") {
-                                            ForEach(entry.keys) { key in
-                                                Text(verbatim: key.name + " → " + key.binding.variable)
-                                                    .font(.system(size: 12)).frame(maxWidth: .infinity, alignment: .leading)
-                                            }
-                                        }.font(.system(size: 12))
-                                    }
-                                    Divider().opacity(0.5)
-                                }.accessibilityIdentifier("apiAccess-\(grant.id)")
+                                    }.accessibilityIdentifier("apiAccess-\(grant.id)")
+                                }
                             }
                         }
                         if !temporary.isEmpty {
-                            sectionTitle("Temporary SSH signing", note: "The app may request signatures with the listed SSH key. Private keys stay in Triwarden.")
-                            ForEach(temporary) { trust in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    permissionHeader(trust.displayName, subtitle: trust.keyName, action: "Revoke") { model.sshAgent.revokeTrust(id: trust.id) }
-                                    if let until = trust.until {
-                                        Text("\(max(0, Int(ceil(until.timeIntervalSinceNow)))) seconds remaining").monospacedDigit()
-                                            .font(.system(size: 12)).foregroundStyle(.secondary)
-                                    } else { Label("Until the vault locks", systemImage: "lock").font(.system(size: 12)).foregroundStyle(.secondary) }
-                                    Divider().opacity(0.5)
+                            group("SSH signing", note: "These apps can sign with the listed key without asking. The private key never leaves Triwarden.") {
+                                ForEach(temporary) { trust in
+                                    permissionRow(symbol: "key.fill", title: trust.displayName, subtitle: trust.keyName,
+                                                  expiry: trust.until.map { Self.remaining(until: $0) } ?? String(localized: "Until the vault locks"),
+                                                  forever: trust.until == nil, action: "End", last: trust.id == temporary.last?.id) {
+                                        model.sshAgent.revokeTrust(id: trust.id)
+                                    }
                                 }
                             }
                         }
                         if !persistent.isEmpty {
-                            sectionTitle("Always Allowed SSH apps", note: "Applies to available SSH keys while the vault is unlocked. This permission survives lock and restart.")
-                            ForEach(persistent) { entry in
-                                VStack(alignment: .leading, spacing: 8) {
-                                    permissionHeader(entry.displayName, subtitle: String(localized: "Persistent SSH permission"), action: "Remove") {
-                                        model.sshAgent.revokeAllowlist(trustKey: entry.trustKey)
+                            group("Always allowed", note: "Never asks while the vault is unlocked, and survives lock and restart. Remove an app to be asked again.") {
+                                ForEach(persistent) { entry in
+                                    permissionRow(symbol: "checkmark.seal", title: entry.displayName, subtitle: String(localized: "All available SSH keys"),
+                                                  expiry: nil, forever: true, action: "Remove…", last: entry.id == persistent.last?.id) {
+                                        removeAlways = entry
                                     }
-                                    Divider().opacity(0.5)
                                 }
                             }
                         }
-                    }.padding(20).frame(maxWidth: 800, alignment: .leading).frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
+                    .padding(.horizontal, 32).padding(.top, 24).padding(.bottom, 32)
+                    .frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity, alignment: .top)
                 }.thinScroller()
             }
+        }
+    }
+
+    private func summary(_ temporary: Int, _ always: Int) -> String {
+        switch (temporary, always) {
+        case (0, _): String(localized: "\(always) always allowed")
+        case (_, 0): String(localized: "\(temporary) temporary")
+        default: String(localized: "\(temporary) temporary · \(always) always allowed")
+        }
+    }
+
+    private func group<Content: View>(_ title: LocalizedStringKey, note: LocalizedStringKey, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                .textCase(.uppercase).tracking(0.4).padding(.leading, 4)
+            VStack(spacing: 0) { content() }
+                .background(Color.panelStrong, in: .rect(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.panelEdge))
+            Text(note).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true).padding(.horizontal, 4)
+        }
+    }
+
+    private func permissionRow(symbol: String, title: String, subtitle: String, expiry: String?, forever: Bool,
+                               action: LocalizedStringKey, last: Bool, perform: @escaping () -> Void) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: symbol).font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                    .frame(width: 30, height: 30)
+                    .background(.primary.opacity(0.05), in: .rect(cornerRadius: 9, style: .continuous))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(verbatim: SecretsController.display(title)).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                    Text(verbatim: SecretsController.display(subtitle)).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                if let expiry {
+                    Label(expiry, systemImage: forever ? "lock" : "timer")
+                        .font(.system(size: 11)).monospacedDigit().foregroundStyle(.secondary).lineLimit(1).fixedSize()
+                }
+                Button(action, action: perform).buttonStyle(.appSecondarySmall).fixedSize()
+                    .accessibilityLabel(Text("\(Text(action)) \(Text(verbatim: SecretsController.display(title)))"))
+            }.padding(.horizontal, 12).padding(.vertical, 10)
+            if !last { Divider().opacity(0.4).padding(.leading, 54) }
         }
     }
 
@@ -205,46 +253,75 @@ struct AccessPane: View {
         let filtered = source == .apiKeys ? [] : events.filter { event in
             outcome.includes(event.outcome) && matches([event.appName, event.keyName, event.via, event.path ?? ""])
         }
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("SSH · \(filtered.count) records").font(.system(size: 12, weight: .medium))
-                Spacer()
-                Button("Clear SSH History…") { clearHistory = true }.buttonStyle(.appSecondarySmall).disabled(events.isEmpty)
-            }.padding(.horizontal, 18).padding(.top, 14)
-            Text(showsAPIKeys ? "SSH requests only · most recent 200 records. API-key launch history is not recorded." : "The most recent 200 SSH requests appear here.")
-                .font(.system(size: 11)).foregroundStyle(.secondary).padding(.horizontal, 18).padding(.vertical, 10)
+        return Group {
             if filtered.isEmpty {
-                ContentUnavailableView(source == .apiKeys ? "API-key history is not available" : "No matching SSH records",
-                                       systemImage: "clock", description: Text(source == .apiKeys ? "You can review and revoke current API-key approvals in Permissions." : "Try another search or result filter."))
+                VStack(spacing: 14) {
+                    Image(systemName: "clock").font(.system(size: 30, weight: .light)).foregroundStyle(.secondary)
+                    Text(source == .apiKeys ? "Tool launches are not recorded" : events.isEmpty ? "No SSH requests yet" : "No matching requests")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text(source == .apiKeys ? "Triwarden keeps no launch log. See current tool approvals in Permissions."
+                                            : events.isEmpty ? "Each time an app asks to sign with an SSH key, the request and its outcome appear here." : "Try another search or result.")
+                        .font(.system(size: 12)).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 380)
+                }.frame(maxWidth: .infinity, maxHeight: .infinity).padding(32)
             } else {
                 TimelineView(.periodic(from: .now, by: 60)) { _ in
-                    List(filtered) { event in SSHAccessRecordRow(event: event).padding(.vertical, 5) }
-                        .listStyle(.inset).scrollContentBackground(.hidden).thinScroller().accessibilityIdentifier("sshAccessHistory")
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 24) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(showsAPIKeys ? "SSH requests · last 200. Tool launches are not recorded." : "SSH requests · last 200.")
+                                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                                Spacer()
+                                Button("Clear History…") { clearHistory = true }.buttonStyle(.appSecondarySmall).disabled(events.isEmpty)
+                            }
+                            ForEach(Self.days(filtered), id: \.day) { day in
+                                VStack(alignment: .leading, spacing: 10) {
+                                    Text(verbatim: Self.dayTitle(day.day)).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                                        .textCase(.uppercase).tracking(0.4).padding(.leading, 4)
+                                    VStack(spacing: 0) {
+                                        ForEach(day.events) { event in
+                                            SSHAccessRecordRow(event: event).padding(.horizontal, 14).padding(.vertical, 9)
+                                            if event.id != day.events.last?.id { Divider().opacity(0.4).padding(.leading, 14) }
+                                        }
+                                    }
+                                    .background(Color.panelStrong, in: .rect(cornerRadius: 14, style: .continuous))
+                                    .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.panelEdge))
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 32).padding(.top, 24).padding(.bottom, 32)
+                        .frame(maxWidth: 720, alignment: .leading).frame(maxWidth: .infinity, alignment: .top)
+                    }.thinScroller().accessibilityIdentifier("sshAccessHistory")
                 }
             }
         }
     }
-    private func sectionTitle(_ title: LocalizedStringKey, note: LocalizedStringKey) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
-            Text(title).font(.system(size: 13, weight: .semibold))
-            Text(note).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
-        }.padding(.top, 5)
-    }
-    private func permissionHeader(_ title: String, subtitle: String, action: LocalizedStringKey, perform: @escaping () -> Void) -> some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: SecretsController.display(title)).font(.system(size: 14, weight: .semibold))
-                Text(verbatim: SecretsController.display(subtitle)).font(.system(size: 12)).foregroundStyle(.secondary)
-            }.fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 12)
-            Button(action, action: perform).buttonStyle(.appSecondarySmall)
-                .accessibilityLabel(Text("\(Text(action)) \(Text(verbatim: SecretsController.display(title)))"))
+
+    private static func days(_ events: [SSHAccessEvent]) -> [(day: Date, events: [SSHAccessEvent])] {
+        let calendar = Calendar.current
+        var order: [Date] = []
+        var groups: [Date: [SSHAccessEvent]] = [:]
+        for event in events {
+            let day = calendar.startOfDay(for: event.date)
+            if groups[day] == nil { order.append(day) }
+            groups[day, default: []].append(event)
         }
+        return order.map { ($0, groups[$0] ?? []) }
+    }
+
+    private static func dayTitle(_ day: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(day) { return String(localized: "Today") }
+        if calendar.isDateInYesterday(day) { return String(localized: "Yesterday") }
+        return day.formatted(.dateTime.weekday(.wide).month(.abbreviated).day())
     }
     private func apiExpiry(_ grant: SecretsActiveGrant) -> String {
-        guard let deadline = grant.deadline else { return String(localized: "Until Triwarden locks") }
+        guard let deadline = grant.deadline else { return String(localized: "Until the vault locks") }
         let parts = ContinuousClock.now.duration(to: deadline).components
-        let seconds = max(0, parts.seconds + (parts.attoseconds > 0 ? 1 : 0))
-        return String(localized: "\(seconds / 60)m \(seconds % 60)s remaining")
+        return Self.remaining(seconds: Int(parts.seconds) + (parts.attoseconds > 0 ? 1 : 0))
+    }
+    private static func remaining(until date: Date) -> String { remaining(seconds: Int(ceil(date.timeIntervalSinceNow))) }
+    private static func remaining(seconds: Int) -> String {
+        let seconds = max(0, seconds)
+        return String(localized: "\(seconds / 60):\(String(format: "%02d", seconds % 60)) left")
     }
 }

@@ -13,12 +13,16 @@ public enum SavedToolCommands {
 
     public static func alias(_ profile: SecretsProfile) throws -> String {
         let command = try launch(profile)
+        return "alias " + aliasName(profile) + "=" + shellQuote(command)
+    }
+
+    /// The short name the suggested alias defines, such as `tw-my-assistant`.
+    public static func aliasName(_ profile: SecretsProfile) -> String {
         let words = profile.title.lowercased().components(separatedBy: CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyz0123456789").inverted)
             .filter { !$0.isEmpty }
         let slug = String(words.joined(separator: "-").prefix(48)).trimmingCharacters(in: CharacterSet(charactersIn: "-"))
         // A prefix avoids common built-in names. The user must select a different name for duplicate titles.
-        let name = "tw-" + (slug.isEmpty ? profile.name : slug)
-        return "alias " + name + "=" + shellQuote(command)
+        return "tw-" + (slug.isEmpty ? profile.name : slug)
     }
 
     public static func validateListArguments(_ arguments: [String]) throws {

@@ -16,26 +16,28 @@ struct SSHAccessRecordRow: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 8)
-            VStack(alignment: .trailing, spacing: 4) {
+            VStack(alignment: .trailing, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Image(systemName: symbol)
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.system(size: 9, weight: .semibold))
                         .accessibilityHidden(true)
                     Text(label)
-                        .font(.system(size: 10, weight: .semibold))
-                        .multilineTextAlignment(.trailing)
-                        .lineLimit(2)
+                        .font(.system(size: 10, weight: .medium))
+                        .lineLimit(1)
                 }
                 .foregroundStyle(event.outcome == .denied ? Color.red : Color.secondary)
-                .padding(.horizontal, 6).padding(.vertical, 2)
+                .padding(.horizontal, 7).padding(.vertical, 3)
                 .overlay {
-                    RoundedRectangle(cornerRadius: 5, style: .continuous)
-                        .strokeBorder(Color(nsColor: .separatorColor), lineWidth: 1)
+                    Capsule(style: .continuous)
+                        .strokeBorder(.primary.opacity(0.12), lineWidth: 1)
                 }
+                .fixedSize()
                 Text(verbatim: SSHAccessClock.label(since: event.date))
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                    .font(.system(size: 10))
+                    .monospacedDigit()
+                    .foregroundStyle(.tertiary)
                     .lineLimit(1)
+                    .padding(.trailing, 7)
             }
         }
         .padding(.vertical, 2)
@@ -62,7 +64,7 @@ struct SSHAccessRecordRow: View {
         case .denied: "Denied"
         case .timedOut: "Timed out"
         case .locked: "Vault locked"
-        case .reusedTrust: "Used existing approval"
+        case .reusedTrust: "Reused approval"
         }
     }
 }

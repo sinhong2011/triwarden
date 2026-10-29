@@ -63,7 +63,7 @@ selftest-tools-browser: build ## Isolated tool search, selection and access-pers
 	@"$(BIN)" --selftest-tools-browser
 
 selftest-tools-preview: build ## Render synthetic light/dark Tools and Access layouts; print the output folder
-	@"$(BIN)" --selftest-tools-preview
+	@TRIWARDEN_SNAPSHOT_DIR="$(SNAP_DIR)" "$(BIN)" --selftest-tools-preview
 
 selftest-secrets-online: build ## Native cancellation checks against the dev Vaultwarden at localhost:28880
 	@"$(BIN)" --selftest-secrets-online

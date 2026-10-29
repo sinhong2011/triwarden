@@ -150,6 +150,9 @@ struct MenuBarContent: View {
                 .disabled(model.isSyncing)
             }
             Spacer()
+            if model.secrets.activeGrantCount > 0 || !model.sshAgent.activeTrusts.isEmpty {
+                FooterButton(symbol: "checkmark.shield", help: "Show Active Access") { model.revealAccessStatus() }
+            }
             FooterButton(symbol: "macwindow", help: "Open Triwarden") { model.bringToFront() }
             FooterButton(symbol: "gearshape", help: "Settings…") { model.showSettings() }
             FooterButton(symbol: "power", help: "Quit Triwarden") { NSApp.terminate(nil) }

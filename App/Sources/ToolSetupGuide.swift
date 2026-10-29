@@ -55,18 +55,17 @@ struct ToolSetupGuide: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Setup Guide").font(.system(size: 18, weight: .semibold))
-                    Spacer()
-                    Text("Step \(step.rawValue + 1) of 5").font(.system(size: 12)).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Setup Guide").font(.system(size: 12, weight: .medium)).foregroundStyle(.secondary)
+                    Text(verbatim: step.guideTitle).font(.system(size: 20, weight: .semibold)).accessibilityAddTraits(.isHeader)
                 }
-                AppSegmented(options: ToolGuide.Step.allCases.map { ($0, LocalizedStringKey($0.guideLabel)) }, selection: $step)
-                    .accessibilityLabel("Guide steps").accessibilityIdentifier("toolGuideSteps")
-            }.padding(22)
+                StepTrack(titles: ToolGuide.Step.allCases.map(\.guideLabel), current: step.rawValue) { index in
+                    step = .init(restoring: index)
+                }.accessibilityIdentifier("toolGuideSteps")
+            }.padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 18)
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    Text(verbatim: step.guideTitle).font(.system(size: 19, weight: .semibold)).accessibilityAddTraits(.isHeader)
                     switch step {
                     case .key: keyStep
                     case .tool: toolStep
@@ -76,7 +75,7 @@ struct ToolSetupGuide: View {
                     }
                     if let error { Text(verbatim: error).font(.system(size: 12)).foregroundStyle(.red) }
                 }.font(.system(size: 13)).fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 22).padding(.bottom, 22).frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 24).padding(.bottom, 24).frame(maxWidth: .infinity, alignment: .leading)
             }.thinScroller()
             Divider().opacity(0.5)
             HStack {
@@ -118,157 +117,289 @@ struct ToolSetupGuide: View {
             .sheet(item: $sheet, onDismiss: childClosed) { child in childSheet(child).environment(model) }
     }
 
+    // MARK: Steps
+
     private var keyStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Keep a provider key in your Bitwarden vault. Choose which saved tool receives it when you approve a launch.")
+        VStack(alignment: .leading, spacing: 18) {
+            lead("Your API key stays in your vault. You choose which tool receives it, and you approve each launch.")
             if model.sessions.isEmpty && !model.previewUnlocked {
-                Text("Unlock an account before you save or select a key.").foregroundStyle(.secondary)
-                Button("Return to Vault") { dismiss(); model.requestedSection = .section(.all) }.buttonStyle(.appPrimarySmall)
-            } else {
-                guideChoice("I have an API key", note: "Save the key once. Set the variable name that your tool expects, such as OPENAI_API_KEY.", action: "Save a Key…") {
-                    practice = false; sheet = .newKey
+                card {
+                    status(symbol: "lock.fill", tint: .orange, title: "Unlock an account first",
+                           note: "Keys are saved to, and read from, an unlocked vault.")
+                    Button("Return to Vault") { dismiss(); model.requestedSection = .section(.all) }.buttonStyle(.appPrimarySmall)
                 }
-                guideChoice("My project has an .env file", note: "Select keys from a masked preview. The importer keeps your source file unchanged.", action: "Import .env File…") { sheet = .importFile }
-                guideChoice("My key is already in the vault", note: "Choose an available API key from an unlocked account.", action: "Choose Saved Key…") { sheet = .keyPicker }
-                DisclosureGroup("Try with a dummy key") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Practice without a provider account or API charges. The form contains a dummy value and TRIWARDEN_TEST_KEY.")
-                        Button("Save a Practice Key…") { practice = true; sheet = .newKey }.buttonStyle(.appSecondarySmall)
-                    }.padding(.top, 8)
-                }.font(.system(size: 12))
+            } else {
+                if keyReady {
+                    card { status(symbol: "checkmark.circle.fill", tint: .green, title: "Key selected", note: "Continue to choose the tool that uses it.") }
+                } else if toolReady {
+                    card { status(symbol: "checkmark.circle.fill", tint: .green, title: "You already have a saved tool", note: "Continue to review it, or add another key below.") }
+                }
+                VStack(spacing: 10) {
+                    StartChoiceCard(symbol: "doc.text", title: "My project has an .env file",
+                                    note: "Pick keys from a masked list. Your file isn't changed.", badge: "Quickest") { sheet = .importFile }
+                    StartChoiceCard(symbol: "plus.circle", title: "I have an API key",
+                                    note: "Paste it once, with the variable name your tool reads, such as OPENAI_API_KEY.") {
+                        practice = false; sheet = .newKey
+                    }
+                    StartChoiceCard(symbol: "key.horizontal", title: "My key is already in the vault",
+                                    note: "Choose an API key from an unlocked account.") { sheet = .keyPicker }
+                }
+                disclosure("Try it with a practice key") {
+                    Text("No provider account or charges. The form fills in a dummy value named TRIWARDEN_TEST_KEY.")
+                    Button("Save a Practice Key…") { practice = true; sheet = .newKey }.buttonStyle(.appSecondarySmall)
+                }
             }
-            if keyReady { Text("A saved key is selected. Continue to choose the tool.").foregroundStyle(.secondary) }
-            if toolReady { Text("You already have a saved tool. Continue to review it.").foregroundStyle(.secondary) }
         }
     }
 
     private var toolStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("A tool setup connects your selected keys to one program and project folder.")
-            Text("The variable name tells the program which environment variable to read. For example, OPENAI_API_KEY can hold your OpenAI key.")
-            Text("Choose a recipe, confirm the installed program, and check each variable name. Review the command before you save.")
-            Button(keyReady ? "Set Up Tool…" : "Choose a Key and Set Up Tool…") {
-                if keyReady { sheet = .setup } else { sheet = .keyPicker }
-            }.buttonStyle(.appPrimarySmall).disabled(model.sessions.isEmpty || profiles.count >= 64)
+        VStack(alignment: .leading, spacing: 18) {
+            lead("A tool is one program in one project folder, plus the keys it gets. Triwarden hands each key over under the variable name the program reads.")
+            card {
+                sectionLabel("For example")
+                Grid(alignment: .leading, horizontalSpacing: 12, verticalSpacing: 9) {
+                    example("sparkles", "Claude Code", "claude", "ANTHROPIC_API_KEY")
+                    example("sparkles", "Codex CLI", "codex", "OPENAI_API_KEY")
+                    example("sparkles", "Gemini CLI", "gemini", "GEMINI_API_KEY")
+                    example("shippingbox", "Your web app", "npm run dev", "STRIPE_SECRET_KEY")
+                    example("chevron.left.forwardslash.chevron.right", "A Python script", "uv run main.py", "HF_TOKEN")
+                }
+                Text("Aider, OpenCode, Cursor CLI, pnpm, Bun and any other program work too.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+                Divider().opacity(0.4)
+                HStack(spacing: 12) {
+                    Button(keyReady ? "Set Up Tool…" : "Choose a Key and Set Up Tool…") {
+                        if keyReady { sheet = .setup } else { sheet = .keyPicker }
+                    }.buttonStyle(.appPrimarySmall).disabled(model.sessions.isEmpty || profiles.count >= 64)
+                    Text("Pick a recipe, then check the program and folder.").font(.system(size: 11)).foregroundStyle(.secondary)
+                }
+            }
             toolSelection
-            DisclosureGroup("Practice with Python") {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Save this script as check_key.py in a test folder. Choose Python script and select that file during setup.")
-                    Text(verbatim: Self.practiceScript).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
-                    Button("Copy Practice Script") { model.copyPlain(Self.practiceScript) }.buttonStyle(.appSecondarySmall)
-                    Text("The script checks the dummy key without printing it. Run it through the saved Triwarden launch.")
-                }.padding(.top, 8)
-            }.font(.system(size: 12))
-            Text("Program checks do not verify project scripts or plugins. Choose a project you trust.")
-                .font(.system(size: 12)).foregroundStyle(.secondary)
-            Text("Start the tool through the saved launch. An already-running tool does not receive new keys automatically.")
-                .font(.system(size: 12)).foregroundStyle(.secondary)
+            disclosure("Practice with Python") {
+                Text("Save this as check_key.py in a test folder. Choose Python script during setup and select the file.")
+                CommandWell(command: Self.practiceScript.trimmingCharacters(in: .newlines), copyLabel: "Copy") {
+                    model.copyPlain(Self.practiceScript)
+                }
+                Text("It checks the practice key without printing it.")
+            }
+            footnote("Triwarden checks the program, not the project's scripts or plugins, so choose a folder you trust. A tool that's already running doesn't get new keys; start it again through Triwarden.")
         }
     }
 
     private var helperStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("The terminal helper, tw, connects your terminal to Triwarden. Install it once for this app.")
-            Text("Move Triwarden to its permanent location first. Open helper setup, check the install destination, and run the copied command in Terminal.")
-            Button("Open Terminal Helper Setup…") { sheet = .helper }.buttonStyle(.appPrimarySmall)
-            if helper == .installed {
-                Label("The helper links to this signed app.", systemImage: "checkmark").foregroundStyle(.secondary)
-            } else if helper != nil {
-                Text("The helper needs setup or repair. Complete helper setup, then return here.").foregroundStyle(.secondary)
-            } else { ProgressView().controlSize(.small) }
-            Button("Check Again") { helperCheck += 1 }.buttonStyle(.appSecondarySmall)
-            Text("Triwarden does not edit .zshrc or .bashrc. Helper setup shows the location before you run the install command.")
-                .font(.system(size: 12)).foregroundStyle(.secondary)
-            toolSelection
+        VStack(alignment: .leading, spacing: 18) {
+            lead("tw is the small command that lets your terminal ask Triwarden for keys. Install it once and every saved tool can use it.")
+            card {
+                switch helper {
+                case .installed?:
+                    status(symbol: "checkmark.circle.fill", tint: .green, title: "tw is installed", note: "It links to this copy of Triwarden.")
+                case nil:
+                    HStack(spacing: 8) { ProgressView().controlSize(.small); Text("Checking…").foregroundStyle(.secondary) }
+                default:
+                    status(symbol: "exclamationmark.circle.fill", tint: .orange, title: "tw isn't set up yet",
+                           note: "Setup copies one command and opens Terminal. You enter your Mac password there.")
+                }
+                HStack(spacing: 10) {
+                    if helper != .installed {
+                        Button("Install Terminal Helper…") { sheet = .helper }.buttonStyle(.appPrimarySmall)
+                        Button("Check Again") { helperCheck += 1 }.buttonStyle(.appSecondarySmall)
+                    } else {
+                        Button("Helper Details…") { sheet = .helper }.buttonStyle(.appSecondarySmall)
+                    }
+                }
+            }
+            if !profiles.isEmpty { toolSelection }
+            footnote("Triwarden never edits .zshrc or .bashrc. Move Triwarden to Applications first so tw keeps working.")
         }
     }
 
     private var launchStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
+            lead("Run the tool once through Triwarden to see the approval card and check that everything works.")
             toolSelection
             if let target, toolReady, helper == .installed {
-                FormCard(title: "Launch command") {
-                    Text(verbatim: (try? SavedToolCommands.launch(target.profile)) ?? "")
-                        .font(.system(size: 12, design: .monospaced)).textSelection(.enabled)
-                    Button(copied ? "Launch Copied" : "Copy Launch") { copyLaunch(target.profile) }
-                        .buttonStyle(.appPrimarySmall)
+                card {
+                    sectionLabel("Run this in Terminal")
+                    CommandWell(command: (try? SavedToolCommands.launch(target.profile)) ?? "", copyLabel: "Copy", prominent: true) {
+                        copyLaunch(target.profile)
+                    }
+                    Divider().opacity(0.4)
+                    VStack(alignment: .leading, spacing: 10) {
+                        numbered(1, "Paste and run it. Keep Triwarden open and the account unlocked.")
+                        numbered(2, "On the approval card, check the tool, folder, and keys.")
+                        numbered(3, "Choose Once for this first test, then confirm with Touch ID or your password.")
+                        numbered(4, "Watch the tool's output to see that it started.")
+                    }
+                    Divider().opacity(0.4)
+                    Toggle("The tool started as expected", isOn: $launchConfirmed)
+                        .toggleStyle(.checkbox).font(.system(size: 12, weight: .medium)).accessibilityIdentifier("confirmToolGuideLaunch")
                 }
-                instruction(1, "Paste the command into Terminal and run it. Keep Triwarden open and the selected accounts unlocked.")
-                instruction(2, "Review the approval card. Check the tool, project folder, and selected keys.")
-                instruction(3, "For your first test, select Allow Once. Then complete Touch ID or your Mac password.")
-                instruction(4, "Check the tool's output. A saved setup or copied command does not confirm a successful launch.")
-                Toggle("I ran the launch and the tool started as expected.", isOn: $launchConfirmed)
-                    .toggleStyle(.checkbox).font(.system(size: 12)).accessibilityIdentifier("confirmToolGuideLaunch")
             } else {
-                Text("Select a ready tool and complete helper setup before you test the launch.").foregroundStyle(.secondary)
+                card {
+                    status(symbol: "exclamationmark.circle.fill", tint: .orange, title: "Not ready to launch yet",
+                           note: helper == .installed ? "Choose a ready tool above." : "Install the terminal helper in the previous step.")
+                }
             }
-            DisclosureGroup("If the launch fails") {
-                Text("If no card appears, check helper setup and keep Triwarden open. Unlock any locked account. If vault sync fails, restore the connection first. Select missing keys again through Edit Setup in Tools. Check the key and provider account if the provider reports an error. Never share key values in a report.")
-                    .font(.system(size: 12)).padding(.top, 8)
+            disclosure("If the launch doesn't work") {
+                Text("No approval card: check that tw is installed and Triwarden is open.")
+                Text("Account locked or sync failed: unlock or reconnect, then run it again.")
+                Text("Missing key: open the tool in Tools and choose the key again.")
+                Text("Provider error: check the key in your provider account. Never paste key values into a report.")
             }
         }
     }
 
     private var dailyStep: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("Next time, open Tools and copy the saved launch. You can also run tw run to choose a saved tool.")
-            Text("Once is the default approval. You can choose 10 minutes or Until lock for repeated launches from the same launcher process.")
-            Text("Open Access > Permissions to review or revoke temporary access. Lock and revoke stop future delivery. Programs retain keys already received.")
-            Text("The program receives the raw keys and can retain or transmit them. Other processes under your user account may inspect them.")
-                .font(.system(size: 12)).foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 18) {
+            lead("You're set up. From now on it takes one command.")
             toolSelection
             if let target {
-                DisclosureGroup("More launch options") {
-                    VStack(alignment: .leading, spacing: 12) {
-                        Button("Copy Shell Alias") {
-                            do { model.copyPlain(try SavedToolCommands.alias(target.profile)) }
-                            catch { self.error = error.localizedDescription }
-                        }.buttonStyle(.appSecondarySmall)
-                        Text("Paste the alias into your terminal yourself. Triwarden does not change shell settings.")
-                        Button("Save .env References…") { sheet = .export }.buttonStyle(.appSecondarySmall)
-                        Text("This separate .env.triwarden file contains references. Use it with tw, not an ordinary dotenv loader.")
-                        Text("Import keeps your old .env unchanged. After testing, remove imported assignments in your editor. Do not leave empty assignments.")
-                    }.font(.system(size: 12)).padding(.top, 8)
+                card {
+                    sectionLabel("Start it with a short name")
+                    CommandWell(command: SavedToolCommands.aliasName(target.profile), copyLabel: "Copy Alias", prominent: true) {
+                        do { model.copyPlain(try SavedToolCommands.alias(target.profile)) }
+                        catch { self.error = error.localizedDescription }
+                    }
+                    Text("Add the copied line to ~/.zshrc, then open a new terminal.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
-            Button("Open Tools") { dismiss(); model.requestedSection = .toolLaunches }.buttonStyle(.appPrimarySmall)
-            Button("Review Access") { dismiss(); model.requestedSection = .access }.buttonStyle(.appSecondarySmall)
+            VStack(spacing: 0) {
+                tip("square.on.square", "Copy the launch from Tools", "Or run tw run and pick a saved tool.")
+                Divider().opacity(0.4).padding(.leading, 52)
+                tip("timer", "Approve for longer", "Choose 10 minutes or Until lock on the card to skip repeat prompts.")
+                Divider().opacity(0.4).padding(.leading, 52)
+                tip("hand.raised", "Stay in control", "Access shows every approval. End temporary access there at any time.")
+            }
+            .background(Color.panelStrong, in: .rect(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.panelEdge))
+            HStack(spacing: 10) {
+                Button("Open Tools") { dismiss(); model.requestedSection = .toolLaunches }.buttonStyle(.appPrimarySmall)
+                Button("Review Access") { dismiss(); model.requestedSection = .access }.buttonStyle(.appSecondarySmall)
+                Spacer()
+                if target != nil {
+                    Button("Save .env References…") { sheet = .export }.buttonStyle(.appSecondarySmall)
+                        .help(Text("Writes .env.triwarden with references, not values. Use it with tw, not an ordinary dotenv loader."))
+                }
+            }
+            footnote("The program gets the real keys and can keep or send them. Locking or ending access stops future launches, not keys a program already has.")
         }
     }
 
     @ViewBuilder private var toolSelection: some View {
         if !profiles.isEmpty {
-            FormField(label: "Saved tool") {
-                SoftMenu(options: [("", String(localized: "Choose a saved tool…"))] + profiles.map { ($0.name, $0.title + " · " + $0.directory) },
-                         selection: $selectedTool, accessibilityLabel: "Saved tool")
-                if let target {
-                    Text(verbatim: target.availability.title).font(.system(size: 12)).foregroundStyle(.secondary)
-                    if !toolReady {
-                        Text("Unlock its accounts, resume the tool, or repair its key settings in Tools before you continue.")
-                            .font(.system(size: 12)).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 16) {
+                    Text("Tool").font(.system(size: 12)).foregroundStyle(.secondary).frame(width: 40, alignment: .leading)
+                    SoftMenu(options: [("", String(localized: "Choose a saved tool…"))] + profiles.map { ($0.name, $0.title + " · " + ToolLaunchesPane.abbreviated($0.directory)) },
+                             selection: $selectedTool, accessibilityLabel: "Saved tool")
+                    if let target {
+                        let state = ToolState(target, helperReady: true)
+                        HStack(spacing: 6) {
+                            StatusDot(state: state)
+                            Text(verbatim: state == .ready ? String(localized: "Ready") : target.availability.title)
+                                .font(.system(size: 11)).foregroundStyle(.secondary)
+                        }.fixedSize()
+                    }
+                }
+                .padding(.horizontal, 14).frame(minHeight: 44)
+                .background(Color.panelStrong, in: .rect(cornerRadius: 14, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.panelEdge))
+                if target != nil, !toolReady {
+                    HStack(spacing: 10) {
+                        Text("Unlock its account, resume it, or fix its keys in Tools.").font(.system(size: 11)).foregroundStyle(.secondary)
                         Button("Open Tools to Repair") { dismiss(); model.requestedToolSelection = selectedTool; model.requestedSection = .toolLaunches }
                             .buttonStyle(.appSecondarySmall)
-                    }
+                    }.padding(.horizontal, 4)
                 }
             }
         } else if step != .tool {
-            Text("Save a tool in step 2 before you continue.").foregroundStyle(.secondary)
+            card { status(symbol: "exclamationmark.circle.fill", tint: .orange, title: "No saved tool yet", note: "Set one up in step 2 first.") }
         }
     }
 
-    private func guideChoice(_ title: LocalizedStringKey, note: LocalizedStringKey, action: LocalizedStringKey, perform: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            Text(title).font(.system(size: 13, weight: .semibold))
-            Text(note).font(.system(size: 12)).foregroundStyle(.secondary)
-            Button(action, action: perform).buttonStyle(.appSecondarySmall)
+    // MARK: Building blocks
+
+    private func lead(_ text: LocalizedStringKey) -> some View {
+        Text(text).font(.system(size: 13)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func footnote(_ text: LocalizedStringKey) -> some View {
+        Label { Text(text) } icon: { Image(systemName: "info.circle") }
+            .font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func sectionLabel(_ text: LocalizedStringKey) -> some View {
+        Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary).textCase(.uppercase).tracking(0.4)
+    }
+
+    private func chip(_ text: String) -> some View {
+        Text(verbatim: text).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundStyle(.secondary)
+            .padding(.horizontal, 7).padding(.vertical, 3)
+            .background(.primary.opacity(0.05), in: .rect(cornerRadius: 6, style: .continuous))
+    }
+
+    /// One recipe example: what runs, the command, and the variable it reads its key from.
+    private func example(_ symbol: String, _ title: LocalizedStringKey, _ command: String, _ variable: String) -> some View {
+        GridRow {
+            Label { Text(title).font(.system(size: 12, weight: .medium)) } icon: {
+                Image(systemName: symbol).font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary).frame(width: 16)
+            }
+            Text(verbatim: command).font(.system(size: 11, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1)
+            Image(systemName: "arrow.left").font(.system(size: 9, weight: .semibold)).foregroundStyle(.tertiary)
+                .accessibilityLabel("reads")
+            chip(variable)
         }
     }
-    private func instruction(_ number: Int, _ text: LocalizedStringKey) -> some View {
+
+    private func card(@ViewBuilder _ content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 14) { content() }
+            .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.panelStrong, in: .rect(cornerRadius: 16, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.panelEdge))
+    }
+
+    private func status(symbol: String, tint: Color, title: LocalizedStringKey, note: LocalizedStringKey) -> some View {
         HStack(alignment: .top, spacing: 10) {
-            Text(verbatim: "\(number).").foregroundStyle(.secondary).accessibilityHidden(true)
-            Text(text)
+            Image(systemName: symbol).font(.system(size: 18)).foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .semibold))
+                Text(note).font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func numbered(_ number: Int, _ text: LocalizedStringKey) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(verbatim: String(number)).font(.system(size: 10, weight: .semibold)).monospacedDigit()
+                .frame(width: 18, height: 18).overlay(Circle().strokeBorder(.primary.opacity(0.2)))
+                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 4 }
+                .accessibilityHidden(true)
+            Text(text).font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func tip(_ symbol: String, _ title: LocalizedStringKey, _ note: LocalizedStringKey) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).font(.system(size: 13, weight: .medium)).foregroundStyle(.secondary)
+                .frame(width: 26, height: 26).background(.primary.opacity(0.05), in: .rect(cornerRadius: 7, style: .continuous))
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 12, weight: .semibold))
+                Text(note).font(.system(size: 11)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 0)
+        }.padding(.horizontal, 14).padding(.vertical, 11)
+    }
+
+    private func disclosure(_ title: LocalizedStringKey, @ViewBuilder _ content: () -> some View) -> some View {
+        let body = content()
+        return DisclosureGroup(title) {
+            VStack(alignment: .leading, spacing: 10) { body }
+                .font(.system(size: 12)).foregroundStyle(.secondary).padding(.top, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }.font(.system(size: 12))
     }
+
     @ViewBuilder private func childSheet(_ child: Sheet) -> some View {
         switch child {
         case .newKey:

@@ -218,6 +218,13 @@ struct TriwardenApp: App {
             CommandGroup(replacing: .appSettings) {
                 Button("Settings…") { model.showSettings() }
                     .keyboardShortcut(",", modifiers: .command)
+                if model.showsAPIKeyTools {
+                    Button("Install Terminal Helper…") { model.showHelperSetup() }
+                }
+                #if DEBUG
+                Button { model.showNotchDemo() } label: { Text(verbatim: "Show Notch Status Demo") }
+                    .keyboardShortcut("n", modifiers: [.control, .option, .command])
+                #endif
             }
             CommandGroup(after: .appSettings) {
                 Button("Lock Vault") { model.lock(animated: true) }
