@@ -12,6 +12,9 @@ public enum NativeHost {
     /// unpacked build has this ID too. scripts/test-install-chrome-path.py checks the two agree.
     public static let chromeExtensionID = "deiehcliaaoigminkkbnjlgmaoagimdm"
 
+    /// The extension's page on the Chrome Web Store. Chrome, Edge, Brave and the other Chromium browsers install from it.
+    public static let chromeStoreURL = URL(string: "https://chromewebstore.google.com/detail/\(chromeExtensionID)")!
+
     public struct Browser: Identifiable, Hashable, Sendable {
         public enum Family: Sendable { case chromium, firefox }
         public let id: String
@@ -23,6 +26,11 @@ public enum NativeHost {
         public let dataFolder: String
         /// Where it reads native-messaging hosts from, under `~/Library/Application Support`.
         public let hostFolder: String
+    }
+
+    /// Where to install the extension for `browser`; nil when it has no listing yet (Firefox, until Mozilla approves it).
+    public static func storeURL(for browser: Browser) -> URL? {
+        browser.family == .chromium ? chromeStoreURL : nil
     }
 
     public static let browsers: [Browser] = [

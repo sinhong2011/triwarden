@@ -496,6 +496,8 @@ private struct BrowserSettings: View {
     /// What this app wrote, per browser: the path of `tw` and, for Chromium, the extension id. The app is sandboxed and
     /// cannot read the browsers' folders, so it keeps its own note.
     @AppStorage("browserHosts") private var recordedHosts = Data()
+    /// Browsers whose store page was opened from here, so the row moves on to Connect (the app cannot see what is installed in a browser).
+    @AppStorage("browserInstallOpened") private var installOpened = Data()
     @State private var problem: String?
 
     private var tool: String { CLIBridge.toolPath }
@@ -527,12 +529,6 @@ private struct BrowserSettings: View {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Safari-Extensions-Settings")!)
                     }
                 }
-                LabeledContent("Chrome, Edge, Brave") {
-                    Button("Show Extension Folder") {
-                        let folder = Bundle.main.bundleURL.appending(path: "Contents/PlugIns/TriwardenSafari.appex/Contents/Resources/manifest.json")
-                        NSWorkspace.shared.activateFileViewerSelecting([folder])
-                    }
-                }
                 ForEach(NativeHost.browsers) { browser in
                     row(browser)
                 }
@@ -542,7 +538,7 @@ private struct BrowserSettings: View {
             } header: {
                 Text("Connect a browser")
             } footer: {
-                Text("Safari needs no setup beyond turning Triwarden on there. Chrome, Edge, Brave and Firefox start Triwarden through a small file in their own folder: Connect asks you to confirm that folder, then writes it. Press Connect again if you move Triwarden.")
+                Text("Install the extension from the browser’s store, then press Connect: Triwarden asks you to confirm the browser’s folder and adds one small file there. Safari needs no setup beyond turning Triwarden on in Safari. Press Connect again if you move Triwarden.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }
@@ -555,12 +551,20 @@ private struct BrowserSettings: View {
     @ViewBuilder private func row(_ browser: NativeHost.Browser) -> some View {
         let state = states[browser.id] ?? .notInstalled
         let seen = model.cli.seenBrowsers[browser.bundleID]
+        let store = NativeHost.storeURL(for: browser)
+        // Not connected yet and a store page exists: first Install, then (once it was opened) Connect.
+        let needsInstall = store != nil && state == .notConnected && !openedStore(browser)
         LabeledContent {
             HStack(spacing: 10) {
-                status(state, seen: seen)
+                status(state, seen: seen, openedStore: openedStore(browser))
                 if state != .notInstalled {
-                    Button(state == .connected ? "Reconnect" : "Connect") { connect(browser) }
-                        .disabled(!browserEnabled)
+                    if needsInstall, let store {
+                        Button("Install") { installFromStore(browser, store) }
+                            .disabled(!browserEnabled)
+                    } else {
+                        Button(state == .connected ? "Reconnect" : "Connect") { connect(browser) }
+                            .disabled(!browserEnabled)
+                    }
                 }
             }
         } label: {
@@ -568,9 +572,25 @@ private struct BrowserSettings: View {
         }
     }
 
+    private func openedStore(_ browser: NativeHost.Browser) -> Bool {
+        ((try? JSONDecoder().decode(Set<String>.self, from: installOpened)) ?? []).contains(browser.id)
+    }
+
+    private func installFromStore(_ browser: NativeHost.Browser, _ url: URL) {
+        var opened = (try? JSONDecoder().decode(Set<String>.self, from: installOpened)) ?? []
+        opened.insert(browser.id)
+        installOpened = (try? JSONEncoder().encode(opened)) ?? Data()
+        // Open the store page in that browser, not the default one.
+        if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: browser.bundleID) {
+            NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+        } else {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
     /// What the row says about the connection: a green check and "Connected" once the browser's extension has reached
     /// Triwarden (with when), a note when it was connected but the app has moved, otherwise nothing.
-    @ViewBuilder private func status(_ state: NativeHost.State, seen: CLIBridge.Seen?) -> some View {
+    @ViewBuilder private func status(_ state: NativeHost.State, seen: CLIBridge.Seen?, openedStore: Bool) -> some View {
         if state == .notInstalled {
             Text("Not installed").font(.caption).foregroundStyle(.tertiary)
         } else if let seen, state != .notConnected, !{ if case .movedApp = state { true } else { false } }() {
@@ -587,6 +607,8 @@ private struct BrowserSettings: View {
                 Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
             }
             .font(.caption).foregroundStyle(.secondary)
+        } else if state == .notConnected, openedStore {
+            Text("Add it in the browser, then connect").font(.caption).foregroundStyle(.secondary)
         } else if case .movedApp = state {
             Label {
                 Text("Triwarden moved · connect again")

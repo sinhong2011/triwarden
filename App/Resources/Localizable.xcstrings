@@ -12822,6 +12822,180 @@
         }
       }
     },
+    "Install": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instalar"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installer"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "インストール"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "설치"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ติดตั้ง"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安裝"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安装"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安裝"
+          }
+        }
+      }
+    },
+    "Add it in the browser, then connect": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add it in the browser, then connect"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añádela en el navegador y conecta"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez-la dans le navigateur, puis connectez"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブラウザで追加してから接続"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "브라우저에서 추가한 다음 연결"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เพิ่มในเบราว์เซอร์ แล้วเชื่อมต่อ"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "喺瀏覽器加入後再連接"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在浏览器中添加，然后连接"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在瀏覽器中加入，然後連接"
+          }
+        }
+      }
+    },
+    "Install the extension from the browser’s store, then press Connect: Triwarden asks you to confirm the browser’s folder and adds one small file there. Safari needs no setup beyond turning Triwarden on in Safari. Press Connect again if you move Triwarden.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Install the extension from the browser’s store, then press Connect: Triwarden asks you to confirm the browser’s folder and adds one small file there. Safari needs no setup beyond turning Triwarden on in Safari. Press Connect again if you move Triwarden."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Instala la extensión desde la tienda del navegador y pulsa Conectar: Triwarden te pide confirmar la carpeta del navegador y añade allí un pequeño archivo. Safari no necesita más ajustes que activar Triwarden en Safari. Pulsa Conectar de nuevo si mueves Triwarden."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Installez l’extension depuis la boutique du navigateur, puis appuyez sur Connecter : Triwarden vous demande de confirmer le dossier du navigateur et y ajoute un petit fichier. Safari n’a besoin que d’activer Triwarden dans Safari. Appuyez de nouveau sur Connecter si vous déplacez Triwarden."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ブラウザのストアから拡張機能をインストールし、「接続」を押します。Triwarden がブラウザのフォルダの確認を求め、小さなファイルを1つ追加します。Safari では Safari 側で Triwarden をオンにするだけです。Triwarden を移動したときは、もう一度「接続」を押してください。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "브라우저 스토어에서 확장 프로그램을 설치한 다음 연결을 누르세요. Triwarden이 브라우저 폴더 확인을 요청하고 작은 파일 하나를 추가합니다. Safari는 Safari에서 Triwarden을 켜기만 하면 됩니다. Triwarden을 옮겼다면 연결을 다시 누르세요."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ติดตั้งส่วนขยายจากร้านค้าของเบราว์เซอร์ แล้วกดเชื่อมต่อ: Triwarden จะขอให้คุณยืนยันโฟลเดอร์ของเบราว์เซอร์และเพิ่มไฟล์เล็กๆ หนึ่งไฟล์ Safari แค่เปิด Triwarden ใน Safari ก็พอ กดเชื่อมต่อใหม่หากคุณย้าย Triwarden"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "喺瀏覽器嘅商店安裝擴充功能，然後㩒「連接」：Triwarden 會請你確認瀏覽器嘅資料夾，並喺入面加一個細檔案。Safari 只需要喺 Safari 開啟 Triwarden。如果搬咗 Triwarden 位置，請再㩒一次「連接」。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从浏览器的商店安装扩展，然后点按“连接”：Triwarden 会请你确认浏览器的文件夹，并在其中添加一个小文件。Safari 只需在 Safari 中打开 Triwarden。如果移动了 Triwarden，请再点按一次“连接”。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從瀏覽器的商店安裝擴充功能，然後按「連接」：Triwarden 會請你確認瀏覽器的資料夾，並在其中加入一個小檔案。Safari 只需在 Safari 中開啟 Triwarden。如果移動了 Triwarden，請再按一次「連接」。"
+          }
+        }
+      }
+    },
     "Allow the browser extension": {
       "localizations": {
         "ja": {
