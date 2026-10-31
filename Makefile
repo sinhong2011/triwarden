@@ -19,7 +19,7 @@ DEV_CA  := $(CURDIR)/DevServer/data/root.crt
 SNAP_DIR := $(HOME)/Library/Group Containers/FX3VR69P5K.io.github.sinhong2011.triwarden/snapshots
 
 .DEFAULT_GOAL := help
-.PHONY: help project build run site test bench screenshots license license-keys test-dev selftest selftest-compatibility selftest-secrets selftest-secrets-online selftest-secrets-interactive selftest-secrets-presentation selftest-cloud snapshots dev-up dev-seed dev-status dev-logs release clean
+.PHONY: help project build run site extension test bench screenshots license license-keys test-dev selftest selftest-compatibility selftest-secrets selftest-secrets-online selftest-secrets-interactive selftest-secrets-presentation selftest-cloud snapshots dev-up dev-seed dev-status dev-logs release clean
 
 help: ## Show this list
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[1m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -40,6 +40,9 @@ run: build ## Build and open the Debug app (quits any other Triwarden first)
 
 site: ## Run the website development server
 	@pnpm --dir site dev --port 4321
+
+extension: ## Develop the browser extension with WXT (Chrome; BROWSER=firefox for Firefox)
+	@cd BrowserExtension/WebExtension && pnpm install --frozen-lockfile && pnpm exec wxt $(if $(BROWSER),-b $(BROWSER),)
 
 test: ## VaultCore unit tests (dev-server tests skip themselves)
 	@cd Packages/VaultCore && swift test

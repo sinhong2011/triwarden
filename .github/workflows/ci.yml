@@ -204,6 +204,17 @@ jobs:
       - name: Install XcodeGen
         if: needs.changes.outputs.code == 'true'
         run: brew install xcodegen
+      # The Safari appex builds the web extension with WXT in an Xcode build phase.
+      - uses: pnpm/action-setup@v4
+        if: needs.changes.outputs.code == 'true'
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        if: needs.changes.outputs.code == 'true'
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: BrowserExtension/WebExtension/pnpm-lock.yaml
       - name: Generate project
         if: needs.changes.outputs.code == 'true'
         run: xcodegen generate
@@ -277,16 +288,20 @@ jobs:
       - name: Verify local command failure reporting
         if: needs.changes.outputs.code == 'true'
         run: python3 scripts/test-make-exit-codes.py
-      # tw is built as a dependency of the app; install-chrome must name the real binary when
+      # tw is built as a dependency of the app; install-chrome and install-firefox must name the real binary when
       # started through PATH, not the working directory plus "tw".
-      - name: Verify install-chrome host path
+      - name: Verify install-chrome and install-firefox host manifests
         if: needs.changes.outputs.code == 'true'
         run: python3 scripts/test-install-chrome-path.py
-      - name: JavaScript syntax
+      - name: Web extension (type-check, tests, Chrome and Firefox builds)
         if: needs.changes.outputs.code == 'true'
+        working-directory: BrowserExtension/WebExtension
         run: |
-          node --check BrowserExtension/WebExtension/content.js
-          node --check BrowserExtension/WebExtension/background.js
+          pnpm install --frozen-lockfile
+          pnpm compile
+          pnpm test
+          pnpm build
+          pnpm build:firefox
       - name: Upload test evidence
         if: always() && needs.changes.outputs.code == 'true'
         uses: actions/upload-artifact@v4

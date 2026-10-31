@@ -1,0 +1,267 @@
+/* Matches the Triwarden app's palette and menu bar panel: a soft neutral selection wash (no colour slab), continuous
+   corners, hairline edges, the vault list's white icon tiles, the app's "485 • 657" code and a spring-in. Colours
+   come from the page's colour scheme, so the menu follows light and dark without asking the page. Brand blue is only
+   ever a fill (the app icon); text and symbols stay neutral. */
+:host {
+  all: initial;
+  color-scheme: light dark;
+  --ink: #1d1d1f; /* not CanvasText: that follows the page's colour scheme, and the menu follows the system's */
+  /* Nearly opaque: unlike the app's glass, this sits over any page, and a page's colours must not tint it. */
+  --card: rgba(255, 255, 255, 0.98);
+  --edge: rgba(0, 0, 0, 0.08);
+  --wash: rgba(0, 0, 0, 0.055);
+  --chip: rgba(0, 0, 0, 0.06);
+  --tile: #fff;
+  --shadow: 0 18px 40px rgba(20, 24, 60, 0.18), 0 2px 8px rgba(20, 24, 60, 0.08);
+}
+@media (prefers-color-scheme: dark) {
+  :host {
+    --ink: #f5f5f7;
+    --card: rgba(38, 39, 43, 0.98);
+    --edge: rgba(255, 255, 255, 0.14);
+    --wash: rgba(255, 255, 255, 0.09);
+    --chip: rgba(255, 255, 255, 0.1);
+    --tile: #f5f5f7;
+    --shadow: 0 18px 44px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* ---- The app icon inside a field ---- */
+.key {
+  position: fixed;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: transparent;
+  cursor: pointer;
+  filter: drop-shadow(0 1px 2px rgba(11, 42, 64, 0.28));
+  transition: transform 160ms cubic-bezier(0.2, 1.2, 0.4, 1), filter 160ms ease;
+}
+.key svg {
+  display: block;
+}
+.key:hover,
+.key:focus-visible {
+  transform: scale(1.12);
+  filter: drop-shadow(0 3px 6px rgba(11, 42, 64, 0.34));
+  outline: none;
+}
+.key:active {
+  transform: scale(0.94);
+}
+
+/* ---- The menu ---- */
+.menu {
+  position: fixed;
+  width: 332px; /* keep in step with MENU_WIDTH in Overlay.tsx */
+  max-width: calc(100vw - 16px);
+  padding: 6px;
+  border-radius: 20px;
+  font: 13px/1.3 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  color: var(--ink);
+  background: var(--card);
+  -webkit-backdrop-filter: saturate(1.6) blur(28px);
+  backdrop-filter: saturate(1.6) blur(28px);
+  box-shadow: var(--shadow), inset 0 0 0 0.5px var(--edge);
+  transform-origin: top left;
+  animation: pop 280ms cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.93) translateY(-4px);
+  }
+}
+
+/* At most five rows show; more scroll, with the app's thin scroller. */
+.list {
+  max-height: 256px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ink) 25%, transparent) transparent;
+}
+
+/* "Passkeys" / "Passwords", only when a site has both. */
+.group {
+  padding: 8px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: color-mix(in srgb, var(--ink) 50%, transparent);
+}
+.group:first-child {
+  padding-top: 4px;
+}
+
+/* Keys that work in a menu that opened by itself. */
+.hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px 4px;
+  margin-top: 4px;
+  border-top: 1px solid var(--edge);
+  font-size: 11px;
+  color: color-mix(in srgb, var(--ink) 50%, transparent);
+}
+.hint kbd {
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  font: 600 10.5px/1.4 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  text-align: center;
+  color: color-mix(in srgb, var(--ink) 70%, transparent);
+  background: var(--chip);
+}
+
+.note {
+  padding: 10px 10px 10px;
+  color: color-mix(in srgb, var(--ink) 62%, transparent);
+}
+
+/* ---- A login row: site icon, name, username, and for code fields the code with its countdown ---- */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  height: 50px;
+  padding: 0 10px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+.row:hover,
+.row[data-active="true"] {
+  background: var(--wash);
+}
+.row:focus-visible {
+  outline: none;
+  background: var(--wash);
+}
+
+/* The vault list's icon tile: white, a hairline edge, continuous corners; letters and logos sit together. */
+.avatar {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: var(--tile);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  padding: 5px;
+  object-fit: contain;
+}
+.avatar .letter {
+  font: 600 15px/1 ui-rounded, -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  text-transform: uppercase;
+  color: rgba(0, 0, 0, 0.62);
+}
+
+.text {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.name {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.detail {
+  font-size: 12px;
+  color: color-mix(in srgb, var(--ink) 58%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The one-time code, as in the app: two halves and a still dot, orange only in the last seconds. */
+.code {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 600 16px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.code[data-masked="true"] {
+  color: color-mix(in srgb, var(--ink) 45%, transparent);
+  letter-spacing: 0.06em;
+}
+.code .dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
+  transition: background-color 200ms ease;
+}
+.code[data-urgent="true"] .dot {
+  background: #ff9f0a;
+}
+
+/* ---- Seconds left on the code: neutral, orange only in the last five ---- */
+.ring {
+  flex: none;
+  position: relative;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: color-mix(in srgb, var(--ink) 58%, transparent);
+  font-variant-numeric: tabular-nums;
+}
+.ring svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  fill: none;
+  stroke-width: 2;
+}
+.ring .track {
+  stroke: var(--chip);
+}
+.ring .arc {
+  stroke: currentColor;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 1s linear, stroke 200ms ease;
+}
+.ring .secs {
+  font-size: 10px;
+  font-weight: 600;
+}
+.ring[data-urgent="true"] {
+  color: #ff9f0a;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu {
+    animation: none;
+  }
+  .key,
+  .row,
+  .ring .arc {
+    transition: none;
+  }
+}

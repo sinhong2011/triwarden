@@ -118,6 +118,15 @@ jobs:
           VALIDATED_SHA: ${{ needs.source.outputs.sha }}
         run: test "$(git rev-parse HEAD)" = "$VALIDATED_SHA"
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: BrowserExtension/WebExtension/pnpm-lock.yaml
+
       - name: Tools
         run: |
           brew install xcodegen

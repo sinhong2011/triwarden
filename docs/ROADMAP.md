@@ -1,6 +1,6 @@
 # Triwarden roadmap
 
-Owner: product. Updated 2026-10-11. Status: ✅ done · 🟡 in progress · ⬜ planned
+Owner: product. Updated 2026-10-28. Status: ✅ done · 🟡 in progress · ⬜ planned
 
 > **Work is tracked in [GitHub Issues](https://github.com/sinhong2011/triwarden/issues)** by milestone
 > ([v0.2](https://github.com/sinhong2011/triwarden/milestone/1), [v0.3](https://github.com/sinhong2011/triwarden/milestone/2), [v1.0](https://github.com/sinhong2011/triwarden/milestone/3)).
@@ -57,6 +57,8 @@ The following capabilities are implemented; continued work focuses on reliabilit
 - App Intents / Shortcuts, Services menu, `tw` CLI over XPC
 - Send, attachments, collections management, emergency access (Vaultwarden)
 - Safari Web Extension + Chromium native messaging (save prompts, inline fill)
+- ✅ Browser extension on Chrome, Edge, Brave and Firefox as well as Safari (WXT + Solid, one source): suggestions on focus, one-time codes with a countdown, right-click fill and copy, Cmd+Shift+L, Connect buttons in Settings › Browser. Listing on the Chrome Web Store and Firefox Add-ons is under way.
+- ⬜ **Passkey sign-in in the browser extension.** Logins that hold a passkey are grouped in the menu, but picking one still fills the password. Real passkey sign-in means intercepting `navigator.credentials.get()` and `create()` in the page (main world), signing in the app (the P-256 signing already exists for the AutoFill passkey provider), and building the WebAuthn response (`clientDataJSON`, `authenticatorData`, counter update, `rpId` and origin checks). It has to coexist with each browser's own passkey prompt and needs testing on real sites. Its own branch, after the store listings.
 
 ## Reliability priorities
 

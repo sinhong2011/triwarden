@@ -9,7 +9,7 @@ import UniformTypeIdentifiers
 struct SettingsView: View {
     enum Pane: String, CaseIterable, Identifiable {
         // Everyday first, then who and how it's protected, then the keys, the connection, the tools, and about.
-        case general, accounts, security, shortcuts, server, developer, secrets, license, about
+        case general, accounts, security, shortcuts, server, browser, developer, secrets, license, about
         var id: Self { self }
         var title: String {
             switch self {
@@ -17,6 +17,7 @@ struct SettingsView: View {
             case .general: String(localized: "General")
             case .shortcuts: String(localized: "Shortcuts")
             case .security: String(localized: "Security")
+            case .browser: String(localized: "Browser")
             case .developer: String(localized: "Developer")
             case .secrets: String(localized: "Secrets")
             case .server: String(localized: "Server")
@@ -30,6 +31,7 @@ struct SettingsView: View {
             case .general: "gearshape"
             case .shortcuts: "keyboard"
             case .security: "lock.shield"
+            case .browser: "safari"
             case .developer: "terminal"
             case .secrets: "key.horizontal"
             case .server: "server.rack"
@@ -74,6 +76,7 @@ struct SettingsView: View {
                 case .general: GeneralSettings()
                 case .shortcuts: ShortcutsSettings()
                 case .security: SecuritySettings()
+                case .browser: BrowserSettings()
                 case .developer: DeveloperSettings()
                 case .secrets: SecretsSettings()
                 case .server: ServerSettings()
@@ -481,6 +484,199 @@ private struct SecuritySettings: View {
     }
 }
 
+// MARK: Browser
+
+private struct BrowserSettings: View {
+    @Environment(AppModel.self) private var model
+    @AppStorage(Pref.browser) private var browserEnabled = false
+    @AppStorage(Pref.browserAutoShow) private var autoShow = true
+    @AppStorage(Pref.browserApprovalSeconds) private var approvalSeconds = 600
+    /// The browsers on this Mac and whether each is connected. Read from the manifests on disk; refreshed after a connect.
+    @State private var states: [String: NativeHost.State] = [:]
+    /// What this app wrote, per browser: the path of `tw` and, for Chromium, the extension id. The app is sandboxed and
+    /// cannot read the browsers' folders, so it keeps its own note.
+    @AppStorage("browserHosts") private var recordedHosts = Data()
+    /// Browsers whose store page was opened from here, so the row moves on to Connect (the app cannot see what is installed in a browser).
+    @AppStorage("browserInstallOpened") private var installOpened = Data()
+    @State private var problem: String?
+
+    private var tool: String { CLIBridge.toolPath }
+
+    var body: some View {
+        Form {
+            Section {
+                Toggle("Allow the browser extension", isOn: $browserEnabled)
+                    .onChange(of: browserEnabled) { model.cli.refreshRunning() }
+                Toggle("Show suggestions when a field is focused", isOn: $autoShow)
+                    .disabled(!browserEnabled)
+                Picker("Ask before filling", selection: $approvalSeconds) {
+                    Text("Every time").tag(0)
+                    Text("Once per minute").tag(60)
+                    Text("Once per 10 minutes").tag(600)
+                    Text("Until Triwarden locks").tag(-1)
+                }
+                .disabled(!browserEnabled)
+            } header: {
+                Text("Browser extension")
+            } footer: {
+                Text("Suggestions show names only; filling asks for Touch ID, saving asks you first.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+
+            Section {
+                LabeledContent("Safari") {
+                    Button("Open Safari Extensions") {
+                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Safari-Extensions-Settings")!)
+                    }
+                }
+                ForEach(NativeHost.browsers) { browser in
+                    row(browser)
+                }
+                if let problem {
+                    Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(.caption)
+                }
+            } header: {
+                Text("Connect a browser")
+            } footer: {
+                Text("Install the extension from the browser’s store, then press Connect: Triwarden asks you to confirm the browser’s folder and adds one small file there. Safari needs no setup beyond turning Triwarden on in Safari. Press Connect again if you move Triwarden.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .thinScroller()
+        .onAppear(perform: refresh)
+    }
+
+    @ViewBuilder private func row(_ browser: NativeHost.Browser) -> some View {
+        let state = states[browser.id] ?? .notInstalled
+        let seen = model.cli.seenBrowsers[browser.bundleID]
+        let store = NativeHost.storeURL(for: browser)
+        // Not connected yet: first Install, then (once the store page was opened) Connect.
+        let needsInstall = state == .notConnected && !openedStore(browser)
+        LabeledContent {
+            HStack(spacing: 10) {
+                status(state, seen: seen, openedStore: openedStore(browser))
+                if state != .notInstalled {
+                    if needsInstall {
+                        Button("Install") { installFromStore(browser, store) }
+                            .disabled(!browserEnabled)
+                    } else {
+                        Button(state == .connected ? "Reconnect" : "Connect") { connect(browser) }
+                            .disabled(!browserEnabled)
+                    }
+                }
+            }
+        } label: {
+            Text(verbatim: browser.title)
+        }
+    }
+
+    private func openedStore(_ browser: NativeHost.Browser) -> Bool {
+        ((try? JSONDecoder().decode(Set<String>.self, from: installOpened)) ?? []).contains(browser.id)
+    }
+
+    private func installFromStore(_ browser: NativeHost.Browser, _ url: URL) {
+        var opened = (try? JSONDecoder().decode(Set<String>.self, from: installOpened)) ?? []
+        opened.insert(browser.id)
+        installOpened = (try? JSONEncoder().encode(opened)) ?? Data()
+        // Open the store page in that browser, not the default one.
+        if let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: browser.bundleID) {
+            NSWorkspace.shared.open([url], withApplicationAt: app, configuration: NSWorkspace.OpenConfiguration())
+        } else {
+            NSWorkspace.shared.open(url)
+        }
+    }
+
+    /// What the row says about the connection: a green check and "Connected" once the browser's extension has reached
+    /// Triwarden (with when), a note when it was connected but the app has moved, otherwise nothing.
+    @ViewBuilder private func status(_ state: NativeHost.State, seen: CLIBridge.Seen?, openedStore: Bool) -> some View {
+        if state == .notInstalled {
+            Text("Not installed").font(.caption).foregroundStyle(.tertiary)
+        } else if let seen, state != .notConnected, !{ if case .movedApp = state { true } else { false } }() {
+            Label {
+                Text("Connected · last used \(seen.date.formatted(.relative(presentation: .named)))")
+            } icon: {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            }
+            .font(.caption).foregroundStyle(.secondary)
+        } else if state == .connected {
+            Label {
+                Text("Ready · open the browser to finish")
+            } icon: {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+            }
+            .font(.caption).foregroundStyle(.secondary)
+        } else if state == .notConnected, openedStore {
+            Text("Add it in the browser, then connect").font(.caption).foregroundStyle(.secondary)
+        } else if case .movedApp = state {
+            Label {
+                Text("Triwarden moved · connect again")
+            } icon: {
+                Image(systemName: "arrow.triangle.2.circlepath").foregroundStyle(.orange)
+            }
+            .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    private struct Record: Codable { var tool: String; var extensionID: String? }
+    private var records: [String: Record] {
+        get { (try? JSONDecoder().decode([String: Record].self, from: recordedHosts)) ?? [:] }
+        nonmutating set { recordedHosts = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+
+    private func installed(_ browser: NativeHost.Browser) -> Bool {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: browser.bundleID) != nil
+    }
+
+    private func refresh() {
+        let notes = records
+        let heard = model.cli.seenBrowsers
+        states = Dictionary(uniqueKeysWithValues: NativeHost.browsers.map { browser in
+            guard installed(browser) else { return (browser.id, .notInstalled) }
+            // Heard from it: connected, whoever wrote the file. Otherwise go by what this app wrote.
+            if heard[browser.bundleID] != nil, notes[browser.id] == nil { return (browser.id, .connected) }
+            return (browser.id, NativeHost.state(recordedTool: notes[browser.id]?.tool, tool: tool))
+        })
+    }
+
+    /// The app is sandboxed and cannot write into another app's folder by itself: the person confirms the folder in an
+    /// open panel, which grants access to exactly that folder for this write.
+    private func connect(_ browser: NativeHost.Browser) {
+        problem = nil
+        let known = records[browser.id]?.extensionID
+        let chromeID = browser.family == .chromium ? (known ?? NativeHost.chromeExtensionID) : nil
+        let data: Data
+        do { data = try NativeHost.manifest(for: browser, tool: tool, chromeExtensionID: chromeID) } catch {
+            problem = String(localized: "Couldn't prepare the file for \(browser.title)."); return
+        }
+        let folder = NativeHost.hostFolderURL(browser)
+        let panel = NSOpenPanel()
+        panel.message = String(localized: "Allow Triwarden to add its file to \(browser.title)'s native-messaging folder.")
+        panel.prompt = String(localized: "Allow")
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.directoryURL = FileManager.default.fileExists(atPath: folder.path) ? folder : folder.deletingLastPathComponent()
+        guard panel.runModal() == .OK, let chosen = panel.url else { return }
+        guard chosen.standardizedFileURL.path == folder.standardizedFileURL.path else {
+            problem = String(localized: "Pick the folder the panel opens in: \(folder.path)"); return
+        }
+        let scoped = chosen.startAccessingSecurityScopedResource()
+        defer { if scoped { chosen.stopAccessingSecurityScopedResource() } }
+        do {
+            try FileManager.default.createDirectory(at: chosen, withIntermediateDirectories: true)
+            try data.write(to: chosen.appending(path: "\(NativeHost.name).json"), options: .atomic)
+        } catch {
+            problem = String(localized: "Couldn't write the file: \(error.localizedDescription)"); return
+        }
+        var notes = records
+        notes[browser.id] = Record(tool: tool, extensionID: chromeID)
+        records = notes
+        refresh()
+    }
+}
+
 // MARK: SSH
 
 private struct DeveloperSettings: View {
@@ -488,7 +684,6 @@ private struct DeveloperSettings: View {
     @AppStorage(Pref.sshAgent) private var enabled = false
     @AppStorage(Pref.cli) private var cliEnabled = false
     @AppStorage(Pref.cliApprovalSeconds) private var cliApprovalSeconds = 0
-    @AppStorage(Pref.browser) private var browserEnabled = false
     @AppStorage(Pref.accessStatus) private var accessStatus = NotchStatusController.macHasNotch
     @AppStorage(Pref.approvalStyle) private var approvalStyle = NotchStatusController.defaultApprovalStyle
     @AppStorage(Pref.accessStatusPosition) private var accessStatusPosition = NotchPosition.notch.rawValue
@@ -590,27 +785,6 @@ private struct DeveloperSettings: View {
                 Text("Command line")
             } footer: {
                 Text("tw get github · tw code github · tw list · tw generate. Reading anything from the vault needs it unlocked and Touch ID or your Mac password.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-
-            Section {
-                Toggle("Allow the browser extension", isOn: $browserEnabled)
-                    .onChange(of: browserEnabled) { model.cli.refreshRunning() }
-                LabeledContent("Safari") {
-                    Button("Open Safari Extensions") {
-                        NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Safari-Extensions-Settings")!)
-                    }
-                }
-                LabeledContent("Chrome, Edge, Brave") {
-                    Button("Show Extension Folder") {
-                        let folder = Bundle.main.bundleURL.appending(path: "Contents/PlugIns/TriwardenSafari.appex/Contents/Resources/manifest.json")
-                        NSWorkspace.shared.activateFileViewerSelecting([folder])
-                    }
-                }
-            } header: {
-                Text("Browser extension")
-            } footer: {
-                Text("Safari: turn on Triwarden in Safari › Settings › Extensions. Chromium browsers: load the folder as an unpacked extension, then run tw install-chrome <extension id>. Suggestions show names only; filling asks for Touch ID, saving asks you first.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
