@@ -28,9 +28,15 @@ public enum NativeHost {
         public let hostFolder: String
     }
 
-    /// Where to install the extension for `browser`; nil when it has no listing yet (Firefox, until Mozilla approves it).
-    public static func storeURL(for browser: Browser) -> URL? {
-        browser.family == .chromium ? chromeStoreURL : nil
+    /// The extension's page on Firefox Add-ons (AMO). No language in the address: AMO picks the visitor's.
+    public static let firefoxStoreURL = URL(string: "https://addons.mozilla.org/firefox/addon/triwarden/")!
+
+    /// Where to install the extension for `browser`: Chrome Web Store for Chromium browsers, Firefox Add-ons for Firefox.
+    public static func storeURL(for browser: Browser) -> URL {
+        switch browser.family {
+        case .chromium: chromeStoreURL
+        case .firefox: firefoxStoreURL
+        }
     }
 
     public static let browsers: [Browser] = [

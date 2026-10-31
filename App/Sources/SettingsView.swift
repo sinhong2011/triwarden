@@ -552,13 +552,13 @@ private struct BrowserSettings: View {
         let state = states[browser.id] ?? .notInstalled
         let seen = model.cli.seenBrowsers[browser.bundleID]
         let store = NativeHost.storeURL(for: browser)
-        // Not connected yet and a store page exists: first Install, then (once it was opened) Connect.
-        let needsInstall = store != nil && state == .notConnected && !openedStore(browser)
+        // Not connected yet: first Install, then (once the store page was opened) Connect.
+        let needsInstall = state == .notConnected && !openedStore(browser)
         LabeledContent {
             HStack(spacing: 10) {
                 status(state, seen: seen, openedStore: openedStore(browser))
                 if state != .notInstalled {
-                    if needsInstall, let store {
+                    if needsInstall {
                         Button("Install") { installFromStore(browser, store) }
                             .disabled(!browserEnabled)
                     } else {

@@ -79,6 +79,15 @@ struct NativeHostTests {
         #expect(NativeHost.browsers.allSatisfy { $0.hostFolder.hasSuffix("NativeMessagingHosts") })
     }
 
+    @Test func eachBrowserInstallsFromItsOwnStore() {
+        for browser in NativeHost.browsers where browser.family == .chromium {
+            #expect(NativeHost.storeURL(for: browser) == NativeHost.chromeStoreURL)
+        }
+        #expect(NativeHost.storeURL(for: firefox) == NativeHost.firefoxStoreURL)
+        #expect(NativeHost.chromeStoreURL.absoluteString.hasSuffix("/" + NativeHost.chromeExtensionID))
+        #expect(NativeHost.firefoxStoreURL.host() == "addons.mozilla.org")
+    }
+
     @Test func onlyOurOwnManifestFileIsUsed() throws {
         // Only our own file name is ever written or read.
         #expect(NativeHost.manifestURL(chrome).lastPathComponent == "io.github.sinhong2011.triwarden.json")
