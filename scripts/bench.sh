@@ -69,20 +69,20 @@ for i in $(seq 1 "$RUNS"); do
     first=$(mark "$log" first-frame); ready=$(mark "$log" vault-ready)
     if [ -z "$ready" ]; then echo "run $i: the vault never came up:" >&2; tail -20 "$log" >&2; kill "$pid" 2>/dev/null; exit 1; fi
     echo "$first" >> "$TMP/first"; echo "$ready" >> "$TMP/ready"
-    if [ "$i" = 1 ]; then
-        # Memory once, on the first run: after sitting idle with the vault open.
-        sleep "$IDLE"
-        footprint -p "$pid" 2>/dev/null | awk '/Footprint:/ { for (i = 1; i <= NF; i++) if ($i == "Footprint:") { print $(i+1), $(i+2); exit } }' >> "$TMP/mem"
-    fi
+    # Icon loading and framework caches settle at slightly different times. Sample every run rather than trusting
+    # the first launch, and store MiB so the same stats helper can report a median and range.
+    sleep "$IDLE"
+    footprint -p "$pid" 2>/dev/null | awk '/Footprint:/ { for (i = 1; i <= NF; i++) if ($i == "Footprint:") {
+        v = $(i+1); u = $(i+2); if (u == "KB") v /= 1024; if (u == "GB") v *= 1024; print v; exit
+    } }' >> "$TMP/mem"
     kill "$pid"; wait "$pid" 2>/dev/null || true
     printf "run %d: first frame %s ms, vault ready %s ms\n" "$i" "$first" "$ready"
     sleep 1
 done
 read -r first_med first_min first_max < <(stats < "$TMP/first")
 read -r ready_med ready_min ready_max < <(stats < "$TMP/ready")
-mem=$(head -1 "$TMP/mem")
-mem_mb=$(echo "$mem" | awk '{ v = $1; u = $2; if (u == "KB") v /= 1024; if (u == "GB") v *= 1024; printf "%.0f MB", v }')
-echo "memory at idle: $mem_mb"
+read -r mem_med mem_min mem_max < <(stats < "$TMP/mem")
+echo "memory at idle: ${mem_med} MB (${mem_min}–${mem_max} MB)"
 
 echo "Timing master-password unlocks…"
 "$BIN" --bench-unlock 2>/dev/null > "$TMP/unlock"
@@ -132,7 +132,7 @@ $(date +%Y-%m-%d) · $chip ($model), ${ram} GB · macOS $os · Release configura
 | --- | ---: | ---: | --- |
 | Launch to first frame | $first_med ms | ${first_min}–${first_max} ms | $RUNS fresh launches; from the kernel starting the process |
 | Launch to vault ready | $ready_med ms | ${ready_min}–${ready_max} ms | the item list on screen with items in it |
-| Memory at idle | $mem_mb | | phys_footprint (Activity Monitor's “Memory”) after ${IDLE} s idle, vault open |
+| Memory at idle | ${mem_med} MB | ${mem_min}–${mem_max} MB | phys_footprint (Activity Monitor's “Memory”) after ${IDLE} s idle, vault open; $RUNS fresh launches |
 | Master-password unlock, PBKDF2 600,000 | $pbkdf2 ms | | key derivation + user key decryption, median of 5 |
 | Master-password unlock, Argon2id 64 MiB · 3 · 4 | $argon ms | | Bitwarden's default Argon2id settings, median of 5 |
 ${touch_rows}
