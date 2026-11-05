@@ -15,8 +15,8 @@
 # --interactive N also times N real unlocks (Touch ID or master password) on this Mac's own accounts: the app opens
 # normally, you lock (⇧⌘L or the lock button) and unlock N times, and the script reads the app's marks.
 #
-# Build: Debug configuration (the demo vault is debug-only) with Swift optimisation turned on (-O, whole module), in
-# its own folder, build/bench. --no-build reuses it.
+# Build: the Release configuration used for shipping, with DEBUG enabled only to compile the isolated demo fixtures,
+# in its own folder, build/bench. --no-build reuses it. Release optimisation settings come from project.yml.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -36,13 +36,14 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-APP=build/bench/Build/Products/Debug/Triwarden.app
+APP=build/bench/Build/Products/Release/Triwarden.app
 BIN=$APP/Contents/MacOS/Triwarden
 if [ "$BUILD" = 1 ]; then
-    echo "Building (Debug, -O) into build/bench…"
+    echo "Building (Release with isolated benchmark fixtures) into build/bench…"
     xcodegen generate -q
-    xcodebuild -project Triwarden.xcodeproj -scheme Triwarden -configuration Debug -derivedDataPath build/bench \
-        -allowProvisioningUpdates SWIFT_OPTIMIZATION_LEVEL=-O SWIFT_COMPILATION_MODE=wholemodule build 2>&1 \
+    xcodebuild -project Triwarden.xcodeproj -scheme Triwarden -configuration Release -derivedDataPath build/bench \
+        -allowProvisioningUpdates ONLY_ACTIVE_ARCH=YES ARCHS="$(uname -m)" \
+        SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG build 2>&1 \
         | grep -E "error:|BUILD (SUCCEEDED|FAILED)"
 fi
 test -x "$BIN" || { echo "No build at $BIN" >&2; exit 1; }
@@ -125,12 +126,12 @@ How quickly Triwarden opens, how little memory it keeps, and how long an unlock 
 
 ## Triwarden $version ($commit)
 
-$(date +%Y-%m-%d) · $chip ($model), ${ram} GB · macOS $os · Debug build with Swift optimisation (-O) · demo vault of 200+ items
+$(date +%Y-%m-%d) · $chip ($model), ${ram} GB · macOS $os · Release configuration with isolated benchmark fixtures · demo vault of 200+ items
 
 | Measure | Median | Range | Notes |
 | --- | ---: | ---: | --- |
-| Launch to first frame | $first_med ms | $first_min–$first_max ms | $RUNS fresh launches; from the kernel starting the process |
-| Launch to vault ready | $ready_med ms | $ready_min–$ready_max ms | the item list on screen with items in it |
+| Launch to first frame | $first_med ms | ${first_min}–${first_max} ms | $RUNS fresh launches; from the kernel starting the process |
+| Launch to vault ready | $ready_med ms | ${ready_min}–${ready_max} ms | the item list on screen with items in it |
 | Memory at idle | $mem_mb | | phys_footprint (Activity Monitor's “Memory”) after ${IDLE} s idle, vault open |
 | Master-password unlock, PBKDF2 600,000 | $pbkdf2 ms | | key derivation + user key decryption, median of 5 |
 | Master-password unlock, Argon2id 64 MiB · 3 · 4 | $argon ms | | Bitwarden's default Argon2id settings, median of 5 |
