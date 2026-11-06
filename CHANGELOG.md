@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.1](https://github.com/sinhong2011/triwarden/compare/v0.8.0...v0.8.1) (2026-11-06)
+
+
+### Fixes
+
+* **unlock:** focus the master password field when asked ([#135](https://github.com/sinhong2011/triwarden/issues/135) follow-up) ([#176](https://github.com/sinhong2011/triwarden/issues/176)) ([d51500a](https://github.com/sinhong2011/triwarden/commit/d51500ad7da0faec4fdcef8685cfe13361a87b31))
+
 ## [0.8.0](https://github.com/sinhong2011/triwarden/compare/v0.7.0...v0.8.0) (2026-11-05)
 
 
