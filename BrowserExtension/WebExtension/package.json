@@ -2,7 +2,7 @@
   "name": "triwarden-extension",
   "private": true,
   "type": "module",
-  "version": "0.4.16",
+  "version": "0.4.2",
   "scripts": {
     "dev": "wxt",
     "dev:firefox": "wxt -b firefox",

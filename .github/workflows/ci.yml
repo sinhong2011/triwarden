@@ -59,9 +59,10 @@ jobs:
   # the full suite. Required checks (VaultCore tests, Build app) still report success on the
   # skip path so rulesets stay green.
   # Chrome/Firefox store zips use BrowserExtension/WebExtension/package.json. A PR that
-  # changes zip inputs without raising that version cannot be published (store rejects
-  # reuse). release-please bumps it on main for conventional commits under that path;
-  # this check still requires the bump on the PR that ships the code.
+  # changes zip inputs must raise that version above the last *released* extension
+  # (BrowserExtension/WebExtension in .release-please-manifest.json), not merely above
+  # the PR base tip — so Debug smoke bumps cannot inflate past the next store version.
+  # release-please still opens the extension release PR / tag on main after merge.
   extension-version:
     name: Extension version bump
     if: github.event_name == 'pull_request'
