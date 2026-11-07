@@ -66,7 +66,8 @@
       "component": "extension",
       "include-component-in-tag": true,
       "changelog-path": "CHANGELOG.md",
-      "bootstrap-sha": "f7878bc9de06687c9bd9db5566d5ab01e9b7e627"
+      "bootstrap-sha": "f7878bc9de06687c9bd9db5566d5ab01e9b7e627",
+      "pull-request-title-pattern": "chore(extension): release ${version}"
     }
   }
 }

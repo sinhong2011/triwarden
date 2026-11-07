@@ -37,13 +37,15 @@ enum Pref {
     static let rememberPalettePosition = "rememberPalettePosition"
     /// That spot: the middle of the palette's top edge, "x,y" in screen coordinates. Cleared when the option goes off.
     static let palettePosition = "palettePosition"
+    /// Opt-in: a new login's websites are saved as the site only ("https://example.com"), without path or query.
+    static let newItemSiteOnly = "newItemSiteOnly"
 
     static func register() {
         UserDefaults.standard.register(defaults: [
             appearance: "system", autoLockMinutes: 15, lockOnSleep: true, fullDoorAnimation: false, clipboardSeconds: 30,
             hideFromCapture: false, timeoutAction: "lock", // opt-in: some screen tools and recordings need the window
             showMenuBar: true, closeToMenuBar: false, matchFrontTab: false, matchFrontTabDismissed: false,
-            rememberPalettePosition: false, browserAutoShow: true, browserApprovalSeconds: 600,
+            rememberPalettePosition: false, newItemSiteOnly: false, browserAutoShow: true, browserApprovalSeconds: 600,
         ])
         UserDefaults.standard.removeObject(forKey: "lockAnimations") // retired (see fullDoorAnimation)
     }

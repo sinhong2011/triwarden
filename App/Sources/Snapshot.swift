@@ -681,6 +681,11 @@ enum Snapshot {
             render(EditItemSheet(mode: .edit(card)).environment(vault).tint(.brand),
                    size: CGSize(width: 580, height: 700), appearance: appearance,
                    to: dir.appending(path: "edit-card-\(name).png"))
+            // A new login prefilled from a browser tab with a long address: the "Site only" button sits beside it.
+            render(EditItemSheet(mode: .create(.login), prefill: EditItemSheet.Prefill(name: "example.com",
+                       uri: "https://www.example.com/login?redirect=%2Faccount&client_id=web#signin"), inPanel: true).environment(vault).tint(.brand),
+                   size: CGSize(width: 580, height: 1100), appearance: appearance,
+                   to: dir.appending(path: "edit-new-site-\(name).png"))
             render(EditItemSheet(mode: .create(.identity)).environment(vault).tint(.brand),
                    size: CGSize(width: 580, height: 700), appearance: appearance,
                    to: dir.appending(path: "edit-identity-\(name).png"))
@@ -700,7 +705,7 @@ enum Snapshot {
             }
             // Each format, so the sheet's height can be checked to stay the same.
             let savedFormat = UserDefaults.standard.string(forKey: "exportFormat")
-            for format in ["encryptedJSON", "json", "csv"] {
+            for format in ["encryptedJSON", "kdbx", "json", "csv"] {
                 UserDefaults.standard.set(format, forKey: "exportFormat")
                 render(ExportSheet().environment(vault).tint(.brand).background(Color(nsColor: .windowBackgroundColor)),
                        size: CGSize(width: 500, height: 600), appearance: appearance, to: dir.appending(path: "export-\(format)-\(name).png"))

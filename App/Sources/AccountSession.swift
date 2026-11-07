@@ -313,6 +313,10 @@ final class AccountSession {
             case .csv:
                 let csv = VaultExport.csv(collections: vault.collections, items: vault.items)
                 return (csv.data, csv.skipped, vault.items.count - csv.skipped)
+            case .kdbx:
+                let name = organizations.first { $0.id == organizationId }?.name ?? "Triwarden"
+                return (try KeePassExport.kdbx(collections: vault.collections, items: vault.items, databaseName: name,
+                                               password: filePassword ?? ""), 0, vault.items.count)
             }
         }
         let vault = try VaultExport.plainVault(syncData: cache, userKey: userKey)
@@ -323,6 +327,9 @@ final class AccountSession {
         case .csv:
             let csv = VaultExport.csv(folders: vault.folders, items: vault.items)
             return (csv.data, csv.skipped, vault.items.count - csv.skipped)
+        case .kdbx:
+            return (try KeePassExport.kdbx(folders: vault.folders, items: vault.items, databaseName: "Triwarden",
+                                           password: filePassword ?? ""), 0, vault.items.count)
         }
     }
 

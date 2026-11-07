@@ -91,6 +91,9 @@ struct EditItemSheet: View {
     @State private var websiteRowHeight: CGFloat = 64
     @State private var websiteAdds = 0
     @FocusState private var focusedWebsite: UUID?
+    /// The website trimmed with "Site only", and what it said before, so Undo can put it back.
+    @AppStorage(Pref.newItemSiteOnly) private var newItemSiteOnly = false
+    @State private var siteOnlyUndo: (id: UUID, original: String, trimmed: String)?
     /// Attachment changes stay local to the form until Save, just like the item's text fields.
     @State private var attachmentRows: [AttachmentDraft] = []
     @State private var choosingAttachments = false
@@ -775,7 +778,7 @@ struct EditItemSheet: View {
     @ViewBuilder private func websiteRow(_ site: Binding<WebsiteRow>, index: Int, dragging: Bool) -> some View {
         let label: LocalizedStringKey = index == 0 ? "Website" : "Website \(index + 1)"
         FormField(label: label) {
-            HStack(spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
                 websiteField(site)
                 if websites.count > 1 {
                     websiteControls(id: site.wrappedValue.id, dragging: dragging)
@@ -786,11 +789,66 @@ struct EditItemSheet: View {
         }
     }
 
+    /// The "save new logins with the site address only" setting applies to this form.
+    private var savesSiteOnly: Bool {
+        if case .create = mode { newItemSiteOnly } else { false }
+    }
+
     private func websiteField(_ site: Binding<WebsiteRow>) -> some View {
-        TextField("Website", text: site.text, prompt: Text(verbatim: "https://example.com"))
-            .textFieldStyle(SoftFieldStyle())
-            .textContentType(.URL)
-            .focused($focusedWebsite, equals: site.wrappedValue.id)
+        let row = site.wrappedValue
+        return VStack(alignment: .leading, spacing: 4) {
+            websiteInput(site)
+            if savesSiteOnly, let trimmed = WebsiteSiteOnly.trimmed(row.text) {
+                Text("Will be saved as \(trimmed)")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(1).truncationMode(.middle)
+                    .help(Text("Your setting saves new logins with the site address only. Change it in Settings › General."))
+            }
+        }
+    }
+
+    private func websiteInput(_ site: Binding<WebsiteRow>) -> some View {
+        let row = site.wrappedValue
+        return HStack(spacing: 8) {
+            TextField("Website", text: site.text, prompt: Text(verbatim: "https://example.com"))
+                .textFieldStyle(SoftFieldStyle())
+                .textContentType(.URL)
+                .focused($focusedWebsite, equals: row.id)
+            if let undo = siteOnlyUndo, undo.id == row.id, undo.trimmed == row.text {
+                Button {
+                    withAnimation(websiteAnimation) { site.text.wrappedValue = undo.original; siteOnlyUndo = nil }
+                } label: {
+                    fieldIcon("arrow.uturn.backward")
+                }
+                .buttonStyle(.plain)
+                .help(Text("Undo: put back \(undo.original)"))
+                .accessibilityLabel(Text("Undo site only"))
+                .transition(.opacity)
+            } else if let trimmed = WebsiteSiteOnly.trimmed(row.text) {
+                Button {
+                    withAnimation(websiteAnimation) {
+                        siteOnlyUndo = (row.id, row.text, trimmed)
+                        site.text.wrappedValue = trimmed
+                    }
+                } label: {
+                    fieldIcon("scissors")
+                }
+                .buttonStyle(.plain)
+                .help(Text("Site only: keep just \(trimmed). The page path and anything after ? or # are removed."))
+                .accessibilityLabel(Text("Site only"))
+                .accessibilityHint(Text("Changes this website to \(trimmed)"))
+                .transition(.opacity)
+            }
+        }
+    }
+
+    /// A square icon button beside a field, matching the password generator and QR scan buttons.
+    private func fieldIcon(_ systemName: String) -> some View {
+        Image(systemName: systemName).font(.system(size: 14, weight: .medium))
+            .frame(width: 38, height: 38)
+            .background(Color.formInputFill, in: .rect(cornerRadius: 9, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
+            .contentShape(.rect)
     }
 
     private func websiteControls(id: UUID, dragging: Bool) -> some View {
@@ -1248,7 +1306,8 @@ struct EditItemSheet: View {
             edit.favorite = prefill?.favorite ?? false
             if newKind == .login {
                 (edit.username, edit.password, edit.totp) = (username, password, totp)
-                edit.uris = websiteValues
+                // Opt-in (Settings › General): a brand-new login keeps only each website's site.
+                edit.uris = savesSiteOnly ? websiteValues.map(WebsiteSiteOnly.apply) : websiteValues
             }
             edit.properties = props.filter { !$0.value.isEmpty }
             if !cleanFields.isEmpty { edit.customFields = cleanFields }

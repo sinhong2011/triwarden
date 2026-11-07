@@ -21,7 +21,9 @@ enum DevServer {
     static func client(port: Int) throws -> VaultClient {
         let ca = try env["TRIWARDEN_DEV_CA"].map { try Data(contentsOf: URL(filePath: $0)) }
         let trust = ServerTrust(certificates: ca.map { [$0] } ?? [])
-        return VaultClient(environment: .selfHosted(URL(string: "https://\(host!):\(port)")!),
+        // `TRIWARDEN_DEV_SCHEME=http` for a plain local server (e.g. Vaultwarden in Docker on localhost).
+        let scheme = env["TRIWARDEN_DEV_SCHEME"] ?? "https"
+        return VaultClient(environment: .selfHosted(URL(string: "\(scheme)://\(host!):\(port)")!),
                                  deviceIdentifier: "6b0e4a3c-1d2e-4f50-8a6b-7c8d9e0f1a2b",
                                  session: trust.makeSession())
     }

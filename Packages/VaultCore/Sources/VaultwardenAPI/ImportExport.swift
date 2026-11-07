@@ -54,6 +54,8 @@ enum CipherFields {
 public enum VaultExport {
     public enum Format: String, CaseIterable, Sendable {
         case json, encryptedJSON, csv
+        /// A KeePass database (KDBX 4), encrypted with the file password: see `KeePassExport`.
+        case kdbx
     }
 
     /// The personal vault (no organization items, nothing in Trash), decrypted into Bitwarden's export shapes.

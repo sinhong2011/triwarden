@@ -75,7 +75,8 @@ public enum KDF {
         email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
-    static func argon2id(password: Data, salt: Data, iterations: Int, memoryKiB: Int, parallelism: Int) throws(CryptoError) -> Data {
+    /// Raw Argon2id with a 32-byte output and no bounds check: callers choose and check their own parameters.
+    public static func argon2id(password: Data, salt: Data, iterations: Int, memoryKiB: Int, parallelism: Int) throws(CryptoError) -> Data {
         var out = Data(count: 32)
         let rc = out.withUnsafeMutableBytes { o in
             password.withUnsafeBytes { p in

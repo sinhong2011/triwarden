@@ -13516,58 +13516,6 @@
         }
       }
     },
-    "Anyone who gets this file can read every password in it. Keep it off shared and synced folders, and delete it when you're done. To keep a backup, choose Password-protected.": {
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このファイルを手に入れた人は誰でも、中のすべてのパスワードを読めます。共有・同期フォルダには置かず、使い終わったら削除してください。バックアップには「パスワード保護」を選んでください。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "任何获得此文件的人都能读取其中所有密码。请勿放在共享或同步的文件夹，用完后删除。如需保留备份，请选择“密码保护”。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "任何取得此檔案的人都能讀取其中所有密碼。請勿放在共享或同步的資料夾，用完後刪除。如要保留備份，請選擇「密碼保護」。"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "任何攞到呢個檔案嘅人都可以睇到入面所有密碼。唔好放喺共享或者同步嘅資料夾，用完就刪除。想保留備份嘅話，請揀「密碼保護」。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "이 파일을 얻은 사람은 안의 모든 비밀번호를 읽을 수 있습니다. 공유되거나 동기화된 폴더에는 두지 말고, 다 사용한 뒤 삭제하세요. 백업을 남기려면 비밀번호로 보호를 선택하세요."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quiconque obtient ce fichier peut lire tous les mots de passe qu’il contient. Ne le placez pas dans des dossiers partagés ou synchronisés, et supprimez-le une fois terminé. Pour conserver une sauvegarde, choisissez Protégé par mot de passe."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cualquiera que obtenga este archivo puede leer todas las contraseñas que contiene. No lo guardes en carpetas compartidas ni sincronizadas, y elimínalo cuando termines. Para conservar una copia de seguridad, elige Protegido con contraseña."
-          }
-        },
-        "th": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ใครก็ตามที่ได้ไฟล์นี้จะอ่านรหัสผ่านทั้งหมดในไฟล์ได้ อย่าวางไว้ในโฟลเดอร์ที่แชร์หรือซิงค์ และลบเมื่อใช้เสร็จ หากต้องการเก็บข้อมูลสำรอง ให้เลือกป้องกันด้วยรหัสผ่าน"
-          }
-        }
-      }
-    },
     "Anywhere": {
       "localizations": {
         "ja": {
@@ -48224,58 +48172,6 @@
         }
       }
     },
-    "Password-protected": {
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "パスワード保護"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "密码保护"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "密碼保護"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "密碼保護"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "비밀번호로 보호됨"
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Protégé par un mot de passe"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Protegido con contraseña"
-          }
-        },
-        "th": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ป้องกันด้วยรหัสผ่าน"
-          }
-        }
-      }
-    },
     "Passwords and passkeys, filled in anywhere": {
       "localizations": {
         "ja": {
@@ -71230,58 +71126,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "อุปกรณ์อื่นจะออกจากระบบ ส่วน Mac เครื่องนี้ยังเข้าสู่ระบบอยู่"
-          }
-        }
-      }
-    },
-    "Your personal items and folders, in a file any Bitwarden app can import.": {
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "個人の項目とフォルダを、どの Bitwarden アプリでも読み込めるファイルにします。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "你的个人项目和文件夹，存为任何 Bitwarden 应用都能导入的文件。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "你的個人項目與資料夾，存成任何 Bitwarden App 都能匯入的檔案。"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "你嘅個人項目同資料夾，存成任何 Bitwarden App 都匯入到嘅檔案。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "개인 항목과 폴더를, 어떤 Bitwarden 앱에서도 가져올 수 있는 파일로 담습니다."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vos éléments et dossiers personnels, dans un fichier que toute app Bitwarden peut importer."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tus elementos y carpetas personales, en un archivo que cualquier app de Bitwarden puede importar."
-          }
-        },
-        "th": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "รายการและโฟลเดอร์ส่วนตัวของคุณ ในไฟล์ที่แอป Bitwarden ทุกแอปนำเข้าได้"
           }
         }
       }
@@ -98716,6 +98560,165 @@
           "stringUnit": {
             "state": "translated",
             "value": "Claude Code, Codex CLI, Gemini CLI, Aider, เว็บแอป หรือสคริปต์ สามารถบันทึกเป็นเครื่องมือได้ทั้งหมด Triwarden จะส่งคีย์โดยใช้ชื่อตัวแปรที่โปรแกรมนั้นต้องการ"
+          }
+        }
+      }
+    },
+    "Your items and folders, in a file Bitwarden, KeePassXC or another password manager can open.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "項目とフォルダを、Bitwarden や KeePassXC などのパスワードマネージャで開けるファイルにします。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的项目和文件夹，存为 Bitwarden、KeePassXC 或其他密码管理器都能打开的文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的項目與資料夾，存成 Bitwarden、KeePassXC 或其他密碼管理工具都能開啟的檔案。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你嘅項目同資料夾，存成 Bitwarden、KeePassXC 或者其他密碼管理工具都開到嘅檔案。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "항목과 폴더를 Bitwarden, KeePassXC 등 다른 비밀번호 관리자에서 열 수 있는 파일로 담습니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos éléments et dossiers, dans un fichier que Bitwarden, KeePassXC ou un autre gestionnaire de mots de passe peut ouvrir."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus elementos y carpetas, en un archivo que Bitwarden, KeePassXC u otro gestor de contraseñas puede abrir."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "รายการและโฟลเดอร์ของคุณ ในไฟล์ที่ Bitwarden, KeePassXC หรือโปรแกรมจัดการรหัสผ่านอื่นเปิดได้"
+          }
+        }
+      }
+    },
+    "A KeePass database, encrypted with a password you choose. Opens directly in KeePassXC, KeePassium and Strongbox, with folders, one-time codes and passkeys.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選んだパスワードで暗号化された KeePass データベースです。KeePassXC、KeePassium、Strongbox でそのまま開け、フォルダ、ワンタイムコード、パスキーも引き継がれます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用你选择的密码加密的 KeePass 数据库。可直接在 KeePassXC、KeePassium 和 Strongbox 中打开，文件夹、一次性验证码和通行密钥都会保留。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以你選擇的密碼加密的 KeePass 資料庫。可直接在 KeePassXC、KeePassium 和 Strongbox 中開啟，資料夾、一次性驗證碼和通行密鑰都會保留。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用你揀嘅密碼加密嘅 KeePass 資料庫。可以直接喺 KeePassXC、KeePassium 同 Strongbox 開啟，資料夾、一次性驗證碼同通行密鑰都會保留。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "선택한 비밀번호로 암호화된 KeePass 데이터베이스입니다. KeePassXC, KeePassium, Strongbox에서 바로 열리며 폴더, 일회용 코드, 패스키도 그대로 옮겨집니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Une base KeePass, chiffrée avec un mot de passe de votre choix. S’ouvre directement dans KeePassXC, KeePassium et Strongbox, avec dossiers, codes à usage unique et clés d’accès."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una base de datos de KeePass, cifrada con una contraseña que tú eliges. Se abre directamente en KeePassXC, KeePassium y Strongbox, con carpetas, códigos de un solo uso y llaves de acceso."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ฐานข้อมูล KeePass ที่เข้ารหัสด้วยรหัสผ่านที่คุณเลือก เปิดได้ทันทีใน KeePassXC, KeePassium และ Strongbox พร้อมโฟลเดอร์ รหัสแบบใช้ครั้งเดียว และพาสคีย์"
+          }
+        }
+      }
+    },
+    "KeePass": {
+      "shouldTranslate": false
+    },
+    "Anyone who gets this file can read every password in it. Keep it off shared and synced folders, and delete it when you're done. To keep a backup, choose Bitwarden or KeePass: both are encrypted.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このファイルを手に入れた人は誰でも、中のすべてのパスワードを読めます。共有・同期フォルダには置かず、使い終わったら削除してください。バックアップには、暗号化される Bitwarden か KeePass を選んでください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任何获得此文件的人都能读取其中所有密码。请勿放在共享或同步的文件夹，用完后删除。如需保留备份，请选择 Bitwarden 或 KeePass：两者都会加密。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任何取得此檔案的人都能讀取其中所有密碼。請勿放在共享或同步的資料夾，用完後刪除。如要保留備份，請選擇 Bitwarden 或 KeePass：兩者都會加密。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "任何攞到呢個檔案嘅人都可以睇到入面所有密碼。唔好放喺共享或者同步嘅資料夾，用完就刪除。想保留備份嘅話，請揀 Bitwarden 或者 KeePass：兩樣都會加密。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 파일을 얻은 사람은 안의 모든 비밀번호를 읽을 수 있습니다. 공유되거나 동기화된 폴더에는 두지 말고, 다 사용한 뒤 삭제하세요. 백업을 남기려면 암호화되는 Bitwarden 또는 KeePass를 선택하세요."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quiconque obtient ce fichier peut lire tous les mots de passe qu’il contient. Ne le placez pas dans des dossiers partagés ou synchronisés, et supprimez-le une fois terminé. Pour conserver une sauvegarde, choisissez Bitwarden ou KeePass : les deux sont chiffrés."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cualquiera que obtenga este archivo puede leer todas las contraseñas que contiene. No lo guardes en carpetas compartidas ni sincronizadas, y elimínalo cuando termines. Para conservar una copia de seguridad, elige Bitwarden o KeePass: ambos están cifrados."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ใครก็ตามที่ได้ไฟล์นี้จะอ่านรหัสผ่านทั้งหมดในไฟล์ได้ อย่าวางไว้ในโฟลเดอร์ที่แชร์หรือซิงค์ และลบเมื่อใช้เสร็จ หากต้องการเก็บข้อมูลสำรอง ให้เลือก Bitwarden หรือ KeePass ซึ่งเข้ารหัสทั้งคู่"
           }
         }
       }

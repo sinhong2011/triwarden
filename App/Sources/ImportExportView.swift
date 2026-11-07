@@ -73,28 +73,32 @@ struct ExportSheet: View {
     private var format: VaultExport.Format { VaultExport.Format(rawValue: formatRaw) ?? .encryptedJSON }
     private var session: AccountSession? { model.session(for: accountId) ?? model.sessions.first }
 
+    /// Password-protected JSON and KeePass files are encrypted with a file password; JSON and CSV aren't.
+    private var encrypted: Bool { format == .encryptedJSON || format == .kdbx }
+
     private var ready: Bool {
         guard !masterPassword.isEmpty, session != nil, !working else { return false }
-        return format != .encryptedJSON || (!filePassword.isEmpty && filePassword == confirmPassword)
+        return !encrypted || (!filePassword.isEmpty && filePassword == confirmPassword)
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             SheetHeader(symbol: "square.and.arrow.up", title: "Export Vault",
-                        subtitle: "Your personal items and folders, in a file any Bitwarden app can import.")
+                        subtitle: "Your items and folders, in a file Bitwarden, KeePassXC or another password manager can open.")
 
             AccountPicker(accountId: $accountId)
             VaultPicker(vaults: session?.transferVaults() ?? [], selection: $vaultId, label: "Vault")
 
             VStack(alignment: .leading, spacing: 8) {
                 SheetLabel("Format")
-                AppSegmented(options: [(VaultExport.Format.encryptedJSON, LocalizedStringKey("Password-protected")),
+                AppSegmented(options: [(VaultExport.Format.encryptedJSON, LocalizedStringKey("Bitwarden")),
+                                       (.kdbx, LocalizedStringKey("KeePass")),
                                        (.json, LocalizedStringKey("JSON")), (.csv, LocalizedStringKey("CSV"))],
                              selection: Binding(get: { format }, set: { formatRaw = $0.rawValue; error = nil }))
                 // Every format's line laid over the others, so switching never changes the sheet's height (a height
                 // change mid-switch broke the segment's sliding thumb).
                 ZStack(alignment: .topLeading) {
-                    ForEach([VaultExport.Format.encryptedJSON, .json, .csv], id: \.self) { option in
+                    ForEach([VaultExport.Format.encryptedJSON, .kdbx, .json, .csv], id: \.self) { option in
                         Text(Self.description(option)).font(.system(size: 12)).foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .opacity(option == format ? 1 : 0)
@@ -113,15 +117,15 @@ struct ExportSheet: View {
                 Text("The passwords don't match.").font(.system(size: 12)).foregroundStyle(.red)
                     .opacity(!confirmPassword.isEmpty && filePassword != confirmPassword ? 1 : 0)
             }
-            .opacity(format == .encryptedJSON ? 1 : 0)
-            .disabled(format != .encryptedJSON)
-            .accessibilityHidden(format != .encryptedJSON)
+            .opacity(encrypted ? 1 : 0)
+            .disabled(!encrypted)
+            .accessibilityHidden(!encrypted)
             .overlay {
-                if format != .encryptedJSON {
+                if !encrypted {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("Not encrypted", systemImage: "exclamationmark.triangle.fill")
                             .font(.system(size: 13, weight: .semibold)).foregroundStyle(.orange)
-                        Text("Anyone who gets this file can read every password in it. Keep it off shared and synced folders, and delete it when you're done. To keep a backup, choose Password-protected.")
+                        Text("Anyone who gets this file can read every password in it. Keep it off shared and synced folders, and delete it when you're done. To keep a backup, choose Bitwarden or KeePass: both are encrypted.")
                             .font(.system(size: 12)).foregroundStyle(.primary.opacity(0.85))
                             .fixedSize(horizontal: false, vertical: true)
                         Spacer(minLength: 0)
@@ -160,6 +164,7 @@ struct ExportSheet: View {
     private static func description(_ format: VaultExport.Format) -> LocalizedStringKey {
         switch format {
         case .encryptedJSON: "Encrypted with a password you choose. Recommended: Bitwarden and Triwarden can import it on any device."
+        case .kdbx: "A KeePass database, encrypted with a password you choose. Opens directly in KeePassXC, KeePassium and Strongbox, with folders, one-time codes and passkeys."
         case .json: "Everything, readable by any app: logins, notes, cards, identities, SSH keys, passkeys and folders."
         case .csv: "Logins and secure notes only, for spreadsheets and other password managers."
         }
@@ -186,8 +191,13 @@ struct ExportSheet: View {
         let panel = NSSavePanel()
         let stamp = Date.now.formatted(.iso8601.year().month().day().dateSeparator(.omitted).time(includingFractionalSeconds: false).timeSeparator(.omitted))
             .replacingOccurrences(of: "T", with: "")
-        panel.nameFieldStringValue = "triwarden_export_\(stamp).\(format == .csv ? "csv" : "json")"
-        panel.allowedContentTypes = [format == .csv ? .commaSeparatedText : .json]
+        let (ext, type): (String, UTType) = switch format {
+        case .csv: ("csv", .commaSeparatedText)
+        case .kdbx: ("kdbx", UTType(filenameExtension: "kdbx", conformingTo: .data) ?? .data)
+        case .json, .encryptedJSON: ("json", .json)
+        }
+        panel.nameFieldStringValue = "triwarden_export_\(stamp).\(ext)"
+        panel.allowedContentTypes = [type]
         panel.canCreateDirectories = true
         guard panel.runModal() == .OK, let url = panel.url else { return }
         // Straight to the chosen file, readable by this user only; never via a temporary copy.
