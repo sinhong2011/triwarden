@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.0](https://github.com/sinhong2011/triwarden/compare/v0.8.1...v0.9.0) (2026-11-07)
+
+
+### Features
+
+* **edit:** trim a website to the site only ([#179](https://github.com/sinhong2011/triwarden/issues/179)) ([#187](https://github.com/sinhong2011/triwarden/issues/187)) ([dc4f275](https://github.com/sinhong2011/triwarden/commit/dc4f27590d4d1ca4e95ffd0afa5b34b717c29194))
+* **export:** export the vault as a KeePass (.kdbx) database ([#185](https://github.com/sinhong2011/triwarden/issues/185)) ([ac03619](https://github.com/sinhong2011/triwarden/commit/ac03619675209449d384482492ac41a78423da3a))
+* **menubar:** generator while locked, full options popover, quieter SSH row ([#186](https://github.com/sinhong2011/triwarden/issues/186)) ([6ce3f10](https://github.com/sinhong2011/triwarden/commit/6ce3f10fd99aa17fa44810dfe887aa53663effb2))
+
+
+### Fixes
+
+* **extension:** AutoFill UI collisions, Safari generate/save, unlock handoff ([#184](https://github.com/sinhong2011/triwarden/issues/184)) ([1b9c7ab](https://github.com/sinhong2011/triwarden/commit/1b9c7ab77fca0410d227807d35a79b02ba4fabe3))
+* **extension:** remount content UI when body is late or replaced ([#183](https://github.com/sinhong2011/triwarden/issues/183)) ([4265194](https://github.com/sinhong2011/triwarden/commit/4265194e8df1c194e7c720e8f2bdcf9c0da5948e))
+* **palette:** don't focus unlock field during prebuild ([#180](https://github.com/sinhong2011/triwarden/issues/180)) ([e076d8a](https://github.com/sinhong2011/triwarden/commit/e076d8a3d9cf263b22e3378ddbb9a129f1a32ca1))
+
 ## [0.8.1](https://github.com/sinhong2011/triwarden/compare/v0.8.0...v0.8.1) (2026-11-06)
 
 
