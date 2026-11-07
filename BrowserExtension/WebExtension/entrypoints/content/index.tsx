@@ -22,14 +22,25 @@ export default defineContentScript({
       name: 'triwarden-overlay',
       position: 'overlay',
       zIndex: 2147483647,
+      // String selector (not Element) so autoMount can watch for body appearing / being replaced.
       anchor: 'body',
       mode: 'closed',
-      onMount: (container) =>
-        render(() => (vaultFillInOverlay() ? <Overlay /> : <GenerateOverlay />), container),
+      onMount: (container) => {
+        const dispose = render(
+          () => (vaultFillInOverlay() ? <Overlay /> : <GenerateOverlay />),
+          container,
+        );
+        // After WXT's applyPosition: force a viewport-sized host so Safari places absolute menus on
+        // the field. Pin on every mount/remount (autoMount), not only once after createShadowRootUi.
+        const root = container.getRootNode();
+        const host = root instanceof ShadowRoot ? (root.host as HTMLElement) : null;
+        if (host) pinOverlayHost(host, container);
+        return dispose;
+      },
       onRemove: (dispose) => dispose?.(),
     });
-    ui.mount();
-    // After WXT's applyPosition: force a viewport-sized host so Safari places absolute menus on the field.
-    pinOverlayHost(ui.shadowHost, ui.uiContainer);
+    // One-shot mount() throws when body is missing at idle, and never remounts after SPA body swaps
+    // (#182). autoMount waits for the anchor and remounts when it is removed/re-added.
+    ui.autoMount();
   },
 });
