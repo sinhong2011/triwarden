@@ -27,8 +27,11 @@ fi
 
 # release-please bumps the manifest on merge, then creates the tag in the same
 # push's release workflow. Allow that transient window.
+# Titles must stay in sync with release-please-config.json:
+#   app:       pull-request-title-pattern "chore: release ${version}"
+#   extension: pull-request-title-pattern "chore(extension): release ${version}"
 subject=$(git log -1 --format=%s)
-if [[ $subject == 'chore: release '* ]]; then
+if [[ $subject == 'chore: release '* || $subject == 'chore(extension): release '* ]]; then
   echo "WARN: ${tag} missing, but HEAD is a release-please release commit; tag expected shortly."
   exit 0
 fi
