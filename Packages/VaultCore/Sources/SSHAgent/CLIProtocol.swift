@@ -185,6 +185,10 @@ public enum BridgeClient {
             }
             return response
         case .failed(let err):
+            // kill -9 / crash leaves a dead cli.sock (ECONNREFUSED). Drop it so the next probe sees
+            // ENOENT; BridgeStatus.wanted still maps that to app_not_running. start() also unlinks
+            // before bind. App Group clients (Safari appex, tw) can unlink this path.
+            if err == ECONNREFUSED { unlink(socket) }
             return unavailableResponse(errno: err, socket: socket)
         }
     }

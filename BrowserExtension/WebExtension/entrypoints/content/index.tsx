@@ -1,10 +1,11 @@
 // Triwarden content script.
-// Safari: generate password/passphrase + save (system AutoFill owns vault pick/fill).
+// Safari: generate + save + a bridge-down toast on ordinary login fields (system AutoFill owns vault pick/fill).
 // Chrome / Firefox / Edge: vault suggestions/fill overlay + save.
 import { render } from 'solid-js/web';
 import { pinOverlayHost } from '../../lib/overlay-layout';
 import { vaultFillInOverlay } from '../../lib/runtime';
 import { watchForSubmits } from '../../lib/save';
+import BridgeDownBanner from './BridgeDownBanner';
 import GenerateOverlay from './GenerateOverlay';
 import Overlay from './Overlay';
 import './overlay.css';
@@ -27,7 +28,15 @@ export default defineContentScript({
       mode: 'closed',
       onMount: (container) => {
         const dispose = render(
-          () => (vaultFillInOverlay() ? <Overlay /> : <GenerateOverlay />),
+          () =>
+            vaultFillInOverlay() ? (
+              <Overlay />
+            ) : (
+              <>
+                <GenerateOverlay />
+                <BridgeDownBanner />
+              </>
+            ),
           container,
         );
         // After WXT's applyPosition: force a viewport-sized host so Safari places absolute menus on

@@ -521,9 +521,7 @@ private struct BrowserSettings: View {
                 Toggle("Allow the browser extension", isOn: $browserEnabled)
                     .onChange(of: browserEnabled) { _, on in
                         model.cli.refreshRunning()
-                        if on, SMAppService.mainApp.status != .enabled {
-                            askOpenAtLogin = true
-                        }
+                        if on { enableOpenAtLoginForBrowser() }
                     }
                 Toggle("Show suggestions when a field is focused", isOn: $autoShow)
                     .disabled(!browserEnabled)
@@ -537,7 +535,7 @@ private struct BrowserSettings: View {
             } header: {
                 Text("Browser extension")
             } footer: {
-                Text("Suggestions show names only; filling asks for Touch ID, saving asks you first.")
+                Text("Suggestions show names only; filling asks for Touch ID, saving asks you first. The extension only works while Triwarden is running — turning this on also turns on Open at login (change that anytime in General).")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -575,7 +573,7 @@ private struct BrowserSettings: View {
             }
             Button("Not now", role: .cancel) {}
         } message: {
-            Text("The browser extension only works while Triwarden is running. Opening at login keeps it available after a restart.")
+            Text("Triwarden could not turn on Open at login automatically. The browser extension only works while the app is running — turn this on so it stays available after a restart.")
         }
     }
 
@@ -600,6 +598,19 @@ private struct BrowserSettings: View {
             }
         } label: {
             Text(verbatim: browser.title)
+        }
+    }
+
+    /// Browser integration dies when the app is quit; register Open at login so a reboot/update does not leave Safari silent.
+    /// Falls back to a confirmation if `SMAppService` refuses (user can still choose Not now).
+    private func enableOpenAtLoginForBrowser() {
+        guard SMAppService.mainApp.status != .enabled else { return }
+        do {
+            try SMAppService.mainApp.register()
+            problem = nil
+        } catch {
+            problem = error.localizedDescription
+            askOpenAtLogin = true
         }
     }
 
