@@ -38,6 +38,8 @@ export type GeneratorOptions = {
 export type Reply = {
   ok: boolean;
   error?: string;
+  /** Machine-readable failure: `app_not_running`, `connection_disabled`, … */
+  code?: string;
   rows?: Row[];
   /** `match`: the Browser setting "Show suggestions when a field is focused". */
   autoShow?: boolean;

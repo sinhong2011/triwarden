@@ -510,6 +510,8 @@ private struct BrowserSettings: View {
     /// Browsers whose store page was opened from here, so the row moves on to Connect (the app cannot see what is installed in a browser).
     @AppStorage("browserInstallOpened") private var installOpened = Data()
     @State private var problem: String?
+    /// Offer Open at login once when Browser is turned on and it is not already registered.
+    @State private var askOpenAtLogin = false
 
     private var tool: String { CLIBridge.toolPath }
 
@@ -517,7 +519,12 @@ private struct BrowserSettings: View {
         Form {
             Section {
                 Toggle("Allow the browser extension", isOn: $browserEnabled)
-                    .onChange(of: browserEnabled) { model.cli.refreshRunning() }
+                    .onChange(of: browserEnabled) { _, on in
+                        model.cli.refreshRunning()
+                        if on, SMAppService.mainApp.status != .enabled {
+                            askOpenAtLogin = true
+                        }
+                    }
                 Toggle("Show suggestions when a field is focused", isOn: $autoShow)
                     .disabled(!browserEnabled)
                 Picker("Ask before filling", selection: $approvalSeconds) {
@@ -557,6 +564,19 @@ private struct BrowserSettings: View {
         .scrollContentBackground(.hidden)
         .thinScroller()
         .onAppear(perform: refresh)
+        .confirmationDialog("Open Triwarden at login?", isPresented: $askOpenAtLogin, titleVisibility: .visible) {
+            Button("Open at login") {
+                do {
+                    try SMAppService.mainApp.register()
+                    problem = nil
+                } catch {
+                    problem = error.localizedDescription
+                }
+            }
+            Button("Not now", role: .cancel) {}
+        } message: {
+            Text("The browser extension only works while Triwarden is running. Opening at login keeps it available after a restart.")
+        }
     }
 
     @ViewBuilder private func row(_ browser: NativeHost.Browser) -> some View {

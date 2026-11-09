@@ -1,5 +1,6 @@
 import Darwin
 import Foundation
+import os
 
 /// JSON messages between the `tw` command and the app (one frame each way per request).
 public struct CLIRequest: Codable, Sendable, Equatable {
@@ -94,6 +95,8 @@ public struct CLIResponse: Codable, Sendable, Equatable {
     public var totpPeriod: Int?
     public var rows: [Row]?
     public var error: String?
+    /// Machine-readable reason when `ok` is false: `app_not_running`, `connection_disabled`, …
+    public var code: String?
     /// `match`: whether the Browser setting "Show suggestions when a field is focused" is on. The extension keeps it.
     public var autoShow: Bool?
     /// `generate`: echo of the options that produced `value` (length = characters or passphrase words).
@@ -113,12 +116,13 @@ public struct CLIResponse: Codable, Sendable, Equatable {
 
     public init(ok: Bool, value: String? = nil, username: String? = nil, password: String? = nil, totp: String? = nil,
                 totpRemaining: Int? = nil, totpPeriod: Int? = nil, rows: [Row]? = nil, error: String? = nil,
-                autoShow: Bool? = nil, length: Int? = nil, uppercase: Bool? = nil, lowercase: Bool? = nil,
-                digits: Bool? = nil, symbols: Bool? = nil, avoidAmbiguous: Bool? = nil, minNumbers: Int? = nil,
-                minSpecial: Int? = nil, separator: String? = nil, capitalize: Bool? = nil, includeNumber: Bool? = nil,
-                entropyBits: Double? = nil) {
+                code: String? = nil, autoShow: Bool? = nil, length: Int? = nil, uppercase: Bool? = nil,
+                lowercase: Bool? = nil, digits: Bool? = nil, symbols: Bool? = nil, avoidAmbiguous: Bool? = nil,
+                minNumbers: Int? = nil, minSpecial: Int? = nil, separator: String? = nil, capitalize: Bool? = nil,
+                includeNumber: Bool? = nil, entropyBits: Double? = nil) {
         self.ok = ok; self.value = value; self.username = username; self.password = password; self.totp = totp
         self.totpRemaining = totpRemaining; self.totpPeriod = totpPeriod; self.rows = rows; self.error = error
+        self.code = code
         self.autoShow = autoShow; self.length = length; self.uppercase = uppercase; self.lowercase = lowercase
         self.digits = digits; self.symbols = symbols; self.avoidAmbiguous = avoidAmbiguous
         self.minNumbers = minNumbers; self.minSpecial = minSpecial; self.separator = separator
@@ -129,7 +133,9 @@ public struct CLIResponse: Codable, Sendable, Equatable {
     public static func list(_ rows: [Row], autoShow: Bool? = nil) -> CLIResponse {
         CLIResponse(ok: true, rows: rows, autoShow: autoShow)
     }
-    public static func failure(_ message: String) -> CLIResponse { CLIResponse(ok: false, error: message) }
+    public static func failure(_ message: String, code: String? = nil) -> CLIResponse {
+        CLIResponse(ok: false, error: message, code: code)
+    }
     public static func credentials(username: String?, password: String?, totp: String?,
                                    totpRemaining: Int? = nil, totpPeriod: Int? = nil) -> CLIResponse {
         CLIResponse(ok: true, username: username, password: password, totp: totp,
@@ -142,9 +148,17 @@ public enum CLISocket {
     public static let name = "cli.sock"
 }
 
+/// Shared App Group flags the app writes so sandboxed clients can tell why the bridge is unreachable.
+public enum BridgeStatus {
+    /// `true` while Settings › Browser or Developer has the bridge on. Kept across quit so a missing
+    /// socket means "open Triwarden", not "turn the setting on".
+    public static let wantedKey = "cliBridgeWanted"
+}
+
 /// One request/response to the running app (used by `tw`, the Chrome host and the Safari extension).
 public enum BridgeClient {
     public static let appGroup = "FX3VR69P5K.io.github.sinhong2011.triwarden"
+    private static let log = Logger(subsystem: "io.github.sinhong2011.triwarden", category: "bridge")
 
     /// `~/Library/Group Containers/<group>/cli.sock`, resolved for sandboxed and unsandboxed callers alike.
     public static var defaultSocketPath: String {
@@ -155,16 +169,63 @@ public enum BridgeClient {
             .appending(path: "Library/Group Containers/\(appGroup)/\(CLISocket.name)").path
     }
 
+    /// App Group defaults the running app mirrors when Browser/CLI is toggled.
+    public static var sharedDefaults: UserDefaults {
+        UserDefaults(suiteName: appGroup) ?? .standard
+    }
+
     public static func send(_ request: CLIRequest, socket: String = defaultSocketPath) -> CLIResponse {
-        guard let fd = FramedSocketServer.connect(to: socket) else {
-            return .failure("Triwarden isn't running, or this connection is turned off in Settings › Browser or Developer.")
+        switch connectOrRetry(socket) {
+        case .connected(let fd):
+            defer { close(fd) }
+            guard let body = try? JSONEncoder().encode(request), FramedSocketServer.writeFrame(fd, body),
+                  let reply = FramedSocketServer.readFrame(fd, max: 8 * 1024 * 1024),
+                  let response = try? JSONDecoder().decode(CLIResponse.self, from: reply) else {
+                return .failure("No answer from Triwarden.")
+            }
+            return response
+        case .failed(let err):
+            return unavailableResponse(errno: err, socket: socket)
         }
-        defer { close(fd) }
-        guard let body = try? JSONEncoder().encode(request), FramedSocketServer.writeFrame(fd, body),
-              let reply = FramedSocketServer.readFrame(fd, max: 8 * 1024 * 1024),
-              let response = try? JSONDecoder().decode(CLIResponse.self, from: reply) else {
-            return .failure("No answer from Triwarden.")
+    }
+
+    /// One short retry: the app may still be binding `cli.sock` right after launch.
+    private static func connectOrRetry(_ socket: String) -> FramedSocketServer.ConnectOutcome {
+        switch FramedSocketServer.attemptConnect(to: socket) {
+        case .connected(let fd):
+            return .connected(fd)
+        case .failed(let err):
+            guard err == ECONNREFUSED || err == ENOENT else { return .failed(errno: err) }
+            usleep(150_000)
+            return FramedSocketServer.attemptConnect(to: socket)
         }
+    }
+
+    /// Maps a connect errno (+ optional App Group "wanted" flag) to an actionable failure.
+    public static func unavailableResponse(errno err: Int32, socket: String? = nil,
+                                           bridgeWanted: Bool? = nil) -> CLIResponse {
+        let wanted = bridgeWanted ?? {
+            let defaults = sharedDefaults
+            guard defaults.object(forKey: BridgeStatus.wantedKey) != nil else { return nil }
+            return defaults.bool(forKey: BridgeStatus.wantedKey)
+        }()
+        let response: CLIResponse
+        if err == ECONNREFUSED || wanted == true {
+            response = .failure(
+                "Triwarden isn't running — open Triwarden to use the browser extension.",
+                code: "app_not_running")
+        } else if wanted == false {
+            response = .failure(
+                "This connection is turned off in Settings › Browser or Developer.",
+                code: "connection_disabled")
+        } else {
+            // Flag never written (fresh install / older build): prefer the actionable "open the app" path.
+            response = .failure(
+                "Triwarden isn't running — open Triwarden to use the browser extension.",
+                code: "app_not_running")
+        }
+        let path = socket ?? "(default)"
+        log.error("bridge connect failed path=\(path, privacy: .public) errno=\(err) wanted=\(String(describing: wanted), privacy: .public) code=\(response.code ?? "-", privacy: .public)")
         return response
     }
 }

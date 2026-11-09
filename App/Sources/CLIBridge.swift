@@ -60,6 +60,9 @@ final class CLIBridge {
     /// Runs while the command line or the browser extension is turned on.
     func refreshRunning() {
         let wanted = UserDefaults.standard.bool(forKey: Pref.cli) || UserDefaults.standard.bool(forKey: Pref.browser)
+        // Mirror into the App Group so Safari/`tw` can tell "open the app" from "turn the setting on"
+        // even after quit unlinks cli.sock.
+        UserDefaults(suiteName: AccountStore.appGroup)?.set(wanted, forKey: BridgeStatus.wantedKey)
         if wanted { start() } else { stop() }
     }
 

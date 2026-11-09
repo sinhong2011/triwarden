@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 import Testing
 @testable import SSHAgent
@@ -112,4 +113,38 @@ struct CLIProtocolTests {
         #expect(phrase["includeNumber"] as? Bool == true)
     }
 
+
+    @Test func failureCarriesAnOptionalCode() throws {
+        let json = try object(.failure("Triwarden isn't running — open Triwarden to use the browser extension.",
+                                       code: "app_not_running"))
+        #expect(json["ok"] as? Bool == false)
+        #expect(json["code"] as? String == "app_not_running")
+        #expect((json["error"] as? String)?.contains("open Triwarden") == true)
+        // Older clients that omit code still decode.
+        let plain = try JSONDecoder().decode(CLIResponse.self, from: Data(#"{"ok":false,"error":"x"}"#.utf8))
+        #expect(plain.code == nil)
+        #expect(plain.error == "x")
+    }
+
+    @Test func unavailableMapsStaleSocketToAppNotRunning() {
+        let reply = BridgeClient.unavailableResponse(errno: ECONNREFUSED, bridgeWanted: nil)
+        #expect(reply.code == "app_not_running")
+        #expect(reply.error?.contains("open Triwarden") == true)
+    }
+
+    @Test func unavailableMapsWantedFlagToAppNotRunningEvenWithoutSocket() {
+        let reply = BridgeClient.unavailableResponse(errno: ENOENT, bridgeWanted: true)
+        #expect(reply.code == "app_not_running")
+    }
+
+    @Test func unavailableMapsDisabledSettingSeparately() {
+        let reply = BridgeClient.unavailableResponse(errno: ENOENT, bridgeWanted: false)
+        #expect(reply.code == "connection_disabled")
+        #expect(reply.error?.contains("Settings") == true)
+    }
+
+    @Test func unavailableWithoutFlagPrefersOpenApp() {
+        let reply = BridgeClient.unavailableResponse(errno: ENOENT, bridgeWanted: nil)
+        #expect(reply.code == "app_not_running")
+    }
 }

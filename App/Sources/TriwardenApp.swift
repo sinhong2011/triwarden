@@ -538,6 +538,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                                name: NSWindow.willCloseNotification, object: nil)
     }
 
+    /// Unlink cli.sock on a normal quit so clients see ENOENT instead of a stale ECONNREFUSED socket.
+    /// Leaves the App Group "wanted" flag alone so the extension can still say "open Triwarden".
+    func applicationWillTerminate(_ notification: Notification) {
+        model?.cli.stop()
+    }
+
     @objc private func revealSSHApproval() {
         model?.sshAgent.reveal()
     }

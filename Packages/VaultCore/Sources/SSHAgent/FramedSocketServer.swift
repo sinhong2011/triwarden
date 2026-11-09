@@ -134,12 +134,25 @@ public final class FramedSocketServer: @unchecked Sendable {
         return true
     }
 
+    /// Outcome of a client connect: the open fd, or the Darwin errno (`ENOENT`, `ECONNREFUSED`, …).
+    public enum ConnectOutcome: Sendable {
+        case connected(Int32)
+        case failed(errno: Int32)
+    }
+
     /// Connects to a server socket (for clients such as the CLI). Returns the fd or nil.
     public static func connect(to path: String) -> Int32? {
+        if case .connected(let fd) = attemptConnect(to: path) { return fd }
+        return nil
+    }
+
+    /// Like `connect`, but returns the Darwin errno when the connection fails so callers can
+    /// distinguish a missing socket (`ENOENT`) from a stale one (`ECONNREFUSED`).
+    public static func attemptConnect(to path: String) -> ConnectOutcome {
         var addr = sockaddr_un()
-        guard path.utf8.count < MemoryLayout.size(ofValue: addr.sun_path) else { return nil }
+        guard path.utf8.count < MemoryLayout.size(ofValue: addr.sun_path) else { return .failed(errno: ENAMETOOLONG) }
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { return nil }
+        guard fd >= 0 else { return .failed(errno: errno) }
         addr.sun_family = sa_family_t(AF_UNIX)
         withUnsafeMutableBytes(of: &addr.sun_path) { buf in
             buf.copyBytes(from: path.utf8)
@@ -147,8 +160,12 @@ public final class FramedSocketServer: @unchecked Sendable {
         }
         let size = socklen_t(MemoryLayout<sockaddr_un>.size)
         let ok = withUnsafePointer(to: &addr) { $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(fd, $0, size) } }
-        guard ok == 0 else { close(fd); return nil }
-        return fd
+        guard ok == 0 else {
+            let err = errno
+            close(fd)
+            return .failed(errno: err)
+        }
+        return .connected(fd)
     }
 
     static func peer(of fd: Int32) -> Peer {
