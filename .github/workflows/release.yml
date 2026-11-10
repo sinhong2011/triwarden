@@ -1,9 +1,11 @@
 name: Release
 
 # Conventional commits on main → release-please keeps a release PR up to date (version + CHANGELOG).
-# Merging that PR tags vX.Y.Z and creates the GitHub release; the build job then signs, notarizes and uploads
-# the DMG, the zip, the Sparkle appcast (what the in-app updater reads) and the Homebrew cask, then pushes the cask to
-# sinhong2011/homebrew-tap (with a deploy key that can write to that repo only).
+# Merging the app release PR tags vX.Y.Z and creates the GitHub release; the build job then signs, notarizes and
+# uploads the DMG, the zip, the Sparkle appcast (what the in-app updater reads) and the Homebrew cask, then pushes
+# the cask to sinhong2011/homebrew-tap (with a deploy key that can write to that repo only).
+# Extension releases (extension-v*) are created here too. They must not become GitHub's Latest release: that
+# pointer is what /releases/latest/download/appcast.xml follows, and an extension release has no appcast.
 
 on:
   workflow_run:
@@ -92,6 +94,31 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: main
+
+      # release-please has no make_latest input, so a new extension-v* release would become Latest
+      # and /releases/latest/download/appcast.xml would 404. Turn Latest off for that tag and point
+      # it at the app release. App releases skip this step and can still become Latest.
+      - name: Check out the release script
+        uses: actions/checkout@v4
+        if: ${{ success() && steps.rp.outputs['BrowserExtension/WebExtension--release_created'] == 'true' }}
+        with:
+          ref: ${{ needs.source.outputs.sha }}
+          persist-credentials: false
+          fetch-depth: 1
+      - name: Keep extension releases off Latest
+        if: ${{ success() && steps.rp.outputs['BrowserExtension/WebExtension--release_created'] == 'true' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXTENSION_TAG: ${{ steps.rp.outputs['BrowserExtension/WebExtension--tag_name'] }}
+          APP_TAG: ${{ steps.rp.outputs.tag_name }}
+          APP_CREATED: ${{ steps.rp.outputs.release_created }}
+        run: |
+          set -euo pipefail
+          if [[ $APP_CREATED == true ]]; then
+            scripts/keep-app-release-latest.sh "$EXTENSION_TAG" "$APP_TAG"
+          else
+            scripts/keep-app-release-latest.sh "$EXTENSION_TAG"
+          fi
 
   build:
     needs: [source, release-please, manual-validation]

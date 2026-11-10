@@ -121,6 +121,8 @@ jobs:
           git fetch --tags --force origin
       - name: Require extension-v* tag for manifest version
         run: scripts/ci/check-extension-release-anchor.sh
+      - name: Extension releases must not stay Latest
+        run: python3 scripts/test-keep-app-release-latest.py
 
   # On pull requests, skip the macOS VaultCore / Vaultwarden / app jobs when only docs
   # or release-please config changed. main, workflow_dispatch, and workflow_call always run

@@ -24,6 +24,17 @@ Releases are automatic once the one-time setup is done:
    `https://github.com/sinhong2011/triwarden/releases/latest/download/appcast.xml`. They verify the EdDSA
    signature and the notarization, install, and relaunch. Everyone else gets it from **Check for Updates…**.
 
+The browser extension is a second release-please component (`BrowserExtension/WebExtension`, tag
+`extension-v*`). That GitHub release has no `appcast.xml`. release-please always publishes a release as
+Latest and cannot set `make_latest`
+([googleapis/release-please#2317](https://github.com/googleapis/release-please/issues/2317)). The Release
+workflow then runs `scripts/keep-app-release-latest.sh`, which is `gh release edit <extension-tag>
+--latest=false` followed by pointing Latest at the app release (`vX.Y.Z` from the same run, otherwise the
+newest published app tag). Clearing Latest does not promote another release, so the app tag has to be set
+explicitly. App releases still become Latest, which is what serves `appcast.xml`. This does not change
+which release is Latest until the next extension release is published. If an extension release is already
+Latest, mark the newest app release (for example `v0.9.1`) as Latest once by hand.
+
 ## One-time setup (maintainer)
 
 These are your credentials, so run each step yourself. Nothing secret goes into the repository.
