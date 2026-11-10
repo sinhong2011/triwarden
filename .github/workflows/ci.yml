@@ -56,11 +56,9 @@ jobs:
 
   # Chrome/Firefox store zips use BrowserExtension/WebExtension/package.json.
   # Feature PRs may change those zip inputs without bumping package.json. The store
-  # version is raised later by the extension release-please PR (branch prefix
-  # release-please--branches--main--components--extension, titles like
-  # chore(extension): release …). Only that PR must set package.json greater than
-  # the last released extension version (BrowserExtension/WebExtension in the
-  # PR base .release-please-manifest.json), not the copy this PR already bumped.
+  # version is raised on the app release-please PR (branch prefix release-please--,
+  # titles like chore: release …) to match MARKETING_VERSION. Only that PR must set
+  # package.json greater than the PR base and equal to the new app version.
   extension-version:
     name: Extension version bump
     if: github.event_name == 'pull_request'
@@ -89,41 +87,29 @@ jobs:
       - name: No Chrome/Firefox zip inputs changed
         if: steps.filter.outputs.extension_zip != 'true'
         run: echo 'No BrowserExtension/WebExtension zip inputs in this PR.'
-      # Feature PRs stay green without a package.json bump. The extension
-      # release-please branch is the one that must raise the store version.
+      # Feature PRs stay green without a package.json bump. The app
+      # release-please branch is the one that raises the store version.
       - name: Feature PR defers the store version
-        if: steps.filter.outputs.extension_zip == 'true' && !startsWith(github.head_ref, 'release-please--branches--main--components--extension')
+        if: steps.filter.outputs.extension_zip == 'true' && !startsWith(github.head_ref, 'release-please--')
         run: |
           echo 'Chrome/Firefox zip inputs changed. Feature PRs do not bump BrowserExtension/WebExtension/package.json.'
-          echo 'The extension release-please PR (branch prefix release-please--branches--main--components--extension, titles like chore(extension): release …) must raise it above the last released version in .release-please-manifest.json.'
-      - name: Require package.json version bump
-        if: steps.filter.outputs.extension_zip == 'true' && startsWith(github.head_ref, 'release-please--branches--main--components--extension')
+          echo 'The app release-please PR (branch prefix release-please--, titles like chore: release …) sets it to the new app version.'
+      - name: Require package.json to match the app version
+        if: steps.filter.outputs.extension_zip == 'true' && startsWith(github.head_ref, 'release-please--')
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: scripts/ci/check-extension-version.sh "$BASE_SHA"
 
-
-  # Manifest version for BrowserExtension/WebExtension must have a matching
-  # extension-v* tag (or release-please reopens chore: release 0.1.0).
-  extension-release-anchor:
-    name: Extension release anchor
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && !startsWith(github.head_ref, 'release-please--'))
+  release-scripts:
+    name: Release scripts
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          fetch-tags: true
           ref: ${{ inputs.ref || github.sha }}
-      - name: Ensure origin remote for ls-remote fallback
-        run: |
-          git remote get-url origin >/dev/null 2>&1 || git remote add origin "https://github.com/${{ github.repository }}.git"
-          git fetch --tags --force origin
-      - name: Require extension-v* tag for manifest version
-        run: scripts/ci/check-extension-release-anchor.sh
-      - name: Extension releases must not stay Latest
-        run: python3 scripts/test-keep-app-release-latest.py
-      - name: Extension version bump uses the PR base manifest
+      - name: Release-please manifest is valid JSON
+        run: python3 -c 'import json,sys; json.load(open(".release-please-manifest.json"))'
+      - name: Extension store version matches the app on the release PR
         run: python3 scripts/test-check-extension-version.py
 
   # On pull requests, skip the macOS VaultCore / Vaultwarden / app jobs when only docs

@@ -23,9 +23,11 @@ permissions:
   contents: read
 
 jobs:
-  # Pull requests, main pushes, and published releases all build. Deploy is the step that is limited.
+  # Pull requests, main pushes, and published app releases all build. Deploy is the step that is limited.
+  # Historical extension-v* GitHub releases have no DMG; ignore those release events.
   build:
     name: Build site
+    if: github.event_name != 'release' || startsWith(github.event.release.tag_name, 'v')
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -67,7 +69,9 @@ jobs:
 
   deploy:
     name: Deploy to Cloudflare Pages
-    if: github.event_name == 'release' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: >-
+      (github.event_name == 'release' && startsWith(github.event.release.tag_name, 'v')) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
     needs: build
     runs-on: ubuntu-latest
     defaults:

@@ -5,7 +5,6 @@
   "include-component-in-tag": false,
   "include-commit-authors": true,
   "bump-minor-pre-major": true,
-  "separate-pull-requests": true,
   "bootstrap-sha": "c11d2dc55735f638ce361693a15a9ae9c3c39633",
   "pull-request-title-pattern": "chore: release ${version}",
   "changelog-sections": [
@@ -50,24 +49,17 @@
       "package-name": "triwarden",
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
-      "exclude-paths": [
-        "BrowserExtension/WebExtension"
-      ],
       "extra-files": [
         {
           "type": "generic",
           "path": "project.yml"
+        },
+        {
+          "type": "json",
+          "path": "BrowserExtension/WebExtension/package.json",
+          "jsonpath": "$.version"
         }
       ]
-    },
-    "BrowserExtension/WebExtension": {
-      "release-type": "node",
-      "package-name": "triwarden-extension",
-      "component": "extension",
-      "include-component-in-tag": true,
-      "changelog-path": "CHANGELOG.md",
-      "bootstrap-sha": "f7878bc9de06687c9bd9db5566d5ab01e9b7e627",
-      "pull-request-title-pattern": "chore(extension): release ${version}"
     }
   }
 }

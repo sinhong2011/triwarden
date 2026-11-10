@@ -8,8 +8,13 @@ Releases are automatic once the one-time setup is done:
    CI checks every PR title (`.github/workflows/pr-title.yml`). Use the same prefixes when you squash-merge
    so the merge commit on `main` is what release-please reads.
 2. [release-please](https://github.com/googleapis/release-please) keeps a **release PR** open with the next version
-   (in `project.yml`) and `CHANGELOG.md`. With `include-commit-authors` in `release-please-config.json`, each
-   entry ends with `(@username)` when GitHub knows the author (otherwise the author name).
+   (in `project.yml` and `BrowserExtension/WebExtension/package.json`) and `CHANGELOG.md`. With
+   `include-commit-authors` in `release-please-config.json`, each entry ends with `(@username)` when GitHub
+   knows the author (otherwise the author name). Chrome/Firefox zip changes land on feature PRs without a
+   store version bump; the release PR raises `package.json` to the new app version. Submit those zips by hand
+   with **Actions › Publish browser extension** only when the extension itself changed. Safari ships inside
+   the app. There is one GitHub release (`vX.Y.Z`); do not create `extension-v*` releases (they have no
+   `appcast.xml` and would take `/releases/latest`).
 3. Merging the release PR tags `vX.Y.Z` and creates the GitHub release. The `build` job in
    `.github/workflows/release.yml` then runs `scripts/release.sh X.Y.Z --publish`:
    - archive a Release build (build number = commit count);
@@ -23,17 +28,6 @@ Releases are automatic once the one-time setup is done:
 4. Installed copies with automatic checks on find the update through
    `https://github.com/sinhong2011/triwarden/releases/latest/download/appcast.xml`. They verify the EdDSA
    signature and the notarization, install, and relaunch. Everyone else gets it from **Check for Updates…**.
-
-The browser extension is a second release-please component (`BrowserExtension/WebExtension`, tag
-`extension-v*`). That GitHub release has no `appcast.xml`. release-please always publishes a release as
-Latest and cannot set `make_latest`
-([googleapis/release-please#2317](https://github.com/googleapis/release-please/issues/2317)). The Release
-workflow then runs `scripts/keep-app-release-latest.sh`, which is `gh release edit <extension-tag>
---latest=false` followed by pointing Latest at the app release (`vX.Y.Z` from the same run, otherwise the
-newest published app tag). Clearing Latest does not promote another release, so the app tag has to be set
-explicitly. App releases still become Latest, which is what serves `appcast.xml`. This does not change
-which release is Latest until the next extension release is published. If an extension release is already
-Latest, mark the newest app release (for example `v0.9.1`) as Latest once by hand.
 
 ## One-time setup (maintainer)
 

@@ -1,5 +1,8 @@
 # Changelog
 
+New Chrome/Firefox notes live in the [root changelog](../../CHANGELOG.md).
+This file is the history of `extension-v*` GitHub releases, which are no longer published.
+
 ## [0.5.0](https://github.com/sinhong2011/triwarden/compare/extension-v0.4.3...extension-v0.5.0) (2026-11-10)
 
 
