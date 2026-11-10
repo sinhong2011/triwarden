@@ -164,11 +164,11 @@ enum MenuBarOpener {
     private static func present(_ item: NSStatusItem) {
         let begin = NSSelectorFromString("_beginExpandedInterfaceSession:")
         if item.responds(to: begin), let imp = item.method(for: begin) {
-            // Timestamp must post-date the last session end, or AppKit drops the begin. A
-            // programmatic open has no event, so pass the maximum.
+            // Must be later than the last session end. `.greatestFiniteMagnitude` only
+            // works once: the next begin can never post-date it, so AppKit drops it.
             typealias Begin = @convention(c) (AnyObject, Selector, TimeInterval) -> Void
-            unsafeBitCast(imp, to: Begin.self)(item, begin, .greatestFiniteMagnitude)
-            return
+            unsafeBitCast(imp, to: Begin.self)(item, begin, ProcessInfo.processInfo.systemUptime)
+            if panel?.isVisible == true { return }
         }
         item.button?.performClick(nil)
     }
