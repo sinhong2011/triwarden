@@ -125,7 +125,7 @@ export default function Overlay() {
     const m = menu();
     if (!m || refreshing) return;
     refreshing = true;
-    const reply = await send({ command: 'match', codes: true, reveal: true });
+    const reply = await send({ command: 'match', codes: true, reveal: true, silent: true });
     refreshing = false;
     const now = menu();
     if (!now || now.target.field !== m.target.field || !reply.ok) return;
@@ -211,7 +211,7 @@ export default function Overlay() {
       command: 'match',
       codes: !!target.otp && !auto,
       reveal: !!target.otp && !auto,
-      ...(!auto ? { foreground: true } : {}),
+      ...(auto ? { silent: true } : { foreground: true }),
     });
     if (mine !== asking) return; // closed, or a newer ask took over
     if (reply.autoShow !== undefined) autoShow = reply.autoShow;

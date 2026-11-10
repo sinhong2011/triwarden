@@ -32,7 +32,7 @@ export default function BridgeDownBanner() {
     probing = true;
     lastProbe = now;
     try {
-      const reply = await send({ command: 'match' });
+      const reply = await send({ command: 'match', silent: true });
       if (!isBridgeDown(reply)) {
         setNote(null);
         dismissedFor = '';
