@@ -59,8 +59,8 @@ jobs:
   # version is raised later by the extension release-please PR (branch prefix
   # release-please--branches--main--components--extension, titles like
   # chore(extension): release …). Only that PR must set package.json greater than
-  # the last released extension version (BrowserExtension/WebExtension in
-  # .release-please-manifest.json), not merely greater than the PR base tip.
+  # the last released extension version (BrowserExtension/WebExtension in the
+  # PR base .release-please-manifest.json), not the copy this PR already bumped.
   extension-version:
     name: Extension version bump
     if: github.event_name == 'pull_request'
@@ -123,6 +123,8 @@ jobs:
         run: scripts/ci/check-extension-release-anchor.sh
       - name: Extension releases must not stay Latest
         run: python3 scripts/test-keep-app-release-latest.py
+      - name: Extension version bump uses the PR base manifest
+        run: python3 scripts/test-check-extension-version.py
 
   # On pull requests, skip the macOS VaultCore / Vaultwarden / app jobs when only docs
   # or release-please config changed. main, workflow_dispatch, and workflow_call always run
