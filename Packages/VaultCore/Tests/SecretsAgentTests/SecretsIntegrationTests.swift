@@ -135,7 +135,12 @@ struct SecretsIntegrationTests {
     @Test func modifiedBundleSealRejectsCredentialDelivery() throws {
         let (code, error) = try run(mode: "allow", sealedBundle: true, tamper: true)
         #expect(code == 70)
-        #expect(error.contains("not signed correctly") || error.contains("bundle was modified") || error.contains("signature"), Comment(rawValue: error))
+        #expect(!error.contains("triwarden-canary"))
+        // Client and server both check the seal. The loser of that race still fail-closes:
+        // a signature error, or the peer already dropped the socket.
+        let rejectedSeal = error.contains("signature") || error.contains("not signed correctly") || error.contains("bundle was modified")
+        let peerDropped = error.contains("Couldn't authenticate the local connection") || error.contains("closed or timed out")
+        #expect(rejectedSeal || peerDropped, Comment(rawValue: error))
     }
 
     @Test func maximumEscapedValueUsesOneCompleteFrame() throws {
