@@ -49,6 +49,8 @@ export type Reply = {
   totp?: string;
   totpRemaining?: number;
   totpPeriod?: number;
+  /** `fill`: the app also put the one-time code on the clipboard (same approval as the fill). */
+  totpCopied?: boolean;
   /** `generate`: the fresh password or passphrase. */
   value?: string;
 } & GeneratorOptions;
@@ -66,6 +68,13 @@ export type Request = {
   codes?: boolean;
   /** With `codes`: the person asked to see them. A field that only took focus never sets this. */
   reveal?: boolean;
+  /**
+   * `fill`: `false` when this page has a one-time-code field (the code goes in the form). `true` asks
+   * the app to copy the code with this fill's approval when the Browser setting is on. Omit it and
+   * the app still copies if the setting is on (older content scripts). The value never goes through
+   * the extension's clipboard.
+   */
+  copyTotp?: boolean;
   /** `generate` password: optional length override (passphrase: word count). */
   length?: number;
   /** `generate` password charset / rules — persisted into the app's `generator` prefs when sent. */

@@ -38,6 +38,10 @@ public struct CLIRequest: Codable, Sendable, Equatable {
     /// `match` with `codes`: the person asked for them (clicked the icon, pressed the shortcut). A field that merely
     /// took focus does not set this, and gets no codes.
     public var reveal: Bool?
+    /// `fill`: `false` when the extension filled an OTP field (do not also copy). `true` or omitted copies
+    /// when Settings › Browser › “Copy one-time code after filling a login” is on. The extension never
+    /// writes the clipboard itself.
+    public var copyTotp: Bool?
     /// Added by `tw` when a browser started it: that browser's extension origin (`chrome-extension://<id>/`) or, for
     /// Firefox, the add-on id. The app uses it to show which browsers are connected, since a sandboxed app cannot read
     /// their folders. The extension itself never sets it.
@@ -51,12 +55,13 @@ public struct CLIRequest: Codable, Sendable, Equatable {
                 avoidAmbiguous: Bool? = nil, minNumbers: Int? = nil, minSpecial: Int? = nil,
                 separator: String? = nil, capitalize: Bool? = nil, includeNumber: Bool? = nil,
                 url: String? = nil, username: String? = nil, password: String? = nil, codes: Bool? = nil,
-                reveal: Bool? = nil, origin: String? = nil, browser: String? = nil) {
+                reveal: Bool? = nil, copyTotp: Bool? = nil, origin: String? = nil, browser: String? = nil) {
         self.command = command; self.query = query; self.field = field; self.length = length
         self.uppercase = uppercase; self.lowercase = lowercase; self.digits = digits; self.symbols = symbols
         self.avoidAmbiguous = avoidAmbiguous; self.minNumbers = minNumbers; self.minSpecial = minSpecial
         self.separator = separator; self.capitalize = capitalize; self.includeNumber = includeNumber
-        self.url = url; self.username = username; self.password = password; self.codes = codes; self.reveal = reveal; self.origin = origin; self.browser = browser
+        self.url = url; self.username = username; self.password = password; self.codes = codes; self.reveal = reveal
+        self.copyTotp = copyTotp; self.origin = origin; self.browser = browser
     }
 }
 
@@ -93,6 +98,8 @@ public struct CLIResponse: Codable, Sendable, Equatable {
     /// `fill`: seconds the one-time code stays valid, and the length of its period (for a countdown).
     public var totpRemaining: Int?
     public var totpPeriod: Int?
+    /// `fill`: the one-time code was also put on the clipboard (same approval as the fill).
+    public var totpCopied: Bool?
     public var rows: [Row]?
     public var error: String?
     /// Machine-readable reason when `ok` is false: `app_not_running`, `connection_disabled`, …
@@ -115,14 +122,14 @@ public struct CLIResponse: Codable, Sendable, Equatable {
     public var entropyBits: Double?
 
     public init(ok: Bool, value: String? = nil, username: String? = nil, password: String? = nil, totp: String? = nil,
-                totpRemaining: Int? = nil, totpPeriod: Int? = nil, rows: [Row]? = nil, error: String? = nil,
-                code: String? = nil, autoShow: Bool? = nil, length: Int? = nil, uppercase: Bool? = nil,
-                lowercase: Bool? = nil, digits: Bool? = nil, symbols: Bool? = nil, avoidAmbiguous: Bool? = nil,
-                minNumbers: Int? = nil, minSpecial: Int? = nil, separator: String? = nil, capitalize: Bool? = nil,
-                includeNumber: Bool? = nil, entropyBits: Double? = nil) {
+                totpRemaining: Int? = nil, totpPeriod: Int? = nil, totpCopied: Bool? = nil, rows: [Row]? = nil,
+                error: String? = nil, code: String? = nil, autoShow: Bool? = nil, length: Int? = nil,
+                uppercase: Bool? = nil, lowercase: Bool? = nil, digits: Bool? = nil, symbols: Bool? = nil,
+                avoidAmbiguous: Bool? = nil, minNumbers: Int? = nil, minSpecial: Int? = nil, separator: String? = nil,
+                capitalize: Bool? = nil, includeNumber: Bool? = nil, entropyBits: Double? = nil) {
         self.ok = ok; self.value = value; self.username = username; self.password = password; self.totp = totp
-        self.totpRemaining = totpRemaining; self.totpPeriod = totpPeriod; self.rows = rows; self.error = error
-        self.code = code
+        self.totpRemaining = totpRemaining; self.totpPeriod = totpPeriod; self.totpCopied = totpCopied
+        self.rows = rows; self.error = error; self.code = code
         self.autoShow = autoShow; self.length = length; self.uppercase = uppercase; self.lowercase = lowercase
         self.digits = digits; self.symbols = symbols; self.avoidAmbiguous = avoidAmbiguous
         self.minNumbers = minNumbers; self.minSpecial = minSpecial; self.separator = separator
@@ -137,9 +144,10 @@ public struct CLIResponse: Codable, Sendable, Equatable {
         CLIResponse(ok: false, error: message, code: code)
     }
     public static func credentials(username: String?, password: String?, totp: String?,
-                                   totpRemaining: Int? = nil, totpPeriod: Int? = nil) -> CLIResponse {
+                                   totpRemaining: Int? = nil, totpPeriod: Int? = nil,
+                                   totpCopied: Bool? = nil) -> CLIResponse {
         CLIResponse(ok: true, username: username, password: password, totp: totp,
-                    totpRemaining: totpRemaining, totpPeriod: totpPeriod)
+                    totpRemaining: totpRemaining, totpPeriod: totpPeriod, totpCopied: totpCopied)
     }
 }
 
