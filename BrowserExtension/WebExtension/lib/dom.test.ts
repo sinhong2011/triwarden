@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { generatePasswordFields, generateTargets, isGeneratePasswordField } from './dom';
+import { generatePasswordFields, generateTargets, isGeneratePasswordField, otpTargets } from './dom';
 
 // jsdom has no layout; `visible()` needs a non-zero box.
 HTMLElement.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 200, 40);
@@ -86,5 +86,25 @@ describe('isGeneratePasswordField (Safari icon gate)', () => {
     const found = generatePasswordFields();
     expect(found).toHaveLength(1);
     expect(found[0]!.autocomplete).toBe('new-password');
+  });
+});
+
+describe('otpTargets', () => {
+  it('ignores a login form plus a paste-check field (issue #209 test page)', () => {
+    document.body.innerHTML = `<form>
+      <label for="user">Username</label>
+      <input id="user" name="username" autocomplete="username" />
+      <label for="pass">Password</label>
+      <input id="pass" name="password" type="password" autocomplete="current-password" />
+    </form>
+    <label for="paste">Paste clipboard here</label>
+    <input id="paste" placeholder="Cmd+V after fill" />`;
+    expect(otpTargets()).toEqual([]);
+  });
+
+  it('finds autocomplete=one-time-code', () => {
+    document.body.innerHTML = '<form><input id="code" autocomplete="one-time-code"></form>';
+    expect(otpTargets()).toHaveLength(1);
+    expect(otpTargets()[0]![0]!.id).toBe('code');
   });
 });

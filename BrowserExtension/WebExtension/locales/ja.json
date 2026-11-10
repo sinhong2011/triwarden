@@ -24,7 +24,8 @@
     "hintChoose": "選択",
     "hintFill": "入力",
     "hintClose": "閉じる",
-    "codeValidFor": "コードはあと $1 秒有効"
+    "codeValidFor": "コードはあと $1 秒有効",
+    "codeCopied": "コードをコピーしました"
   },
 
   "ctx": {

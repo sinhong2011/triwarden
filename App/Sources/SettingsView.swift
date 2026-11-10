@@ -501,6 +501,7 @@ private struct BrowserSettings: View {
     @Environment(AppModel.self) private var model
     @AppStorage(Pref.browser) private var browserEnabled = false
     @AppStorage(Pref.browserAutoShow) private var autoShow = true
+    @AppStorage(Pref.browserCopyTotpAfterFill) private var copyTotpAfterFill = false
     @AppStorage(Pref.browserApprovalSeconds) private var approvalSeconds = 600
     /// The browsers on this Mac and whether each is connected. Read from the manifests on disk; refreshed after a connect.
     @State private var states: [String: NativeHost.State] = [:]
@@ -525,6 +526,8 @@ private struct BrowserSettings: View {
                     }
                 Toggle("Show suggestions when a field is focused", isOn: $autoShow)
                     .disabled(!browserEnabled)
+                Toggle("Copy one-time code after filling a login", isOn: $copyTotpAfterFill)
+                    .disabled(!browserEnabled)
                 Picker("Ask before filling", selection: $approvalSeconds) {
                     Text("Every time").tag(0)
                     Text("Once per minute").tag(60)
@@ -535,7 +538,7 @@ private struct BrowserSettings: View {
             } header: {
                 Text("Browser extension")
             } footer: {
-                Text("Suggestions show names only; filling asks for Touch ID, saving asks you first. The extension only works while Triwarden is running — turning this on also turns on Open at login (change that anytime in General).")
+                Text("Suggestions show names only; filling asks for Touch ID, saving asks you first. “Copy one-time code after filling” puts the code on the clipboard when the page has no code field — same approval, clears on the usual timer. The extension only works while Triwarden is running — turning this on also turns on Open at login (change that anytime in General).")
                     .font(.caption).foregroundStyle(.secondary)
             }
 

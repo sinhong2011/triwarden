@@ -20,6 +20,8 @@ enum Pref {
     static let browser = "browser"                       // answer the Safari/Chrome extension
     static let browserApprovalSeconds = "browserApprovalSeconds" // how long a Touch ID covers the extension (0 = every time)
     static let browserAutoShow = "browserAutoShow"       // the extension opens its suggestions when a login field is focused (on by default)
+    /// After filling a login with no one-time-code field on the page, put that login's code on the clipboard (off until dogfooded).
+    static let browserCopyTotpAfterFill = "browserCopyTotpAfterFill"
     static let accessStatus = "accessStatus"             // temporary access shows at the notch (on unless turned off)
     static let accessStatusPosition = "accessStatusPosition" // NotchPosition: "notch" | "topLeft" | "topRight" | "custom"
     static let approvalStyle = "approvalStyle"               // "window" (default) | "notch": where approval requests appear

@@ -24,7 +24,8 @@
     "hintChoose": "选择",
     "hintFill": "填充",
     "hintClose": "关闭",
-    "codeValidFor": "验证码还剩 $1 秒有效"
+    "codeValidFor": "验证码还剩 $1 秒有效",
+    "codeCopied": "已复制验证码"
   },
 
   "ctx": {
