@@ -14,6 +14,7 @@ struct CLIProtocolTests {
         #expect(json["totp"] as? String == "123456")
         #expect(json["totpRemaining"] as? Int == 17)
         #expect(json["totpPeriod"] as? Int == 30)
+        #expect(json["totpCopied"] == nil)
     }
 
     @Test func fillWithoutACodeLeavesTheFieldsOut() throws {
@@ -21,6 +22,23 @@ struct CLIProtocolTests {
         #expect(json["totp"] == nil)
         #expect(json["totpRemaining"] == nil)
         #expect(json["totpPeriod"] == nil)
+        #expect(json["totpCopied"] == nil)
+    }
+
+    @Test func fillCanSayTheCodeWasCopied() throws {
+        let json = try object(.credentials(username: "u", password: "p", totp: "654321",
+                                           totpRemaining: 20, totpPeriod: 30, totpCopied: true))
+        #expect(json["totpCopied"] as? Bool == true)
+        #expect(json["totp"] as? String == "654321")
+    }
+
+    @Test func fillRequestCanAskToCopyTheCode() throws {
+        let asking = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"fill","query":"id","copyTotp":true}"#.utf8))
+        #expect(asking.copyTotp == true)
+        let skipping = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"fill","query":"id","copyTotp":false}"#.utf8))
+        #expect(skipping.copyTotp == false)
+        let plain = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"fill","query":"id"}"#.utf8))
+        #expect(plain.copyTotp == nil)
     }
 
     @Test func matchCanAskToBringTheWindowForward() throws {

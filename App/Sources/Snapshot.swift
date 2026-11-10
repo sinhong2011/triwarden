@@ -1603,6 +1603,37 @@ enum SelfTest {
                 check(matched.rows?.count == 1 && matched.rows?.first?.detail == "web-user" && elsewhere.rows?.isEmpty == true
                       && filled.username == "web-user" && filled.password == "web-pass-1" && !wrongSite.ok,
                       "browser: suggestions only for the page's site, fill after approval, never on another site")
+                // Auto-copy TOTP after fill (#209): same approval, app clipboard; only when the setting is on.
+                _ = await model.createItem(.login, edit: CipherEdit(name: "Selftest totp fill", username: "totp-user",
+                                                                    password: "totp-pass-1", totp: "JBSWY3DPEHPK3PXP",
+                                                                    uri: "https://login.chiikawa.test/signin"))
+                let totpID = (await bridge(CLIRequest(command: .match, url: page))).rows?
+                    .first { $0.name == "Selftest totp fill" }?.id ?? ""
+                UserDefaults.standard.set(true, forKey: Pref.browserCopyTotpAfterFill)
+                let pb = NSPasteboard.general
+                pb.clearContents()
+                let copiedFill = await bridge(CLIRequest(command: .fill, query: totpID, url: page, copyTotp: true))
+                let clipboardAfter = pb.string(forType: .string)
+                check(copiedFill.ok && copiedFill.totp != nil && copiedFill.totpCopied == true
+                      && clipboardAfter == copiedFill.totp,
+                      "browser: fill with totp + copyTotp + setting on puts the code on the clipboard once")
+                UserDefaults.standard.set(false, forKey: Pref.browserCopyTotpAfterFill)
+                pb.clearContents()
+                let skippedFill = await bridge(CLIRequest(command: .fill, query: totpID, url: page, copyTotp: true))
+                check(skippedFill.ok && skippedFill.totp != nil && skippedFill.totpCopied != true
+                      && pb.string(forType: .string) == nil,
+                      "browser: setting off skips auto-copy even when copyTotp is requested")
+                UserDefaults.standard.set(true, forKey: Pref.browserCopyTotpAfterFill)
+                pb.clearContents()
+                let impliedFill = await bridge(CLIRequest(command: .fill, query: totpID, url: page))
+                check(impliedFill.ok && impliedFill.totpCopied == true && pb.string(forType: .string) == impliedFill.totp,
+                      "browser: setting on copies after fill even when the extension omits copyTotp")
+                pb.clearContents()
+                let otpPageFill = await bridge(CLIRequest(command: .fill, query: totpID, url: page, copyTotp: false))
+                check(otpPageFill.ok && otpPageFill.totpCopied != true && pb.string(forType: .string) == nil,
+                      "browser: copyTotp false skips auto-copy so an OTP field on the page can take the code")
+                for item in model.items where item.name == "Selftest totp fill" { await model.deleteForever(item) }
+                UserDefaults.standard.removeObject(forKey: Pref.browserCopyTotpAfterFill)
                 // Saving never takes the screen: a submitted login waits in the bell until it's answered.
                 let same = await bridge(CLIRequest(command: .save, url: page, username: "web-user", password: "web-pass-1"))
                 let changed = await bridge(CLIRequest(command: .save, url: page, username: "web-user", password: "web-pass-2"))

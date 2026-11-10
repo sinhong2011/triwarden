@@ -1,5 +1,6 @@
 import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { browser } from 'wxt/browser';
+import { shouldRequestTotpCopy } from '../../lib/after-fill';
 import { replyErrorMessage } from '../../lib/bridge-status';
 import { fillOtp, isRTL, otpTargets, passwordFields, setValue, usernameFor, visible } from '../../lib/dom';
 import { t } from '../../lib/i18n';
@@ -93,12 +94,14 @@ export default function Overlay() {
   const [menu, setMenu] = createSignal<Menu | null>(null);
   const [active, setActive] = createSignal(0); // the highlighted row, moved with the arrow keys
   const [now, setNow] = createSignal(Date.now()); // ticks once a second while the menu shows, for the countdowns
+  const [toast, setToast] = createSignal<string | null>(null); // quiet "Code copied" after fill, when the app did
   let root!: HTMLDivElement;
   let asking = 0; // bumped on every ask and every close, so an answer that arrives late is dropped
   let autoShow: boolean | undefined; // the app's Browser setting, learned from its answers
   let autoOpened = false; // the menu opened by itself on focus: it must not take Enter from the page
   let navigated = false; // arrow keys moved the highlight, so Enter means "fill this one"
   let filling = false; // we are putting values in fields: that moves focus, and must not open the menu again
+  let toastTimer: number | undefined;
 
   const close = () => {
     asking++;
@@ -273,9 +276,21 @@ export default function Overlay() {
     else void open(target, 'direct');
   }
 
+  function flash(note: string) {
+    clearTimeout(toastTimer);
+    setToast(note);
+    toastTimer = window.setTimeout(() => setToast(null), 1800);
+  }
+
   async function choose(row: Row, target: Target) {
     close();
-    const filled = await send({ command: 'fill', query: row.id });
+    // Ask the app to copy with this fill when there is no OTP field (setting + totp live in the app).
+    const copyTotp = shouldRequestTotpCopy(!!target.otp || otpTargets().length > 0);
+    const filled = await send({
+      command: 'fill',
+      query: row.id,
+      copyTotp,
+    });
     if (!filled.ok) {
       if (filled.code === 'vault_locked') {
         setMenu({
@@ -295,14 +310,15 @@ export default function Overlay() {
     try {
       if (target.otp) {
         if (filled.totp) fillOtp(target.otp, filled.totp);
-        return;
+      } else {
+        const { field, pw } = target;
+        setValue(pw ? usernameFor(pw) : field, filled.username);
+        setValue(pw || passwordFields().find(visible), filled.password);
+        // A page that asks for the code on the same form gets it too.
+        const code = otpTargets()[0];
+        if (filled.totp && code) fillOtp(code, filled.totp);
       }
-      const { field, pw } = target;
-      setValue(pw ? usernameFor(pw) : field, filled.username);
-      setValue(pw || passwordFields().find(visible), filled.password);
-      // A page that asks for the code on the same form gets it too.
-      const code = otpTargets()[0];
-      if (filled.totp && code) fillOtp(code, filled.totp);
+      if (filled.totpCopied) flash(t('overlay.codeCopied'));
     } finally {
       // Focus events from the fill arrive synchronously; give them a moment, then listen again.
       setTimeout(() => (filling = false), 400);
@@ -372,6 +388,7 @@ export default function Overlay() {
     document.addEventListener('focusin', focused, true);
     onCleanup(() => {
       clearTimeout(timer);
+      clearTimeout(toastTimer);
       browser.runtime.onMessage.removeListener(asked);
       observer.disconnect();
       removeEventListener('scroll', move, true);
@@ -399,6 +416,13 @@ export default function Overlay() {
           </button>
         )}
       </For>
+      <Show when={toast()}>
+        {(text) => (
+          <div class="fill-toast" role="status" aria-live="polite">
+            {text()}
+          </div>
+        )}
+      </Show>
       <Show when={menu()}>
         {(m) => {
           // Two logins with the same name are told apart by their username, which then leads the row.

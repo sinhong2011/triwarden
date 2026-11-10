@@ -25,7 +25,8 @@
     "hintFill": "填入",
     "hintClose": "關閉",
     "codeValidFor": "驗證碼尚餘 $1 秒有效",
-    "openToUnlock": "開啟 Triwarden"
+    "openToUnlock": "開啟 Triwarden",
+    "codeCopied": "已複製驗證碼"
   },
 
   "ctx": {

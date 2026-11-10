@@ -606,20 +606,18 @@ private struct GeneratorCard: View {
                         }
                     }
                 }
+                ColoredSecret(value: value, separator: passphrase ? phrase.separator : nil)
+                    .font(.system(size: 13, design: .monospaced))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityLabel(Text(verbatim: value))
                 HStack(spacing: 6) {
-                    ColoredSecret(value: value, separator: passphrase ? phrase.separator : nil)
-                        .font(.system(size: 13, design: .monospaced))
-                        .lineLimit(1).truncationMode(.middle)
-                        .textSelection(.enabled)
-                        .contentTransition(.opacity)
-                        .accessibilityLabel(Text(verbatim: value))
-                    Spacer(minLength: 4)
+                    StrengthMeter(bits: passphrase ? phrase.entropyBits : password.entropyBits)
+                    Spacer(minLength: 8)
                     CopyIcon(symbol: "arrow.clockwise", help: "Regenerate password") { regenerate() }
                     CopyIcon(symbol: "doc.on.doc", help: passphrase ? "Copy generated passphrase" : "Copy generated password") {
                         model.copy(value, label: passphrase ? String(localized: "Passphrase") : String(localized: "Password"))
                     }
                 }
-                StrengthMeter(bits: passphrase ? phrase.entropyBits : password.entropyBits)
             }
         }
         .onAppear(perform: regenerate)

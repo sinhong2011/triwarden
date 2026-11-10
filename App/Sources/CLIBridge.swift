@@ -265,8 +265,17 @@ final class CLIBridge {
             lastFilled[item.id] = .now
             guard let totp = item.totp else { return .credentials(username: item.username, password: item.password, totp: nil) }
             let fresh = await Self.freshCode(totp)
+            // Same approval as the fill. Settings › Browser copies the code so the next page can paste it
+            // without a second Touch ID. The extension sends copyTotp:false when it filled an OTP field;
+            // a missing flag (older content script) still copies — otherwise the setting does nothing.
+            var copied = false
+            if UserDefaults.standard.bool(forKey: Pref.browserCopyTotpAfterFill), request.copyTotp != false {
+                model.copy(fresh.code, label: String(localized: "Code"))
+                copied = true
+            }
             return .credentials(username: item.username, password: item.password, totp: fresh.code,
-                                totpRemaining: fresh.remaining, totpPeriod: totp.period)
+                                totpRemaining: fresh.remaining, totpPeriod: totp.period,
+                                totpCopied: copied ? true : nil)
         case .copy:
             guard Self.isOwnBinary(peer) else { return .failure("Unknown client.") }
             guard model.isUnlocked else { return lockedFillOrCopy() }

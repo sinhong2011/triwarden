@@ -25,7 +25,8 @@
     "hintFill": "入力",
     "hintClose": "閉じる",
     "codeValidFor": "コードはあと $1 秒有効",
-    "openToUnlock": "Triwarden を開く"
+    "openToUnlock": "Triwarden を開く",
+    "codeCopied": "コードをコピーしました"
   },
 
   "ctx": {
