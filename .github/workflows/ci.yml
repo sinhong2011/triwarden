@@ -54,15 +54,13 @@ jobs:
             revert
           requireScope: false
 
-  # On pull requests, skip the macOS VaultCore / Vaultwarden / app jobs when only docs
-  # or release-please config changed. main, workflow_dispatch, and workflow_call always run
-  # the full suite. Required checks (VaultCore tests, Build app) still report success on the
-  # skip path so rulesets stay green.
-  # Chrome/Firefox store zips use BrowserExtension/WebExtension/package.json. A PR that
-  # changes zip inputs must raise that version above the last *released* extension
-  # (BrowserExtension/WebExtension in .release-please-manifest.json), not merely above
-  # the PR base tip — so Debug smoke bumps cannot inflate past the next store version.
-  # release-please still opens the extension release PR / tag on main after merge.
+  # Chrome/Firefox store zips use BrowserExtension/WebExtension/package.json.
+  # Feature PRs may change those zip inputs without bumping package.json. The store
+  # version is raised later by the extension release-please PR (branch prefix
+  # release-please--branches--main--components--extension, titles like
+  # chore(extension): release …). Only that PR must set package.json greater than
+  # the last released extension version (BrowserExtension/WebExtension in
+  # .release-please-manifest.json), not merely greater than the PR base tip.
   extension-version:
     name: Extension version bump
     if: github.event_name == 'pull_request'
@@ -91,8 +89,15 @@ jobs:
       - name: No Chrome/Firefox zip inputs changed
         if: steps.filter.outputs.extension_zip != 'true'
         run: echo 'No BrowserExtension/WebExtension zip inputs in this PR.'
+      # Feature PRs stay green without a package.json bump. The extension
+      # release-please branch is the one that must raise the store version.
+      - name: Feature PR defers the store version
+        if: steps.filter.outputs.extension_zip == 'true' && !startsWith(github.head_ref, 'release-please--branches--main--components--extension')
+        run: |
+          echo 'Chrome/Firefox zip inputs changed. Feature PRs do not bump BrowserExtension/WebExtension/package.json.'
+          echo 'The extension release-please PR (branch prefix release-please--branches--main--components--extension, titles like chore(extension): release …) must raise it above the last released version in .release-please-manifest.json.'
       - name: Require package.json version bump
-        if: steps.filter.outputs.extension_zip == 'true'
+        if: steps.filter.outputs.extension_zip == 'true' && startsWith(github.head_ref, 'release-please--branches--main--components--extension')
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: scripts/ci/check-extension-version.sh "$BASE_SHA"
@@ -117,6 +122,10 @@ jobs:
       - name: Require extension-v* tag for manifest version
         run: scripts/ci/check-extension-release-anchor.sh
 
+  # On pull requests, skip the macOS VaultCore / Vaultwarden / app jobs when only docs
+  # or release-please config changed. main, workflow_dispatch, and workflow_call always run
+  # the full suite. Required checks (VaultCore tests, Build app) still report success on the
+  # skip path so rulesets stay green.
   changes:
     name: Detect changes
     runs-on: ubuntu-latest

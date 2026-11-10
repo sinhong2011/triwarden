@@ -1,9 +1,17 @@
 #!/usr/bin/env bash
-# Fail when Chrome/Firefox zip inputs change without raising package.json above the
-# last *released* extension version (.release-please-manifest.json).
+# Version gate for the extension release-please PR only.
 #
-# Compare against the released anchor — not the PR base tip — so long-lived PRs /
-# Debug smoke bumps cannot inflate past the next store version (e.g. 0.4.1 → 0.4.15).
+# Feature PRs may change Chrome/Firefox zip inputs without bumping
+# BrowserExtension/WebExtension/package.json. The store version is raised later
+# by the extension release-please PR:
+#   branch prefix release-please--branches--main--components--extension
+#   titles like chore(extension): release …
+# CI runs this script only for that branch, and only when zip inputs changed.
+#
+# package.json must be greater than the last *released* extension version
+# (.release-please-manifest.json). Compare against that released anchor — not
+# the PR base tip — so the release cannot ship a version that is not above the
+# last store release.
 set -euo pipefail
 base=${1:?usage: check-extension-version.sh <base-sha>}
 pkg=BrowserExtension/WebExtension/package.json
@@ -38,14 +46,16 @@ def parts(v: str) -> tuple[int, ...]:
 released, head, base_tip = sys.argv[1], sys.argv[2], sys.argv[3]
 if parts(head) <= parts(released):
     print(
-        f"BrowserExtension/WebExtension zip inputs changed, but package.json "
-        f"{head} is not greater than last released {released}.",
+        "Extension release-please PR changed BrowserExtension/WebExtension zip "
+        f"inputs, but package.json {head} is not greater than last released {released}.",
         file=sys.stderr,
     )
     print(
-        "Bump BrowserExtension/WebExtension/package.json above the released "
+        "That PR (branch prefix release-please--branches--main--components--extension, "
+        "titles like chore(extension): release …) must set "
+        "BrowserExtension/WebExtension/package.json above the last released "
         "version in .release-please-manifest.json (next store version, e.g. "
-        f"{released} → patch+1). Do not stack Debug smoke bumps past that.",
+        f"{released} → patch+1). Feature PRs do not bump package.json.",
         file=sys.stderr,
     )
     raise SystemExit(1)
