@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.10.0](https://github.com/sinhong2011/triwarden/compare/v0.9.1...v0.10.0) (2026-11-10)
+
+
+### Features
+
+* **browser:** add Zen to the native-messaging browser list ([#195](https://github.com/sinhong2011/triwarden/issues/195)) ([89bcf2d](https://github.com/sinhong2011/triwarden/commit/89bcf2d23950ecda4b67b28985e288160da12e01))
+* **browser:** copy the one-time code after filling a login with no OTP field ([#210](https://github.com/sinhong2011/triwarden/issues/210)) ([7dd8a1c](https://github.com/sinhong2011/triwarden/commit/7dd8a1c63fee3587b859cf77eb2da97e4584b29c))
+* **browser:** unlock from a locked fill in the window, palette, or menu bar ([#211](https://github.com/sinhong2011/triwarden/issues/211)) ([fc9ca0e](https://github.com/sinhong2011/triwarden/commit/fc9ca0edf1e8a2e2861b07e3fc3776671a38b26b))
+
+
+### Fixes
+
+* **generator:** center the compact Use Password action ([#198](https://github.com/sinhong2011/triwarden/issues/198)) ([1ff4595](https://github.com/sinhong2011/triwarden/commit/1ff459555c00012d98f1ddd7213bdbf7f1d0c024))
+* **generator:** wrap long secrets at each character ([#212](https://github.com/sinhong2011/triwarden/issues/212)) ([e2f34dc](https://github.com/sinhong2011/triwarden/commit/e2f34dc4af484a025f1f3cdeecee8674bc11fdc4))
+* keep extension releases from taking GitHub Latest ([#214](https://github.com/sinhong2011/triwarden/issues/214)) ([208a18c](https://github.com/sinhong2011/triwarden/commit/208a18c4e2f3f3f032e7c9b19c4ab5f57437a342))
+
 ## [0.9.1](https://github.com/sinhong2011/triwarden/compare/v0.9.0...v0.9.1) (2026-11-09)
 
 
