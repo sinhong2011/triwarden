@@ -105,10 +105,11 @@ describe('GenerateOverlay', () => {
     await tick(5);
     expect(host.querySelector('.gen-slider')).not.toBeNull();
     expect(host.querySelectorAll('.gen-chip').length).toBe(4);
-    expect(host.querySelector('.gen-strength-label')!.textContent).toBe('Very strong');
+    const { t } = await import('../../lib/i18n');
+    expect(host.querySelector('.gen-strength-label')!.textContent).toBe(t('gen.veryStrong'));
     expect(host.querySelector('.gen-toggle[role="switch"]')).not.toBeNull();
     expect(host.querySelector('.gen-mins')).not.toBeNull();
-    expect(host.querySelector('.gen-use')!.textContent).toBe('Use Password');
+    expect(host.querySelector('.gen-use')!.textContent).toBe(t('gen.usePassword'));
     // No native title tooltip that truncates over the controls.
     expect(host.querySelector('.gen-row')!.getAttribute('title')).toBeNull();
     host.querySelector<HTMLButtonElement>('.gen-use')!.click();
@@ -117,13 +118,14 @@ describe('GenerateOverlay', () => {
 
   it('changing Length re-generates with the new length so the app can persist prefs', async () => {
     const { send } = await import('../../lib/send');
+    const { t } = await import('../../lib/i18n');
     const host = await mount();
     host.querySelector<HTMLButtonElement>('.key')!.click();
     await tick(5);
     // First call loads saved prefs (no overrides); reply seeds local state.
     expect(vi.mocked(send).mock.calls[0]![0]).toEqual({ command: 'generate', field: undefined });
     const before = vi.mocked(send).mock.calls.length;
-    const plus = host.querySelector<HTMLButtonElement>('.gen-stepper button[aria-label="Increase Length"]')!;
+    const plus = host.querySelector<HTMLButtonElement>(`.gen-stepper button[aria-label="${t('gen.increase', t('gen.length'))}"]`)!;
     plus.click();
     plus.click(); // coalesce: two quick steps → one debounced generate
     await tick(5);

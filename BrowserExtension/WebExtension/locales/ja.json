@@ -1,0 +1,76 @@
+{
+  "extName": "Triwarden",
+  "extDescription": "Triwarden の保管庫からログイン情報を入力・保存します。入力時はアプリで Touch ID を求めます。",
+  "cmdFillLogin": "このページのログインまたはワンタイムコードを入力",
+
+  "noAnswer": "Triwarden から応答がありません。",
+  "unavailable": "Triwarden を利用できません。",
+  "dismiss": "閉じる",
+
+  "bridge": {
+    "appNotRunning": "Triwarden が起動していません — ブラウザ拡張機能を使うには Triwarden を開いてください。",
+    "connectionDisabled": "この接続は「設定 › ブラウザ」または「デベロッパ」でオフになっています。"
+  },
+
+  "overlay": {
+    "fillWithTriwarden": "Triwarden で入力",
+    "lookingForLogins": "ログインを検索中…",
+    "noLogins": "このサイトのログインはありません。",
+    "noLoginsShort": "このサイトのログインはありません",
+    "noOtpLogin": "このサイトにワンタイムコード付きのログインはありません。",
+    "noLoginHasCode": "コード付きのログインがありません",
+    "passwords": "パスワード",
+    "passkeys": "パスキー",
+    "hintChoose": "選択",
+    "hintFill": "入力",
+    "hintClose": "閉じる",
+    "codeValidFor": "コードはあと $1 秒有効"
+  },
+
+  "ctx": {
+    "autofill": "ログインを自動入力",
+    "copyUsername": "ユーザー名をコピー",
+    "copyPassword": "パスワードをコピー",
+    "copyTotp": "確認コードをコピー"
+  },
+
+  "gen": {
+    "suggestPassword": "強いパスワードを提案",
+    "suggestPasswordAria": "Triwarden で強いパスワードを提案",
+    "suggestedPassword": "提案パスワード",
+    "suggestedPassphrase": "提案パスフレーズ",
+    "dragToMove": "ドラッグして移動",
+    "kind": "種類",
+    "password": "パスワード",
+    "passphrase": "パスフレーズ",
+    "fillPassword": "パスワードを入力",
+    "fillPasswordAndConfirm": "パスワードと確認欄に入力",
+    "generating": "生成中…",
+    "anotherOne": "別のものを生成",
+    "generateAnother": "もう一度生成",
+    "copy": "コピー",
+    "copied": "コピーしました",
+    "strength": "強度: $1",
+    "weak": "弱い",
+    "fair": "普通",
+    "strong": "強い",
+    "veryStrong": "非常に強い",
+    "length": "長さ",
+    "include": "含める文字",
+    "minNumbers": "数字の最小数",
+    "minSpecial": "記号の最小数",
+    "minimumNumbers": "数字の最小数",
+    "minimumSpecial": "記号の最小数",
+    "avoidAmbiguous": "紛らわしい文字を避ける",
+    "avoidAmbiguousAria": "紛らわしい文字を避ける",
+    "wordCount": "単語数",
+    "separator": "区切り",
+    "wordSeparator": "単語の区切り",
+    "capitalize": "先頭を大文字に",
+    "includeNumber": "数字を含める",
+    "usePassword": "このパスワードを使う",
+    "usePassphrase": "このパスフレーズを使う",
+    "decrease": "$1を減らす",
+    "increase": "$1を増やす"
+  }
+}

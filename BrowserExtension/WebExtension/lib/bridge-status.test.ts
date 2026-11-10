@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { bridgeDownMessage, isBridgeDown } from './bridge-status';
+import { bridgeDownMessage, isBridgeDown, replyErrorMessage } from './bridge-status';
+import { t } from './i18n';
 
 describe('isBridgeDown', () => {
   it('ignores successful replies and missing answers', () => {
@@ -30,9 +31,21 @@ describe('isBridgeDown', () => {
 });
 
 describe('bridgeDownMessage', () => {
-  it('prefers the reply error, then a code-specific default', () => {
-    expect(bridgeDownMessage({ error: 'Custom', code: 'app_not_running' })).toBe('Custom');
-    expect(bridgeDownMessage({ code: 'connection_disabled' })).toMatch(/Settings/);
-    expect(bridgeDownMessage({})).toMatch(/open Triwarden/);
+  it('translates known codes (not the English reply.error)', () => {
+    expect(bridgeDownMessage({ error: 'Custom', code: 'app_not_running' })).toBe(t('bridge.appNotRunning'));
+    expect(bridgeDownMessage({ error: 'Custom', code: 'connection_disabled' })).toBe(t('bridge.connectionDisabled'));
+    expect(bridgeDownMessage({})).toBe(t('bridge.appNotRunning'));
+  });
+
+  it('keeps legacy English error text when code is absent', () => {
+    expect(bridgeDownMessage({ error: 'Legacy host message' })).toBe('Legacy host message');
+  });
+});
+
+describe('replyErrorMessage', () => {
+  it('maps bridge-down codes to localized copy and keeps other errors', () => {
+    expect(replyErrorMessage({ code: 'connection_disabled', error: 'Settings' })).toBe(t('bridge.connectionDisabled'));
+    expect(replyErrorMessage({ error: 'Denied' })).toBe('Denied');
+    expect(replyErrorMessage({})).toBe(t('unavailable'));
   });
 });

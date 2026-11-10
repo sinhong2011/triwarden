@@ -1,6 +1,8 @@
 // Relays page requests to the Triwarden app (Safari: the extension's native handler; Chrome and Firefox: the
 // bundled `tw` native-messaging host). The app decides everything: what matches, Touch ID, saving.
 import { browser } from 'wxt/browser';
+import { replyErrorMessage } from '../lib/bridge-status';
+import { t } from '../lib/i18n';
 import { COMMANDS, type Reply } from '../lib/protocol';
 
 const HOST = 'io.github.sinhong2011.triwarden';
@@ -26,7 +28,7 @@ export default defineBackground(() => {
     const url = sender.url ?? sender.tab.url;
     const request = { ...message, url };
     Promise.resolve(browser.runtime.sendNativeMessage(HOST, request))
-      .then((reply: Reply | undefined) => sendResponse(reply ?? { ok: false, error: 'No answer from Triwarden.' }))
+      .then((reply: Reply | undefined) => sendResponse(reply ?? { ok: false, error: t('noAnswer') }))
       .catch((error: unknown) =>
         sendResponse({ ok: false, error: String((error as Error)?.message ?? error) }),
       );
@@ -36,11 +38,11 @@ export default defineBackground(() => {
 
 type Login = { id: string; label: string; totp: boolean };
 
-const ACTIONS = [
-  { id: 'fill', title: 'Autofill login', field: undefined, needsCode: false },
-  { id: 'username', title: 'Copy username', field: 'username', needsCode: false },
-  { id: 'password', title: 'Copy password', field: 'password', needsCode: false },
-  { id: 'totp', title: 'Copy verification code', field: 'totp', needsCode: true },
+const actionDefs = [
+  { id: 'fill', titleKey: 'ctx.autofill', field: undefined, needsCode: false },
+  { id: 'username', titleKey: 'ctx.copyUsername', field: 'username', needsCode: false },
+  { id: 'password', titleKey: 'ctx.copyPassword', field: 'password', needsCode: false },
+  { id: 'totp', titleKey: 'ctx.copyTotp', field: 'totp', needsCode: true },
 ] as const;
 
 function setUpContextMenu() {
@@ -72,7 +74,7 @@ function setUpContextMenu() {
       try {
         const reply = (await browser.runtime.sendNativeMessage(HOST, { command: 'match', url })) as Reply | undefined;
         if (reply?.ok) logins = (reply.rows ?? []).map((r) => ({ id: r.id, label: label(r), totp: !!r.totpPeriod }));
-        else problem = reply?.error ?? "Triwarden isn't available.";
+        else problem = replyErrorMessage(reply);
       } catch (error) {
         problem = String((error as Error)?.message ?? error);
       }
@@ -81,17 +83,17 @@ function setUpContextMenu() {
     await browser.contextMenus.removeAll();
     if (mine !== generation || !url) return; // nothing to offer on pages we do not run on
 
-    browser.contextMenus.create({ id: 'root', title: 'Triwarden', contexts: ['all'] });
+    browser.contextMenus.create({ id: 'root', title: t('extName'), contexts: ['all'] });
     const empty = (parentId: string, title: string) =>
       browser.contextMenus.create({ id: `${parentId}:none`, parentId, title, enabled: false, contexts: ['all'] });
     if (problem || !logins.length) {
-      empty('root', problem ? problem.slice(0, 60) : 'No logins for this site');
+      empty('root', problem ? problem.slice(0, 60) : t('overlay.noLoginsShort'));
       return;
     }
-    for (const action of ACTIONS) {
+    for (const action of actionDefs) {
       const rows = action.needsCode ? logins.filter((l) => l.totp) : logins;
-      browser.contextMenus.create({ id: action.id, parentId: 'root', title: action.title, contexts: ['all'] });
-      if (!rows.length) empty(action.id, 'No login has a code');
+      browser.contextMenus.create({ id: action.id, parentId: 'root', title: t(action.titleKey), contexts: ['all'] });
+      if (!rows.length) empty(action.id, t('overlay.noLoginHasCode'));
       for (const login of rows) {
         browser.contextMenus.create({ id: `${action.id}:${login.id}`, parentId: action.id, title: login.label, contexts: ['all'] });
       }
@@ -115,7 +117,7 @@ function setUpContextMenu() {
   browser.contextMenus.onClicked.addListener((info, tab) => {
     const [actionId, ...rest] = String(info.menuItemId).split(':');
     const loginId = rest.join(':');
-    const action = ACTIONS.find((a) => a.id === actionId);
+    const action = actionDefs.find((a) => a.id === actionId);
     if (!action || !loginId || loginId === 'none' || tab?.id == null) return;
     if (!action.field) {
       // On a field only its own frame answers; elsewhere every frame hears it and the one with a form fills.

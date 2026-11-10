@@ -1,0 +1,76 @@
+{
+  "extName": "Triwarden",
+  "extDescription": "Fill and save logins from your Triwarden vault. Filling asks for Touch ID in the app.",
+  "cmdFillLogin": "Fill the login or one-time code on this page",
+
+  "noAnswer": "No answer from Triwarden.",
+  "unavailable": "Triwarden isn't available.",
+  "dismiss": "Dismiss",
+
+  "bridge": {
+    "appNotRunning": "Triwarden isn't running — open Triwarden to use the browser extension.",
+    "connectionDisabled": "This connection is turned off in Settings › Browser or Developer."
+  },
+
+  "overlay": {
+    "fillWithTriwarden": "Fill with Triwarden",
+    "lookingForLogins": "Looking for logins…",
+    "noLogins": "No logins for this site.",
+    "noLoginsShort": "No logins for this site",
+    "noOtpLogin": "No login with a one-time code for this site.",
+    "noLoginHasCode": "No login has a code",
+    "passwords": "Passwords",
+    "passkeys": "Passkeys",
+    "hintChoose": "choose",
+    "hintFill": "fill",
+    "hintClose": "close",
+    "codeValidFor": "Code valid for $1 more seconds"
+  },
+
+  "ctx": {
+    "autofill": "Autofill login",
+    "copyUsername": "Copy username",
+    "copyPassword": "Copy password",
+    "copyTotp": "Copy verification code"
+  },
+
+  "gen": {
+    "suggestPassword": "Suggest a strong password",
+    "suggestPasswordAria": "Suggest a strong password with Triwarden",
+    "suggestedPassword": "Suggested password",
+    "suggestedPassphrase": "Suggested passphrase",
+    "dragToMove": "Drag to move",
+    "kind": "Kind",
+    "password": "Password",
+    "passphrase": "Passphrase",
+    "fillPassword": "Fill password",
+    "fillPasswordAndConfirm": "Fill password and confirmation",
+    "generating": "Generating…",
+    "anotherOne": "Another one",
+    "generateAnother": "Generate another",
+    "copy": "Copy",
+    "copied": "Copied",
+    "strength": "Strength: $1",
+    "weak": "Weak",
+    "fair": "Fair",
+    "strong": "Strong",
+    "veryStrong": "Very strong",
+    "length": "Length",
+    "include": "Include",
+    "minNumbers": "Min numbers",
+    "minSpecial": "Min special",
+    "minimumNumbers": "Minimum numbers",
+    "minimumSpecial": "Minimum special",
+    "avoidAmbiguous": "Avoid ambiguous",
+    "avoidAmbiguousAria": "Avoid ambiguous characters",
+    "wordCount": "Number of words",
+    "separator": "Separator",
+    "wordSeparator": "Word separator",
+    "capitalize": "Capitalize",
+    "includeNumber": "Include number",
+    "usePassword": "Use Password",
+    "usePassphrase": "Use Passphrase",
+    "decrease": "Decrease $1",
+    "increase": "Increase $1"
+  }
+}

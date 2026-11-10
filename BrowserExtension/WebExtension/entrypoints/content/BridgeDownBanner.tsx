@@ -1,6 +1,7 @@
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isGeneratePasswordField, passwordFields, textLike, visible } from '../../lib/dom';
 import { bridgeDownMessage, isBridgeDown } from '../../lib/bridge-status';
+import { t } from '../../lib/i18n';
 import { send } from '../../lib/send';
 
 /**
@@ -62,7 +63,7 @@ export default function BridgeDownBanner() {
             <button
               type="button"
               class="bridge-banner-dismiss"
-              aria-label="Dismiss"
+              aria-label={t('dismiss')}
               on:click={() => {
                 dismissedAt = Date.now();
                 dismissedFor = text();

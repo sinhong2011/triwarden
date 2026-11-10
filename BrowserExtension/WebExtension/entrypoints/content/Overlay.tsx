@@ -1,9 +1,11 @@
 import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { browser } from 'wxt/browser';
-import { send } from '../../lib/send';
+import { replyErrorMessage } from '../../lib/bridge-status';
 import { fillOtp, isRTL, otpTargets, passwordFields, setValue, usernameFor, visible } from '../../lib/dom';
+import { t } from '../../lib/i18n';
 import { iconPosition, menuLeft, menuVertical } from '../../lib/overlay-layout';
 import type { Row } from '../../lib/protocol';
+import { send } from '../../lib/send';
 import { AppMark } from './AppMark';
 
 const secondsLeft = (period: number, now: number) => period - (Math.floor(now / 1000) % period);
@@ -14,7 +16,7 @@ const Ring = (props: { period: number; now: number }) => {
   const left = () => secondsLeft(props.period, props.now);
   const circumference = 2 * Math.PI * 9;
   return (
-    <span class="ring" data-urgent={left() <= 5} role="img" aria-label={`Code valid for ${left()} more seconds`}>
+    <span class="ring" data-urgent={left() <= 5} role="img" aria-label={t('overlay.codeValidFor', String(left()))}>
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle class="track" cx="12" cy="12" r="9" />
         <circle
@@ -64,7 +66,9 @@ const MENU_WIDTH = 332;
 const CODE_MENU_WIDTH = 392; // a code field's rows also hold the code and its ring, so the username needs more room
 
 /** Rows are shown in two groups when a site has both logins with a passkey and logins without. */
-const groupOf = (row: Row) => (row.passkey ? 'Passkeys' : 'Passwords');
+const groupOf = (row: Row) => (row.passkey ? 'passkeys' : 'passwords');
+const groupLabel = (group: ReturnType<typeof groupOf>) =>
+  group === 'passkeys' ? t('overlay.passkeys') : t('overlay.passwords');
 
 /** `pw`: the password field of a login form. `otp`: the field, or row of one-digit boxes, for a one-time code. */
 type Target = { field: HTMLInputElement; pw?: HTMLInputElement; otp?: HTMLInputElement[] };
@@ -199,7 +203,7 @@ export default function Overlay() {
     const base = { target, auto, rows: [] as Row[], at: Date.now(), revealed: !auto };
     const mine = ++asking;
     autoOpened = false;
-    if (!auto) setMenu({ ...base, state: 'note', note: 'Looking for logins…' });
+    if (!auto) setMenu({ ...base, state: 'note', note: t('overlay.lookingForLogins') });
     // Digits only when asked for: a field that merely took focus gets names and countdowns, never the code.
     const reply = await send({ command: 'match', codes: !!target.otp && !auto, reveal: !!target.otp && !auto });
     if (mine !== asking) return; // closed, or a newer ask took over
@@ -207,7 +211,7 @@ export default function Overlay() {
     if (auto) {
       if (!reply.ok || !autoShow) return;
     } else if (!reply.ok) {
-      return setMenu({ ...base, state: 'note', note: reply.error || "Triwarden isn't available." });
+      return setMenu({ ...base, state: 'note', note: replyErrorMessage(reply) });
     }
     // A code field only offers the logins that have a code.
     const found = target.otp ? (reply.rows ?? []).filter((row) => row.totpPeriod) : (reply.rows ?? []);
@@ -216,7 +220,7 @@ export default function Overlay() {
     const rows = mixed ? [...found.filter((r) => r.passkey), ...found.filter((r) => !r.passkey)] : found;
     if (!rows.length) {
       if (auto) return;
-      const none = target.otp ? 'No login with a one-time code for this site.' : 'No logins for this site.';
+      const none = target.otp ? t('overlay.noOtpLogin') : t('overlay.noLogins');
       return setMenu({ ...base, state: 'note', note: none });
     }
     const only = rows.length === 1 ? rows[0] : undefined;
@@ -354,15 +358,15 @@ export default function Overlay() {
   return (
     <div ref={root}>
       <For each={targets()}>
-        {(t) => (
+        {(target) => (
           <button
             class="key"
             type="button"
-            title="Fill with Triwarden"
-            aria-label="Fill with Triwarden"
-            style={place(t)}
+            title={t('overlay.fillWithTriwarden')}
+            aria-label={t('overlay.fillWithTriwarden')}
+            style={place(target)}
             on:mousedown={(e) => e.preventDefault()}
-            on:click={() => open(t)}
+            on:click={() => open(target)}
           >
             <AppMark size={22} />
           </button>
@@ -385,7 +389,7 @@ export default function Overlay() {
                     {(row, i) => (
                       <>
                         <Show when={mixed() && (i() === 0 || groupOf(m().rows[i() - 1]!) !== groupOf(row))}>
-                          <div class="group">{groupOf(row)}</div>
+                          <div class="group">{groupLabel(groupOf(row))}</div>
                         </Show>
                         <div
                           class="row"
@@ -426,7 +430,8 @@ export default function Overlay() {
                 <Show when={m().auto}>
                   <div class="hint">
                     <kbd>↑</kbd>
-                    <kbd>↓</kbd> choose <kbd>↵</kbd> fill <kbd>esc</kbd> close
+                    <kbd>↓</kbd> {t('overlay.hintChoose')} <kbd>↵</kbd> {t('overlay.hintFill')} <kbd>esc</kbd>{' '}
+                    {t('overlay.hintClose')}
                   </div>
                 </Show>
               </Show>

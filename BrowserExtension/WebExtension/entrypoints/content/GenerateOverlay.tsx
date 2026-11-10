@@ -1,6 +1,8 @@
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
+import { replyErrorMessage } from '../../lib/bridge-status';
 import { generateTargets, isRTL, setValue, visible, type GenerateTarget } from '../../lib/dom';
 import { loadGenMenuPos, saveGenMenuPos, type GenMenuPos } from '../../lib/gen-menu-pos';
+import { t } from '../../lib/i18n';
 import { applyMenuDrag, generateMenuPlace, iconPosition } from '../../lib/overlay-layout';
 import type { Request } from '../../lib/protocol';
 import { send } from '../../lib/send';
@@ -78,11 +80,11 @@ function Pretty(props: { value: string }) {
   );
 }
 
-function strengthLevel(bits: number): { level: number; label: string } {
-  if (bits < 40) return { level: 1, label: 'Weak' };
-  if (bits < 64) return { level: 2, label: 'Fair' };
-  if (bits < 90) return { level: 3, label: 'Strong' };
-  return { level: 4, label: 'Very strong' };
+function strengthLevel(bits: number): { level: number; labelKey: 'gen.weak' | 'gen.fair' | 'gen.strong' | 'gen.veryStrong' } {
+  if (bits < 40) return { level: 1, labelKey: 'gen.weak' };
+  if (bits < 64) return { level: 2, labelKey: 'gen.fair' };
+  if (bits < 90) return { level: 3, labelKey: 'gen.strong' };
+  return { level: 4, labelKey: 'gen.veryStrong' };
 }
 
 function Stepper(props: {
@@ -97,7 +99,7 @@ function Stepper(props: {
     <div class="gen-stepper" role="group" aria-label={props.label}>
       <button
         type="button"
-        aria-label={`Decrease ${props.label}`}
+        aria-label={t('gen.decrease', props.label)}
         disabled={props.value <= props.min}
         on:click={(e) => {
           e.stopPropagation();
@@ -109,7 +111,7 @@ function Stepper(props: {
       <span aria-live="polite">{props.value}</span>
       <button
         type="button"
-        aria-label={`Increase ${props.label}`}
+        aria-label={t('gen.increase', props.label)}
         disabled={props.value >= props.max}
         on:click={(e) => {
           e.stopPropagation();
@@ -391,7 +393,7 @@ export default function GenerateOverlay() {
       const reply = await send(buildGenerateRequest(kind));
       if (mine !== asking) return;
       if (!reply.ok || !reply.value) {
-        return setMenu({ target, kind, error: reply.error || "Triwarden isn't available." });
+        return setMenu({ target, kind, error: replyErrorMessage(reply) });
       }
       applyReplyOptions(kind, reply);
       setMenu({ target, kind, value: reply.value, entropyBits: reply.entropyBits });
@@ -547,15 +549,15 @@ export default function GenerateOverlay() {
   return (
     <div ref={root}>
       <For each={targets()}>
-        {(t) => (
+        {(target) => (
           <button
             class="key"
             type="button"
-            title="Suggest a strong password"
-            aria-label="Suggest a strong password with Triwarden"
-            style={place(t)}
+            title={t('gen.suggestPassword')}
+            aria-label={t('gen.suggestPasswordAria')}
+            style={place(target)}
             on:mousedown={(e) => e.preventDefault()}
-            on:click={() => toggle(t)}
+            on:click={() => toggle(target)}
           >
             <AppMark size={22} />
           </button>
@@ -571,7 +573,7 @@ export default function GenerateOverlay() {
               }}
               class="menu gen"
               role="dialog"
-              aria-label="Suggested password"
+              aria-label={t('gen.suggestedPassword')}
               style={menuStyle(m())}
               data-rtl={isRTL(m().target.field)}
               data-above={menuAbove(m())}
@@ -584,11 +586,11 @@ export default function GenerateOverlay() {
                 e.preventDefault();
               }}
             >
-              <div class="group gen-drag" title="Drag to move" on:pointerdown={(e) => onDragHandle(e)}>
-                {m().kind === 'passphrase' ? 'Suggested passphrase' : 'Suggested password'}
+              <div class="group gen-drag" title={t('gen.dragToMove')} on:pointerdown={(e) => onDragHandle(e)}>
+                {m().kind === 'passphrase' ? t('gen.suggestedPassphrase') : t('gen.suggestedPassword')}
               </div>
 
-              <div class="gen-kinds" role="radiogroup" aria-label="Kind" data-kind={m().kind}>
+              <div class="gen-kinds" role="radiogroup" aria-label={t('gen.kind')} data-kind={m().kind}>
                 <span class="gen-kinds-thumb" aria-hidden="true" />
                 <For each={['password', 'passphrase'] as Kind[]}>
                   {(kind) => (
@@ -599,7 +601,7 @@ export default function GenerateOverlay() {
                       data-on={m().kind === kind}
                       on:click={() => m().kind !== kind && void generate(m().target, kind, { soft: true })}
                     >
-                      {kind === 'password' ? 'Password' : 'Passphrase'}
+                      {kind === 'password' ? t('gen.password') : t('gen.passphrase')}
                     </button>
                   )}
                 </For>
@@ -612,12 +614,12 @@ export default function GenerateOverlay() {
                     role="button"
                     data-active="true"
                     aria-disabled={!m().value}
-                    aria-label={m().target.confirm ? 'Fill password and confirmation' : 'Fill password'}
+                    aria-label={m().target.confirm ? t('gen.fillPasswordAndConfirm') : t('gen.fillPassword')}
                     on:click={() => use(m())}
                   >
                     <span class="text">
                       <span class="gen-value" data-loading={!m().value} data-updating={updating()}>
-                        <Show when={m().value} fallback="Generating…">
+                        <Show when={m().value} fallback={t('gen.generating')}>
                           {(v) => <Pretty value={v()} />}
                         </Show>
                       </span>
@@ -625,8 +627,8 @@ export default function GenerateOverlay() {
                     <button
                       class="icon-btn"
                       type="button"
-                      title="Another one"
-                      aria-label="Generate another"
+                      title={t('gen.anotherOne')}
+                      aria-label={t('gen.generateAnother')}
                       on:click={(e) => {
                         e.stopPropagation();
                         void generate(m().target, m().kind, { soft: true });
@@ -637,8 +639,8 @@ export default function GenerateOverlay() {
                     <button
                       class="icon-btn"
                       type="button"
-                      title={copied() ? 'Copied' : 'Copy'}
-                      aria-label={copied() ? 'Copied' : 'Copy'}
+                      title={copied() ? t('gen.copied') : t('gen.copy')}
+                      aria-label={copied() ? t('gen.copied') : t('gen.copy')}
                       disabled={!m().value}
                       on:click={(e) => {
                         e.stopPropagation();
@@ -649,11 +651,11 @@ export default function GenerateOverlay() {
                     </button>
                   </div>
                   <Show when={m().value && m().entropyBits != null}>
-                    <div class="gen-strength" aria-label={`Strength: ${strength().label}`}>
+                    <div class="gen-strength" aria-label={t('gen.strength', t(strength().labelKey))}>
                       <div class="gen-strength-bars" data-level={strength().level}>
                         <For each={[1, 2, 3, 4]}>{(i) => <span data-on={i <= strength().level} />}</For>
                       </div>
-                      <span class="gen-strength-label">{strength().label}</span>
+                      <span class="gen-strength-label">{t(strength().labelKey)}</span>
                     </div>
                   </Show>
                 </div>
@@ -661,7 +663,7 @@ export default function GenerateOverlay() {
                 <Show when={m().kind === 'password'}>
                   <div class="gen-options gen-tab-pane" data-kind="password">
                     <div class="gen-opt-stack">
-                      <span class="gen-opt-label">Length</span>
+                      <span class="gen-opt-label">{t('gen.length')}</span>
                       <div class="gen-opt-row">
                         <input
                           class="gen-slider"
@@ -669,7 +671,7 @@ export default function GenerateOverlay() {
                           min="5"
                           max="128"
                           value={password().length}
-                          aria-label="Length"
+                          aria-label={t('gen.length')}
                           style={{ '--pct': `${((password().length - 5) / (128 - 5)) * 100}%` }}
                           on:pointerdown={(e) => e.stopPropagation()}
                           on:mousedown={(e) => e.stopPropagation()}
@@ -677,7 +679,7 @@ export default function GenerateOverlay() {
                           on:click={(e) => e.stopPropagation()}
                         />
                         <Stepper
-                          label="Length"
+                          label={t('gen.length')}
                           value={password().length}
                           min={5}
                           max={128}
@@ -686,7 +688,7 @@ export default function GenerateOverlay() {
                       </div>
                     </div>
                     <div class="gen-opt-stack">
-                      <span class="gen-opt-label">Include</span>
+                      <span class="gen-opt-label">{t('gen.include')}</span>
                       <div class="gen-chips">
                         <For
                           each={
@@ -717,9 +719,9 @@ export default function GenerateOverlay() {
                     </div>
                     <div class="gen-mins">
                       <div class="gen-min" data-disabled={!password().digits}>
-                        <span class="gen-opt-label">Min numbers</span>
+                        <span class="gen-opt-label">{t('gen.minNumbers')}</span>
                         <Stepper
-                          label="Minimum numbers"
+                          label={t('gen.minimumNumbers')}
                           value={password().minNumbers}
                           min={0}
                           max={9}
@@ -727,9 +729,9 @@ export default function GenerateOverlay() {
                         />
                       </div>
                       <div class="gen-min" data-disabled={!password().symbols}>
-                        <span class="gen-opt-label">Min special</span>
+                        <span class="gen-opt-label">{t('gen.minSpecial')}</span>
                         <Stepper
-                          label="Minimum special"
+                          label={t('gen.minimumSpecial')}
                           value={password().minSpecial}
                           min={0}
                           max={9}
@@ -738,13 +740,13 @@ export default function GenerateOverlay() {
                       </div>
                     </div>
                     <div class="gen-switch">
-                      <span>Avoid ambiguous</span>
+                      <span>{t('gen.avoidAmbiguous')}</span>
                       <button
                         type="button"
                         class="gen-toggle"
                         role="switch"
                         aria-checked={password().avoidAmbiguous}
-                        aria-label="Avoid ambiguous characters"
+                        aria-label={t('gen.avoidAmbiguousAria')}
                         data-on={password().avoidAmbiguous}
                         on:click={(e) => {
                           e.stopPropagation();
@@ -758,7 +760,7 @@ export default function GenerateOverlay() {
                 <Show when={m().kind === 'passphrase'}>
                   <div class="gen-options gen-tab-pane" data-kind="passphrase">
                     <div class="gen-opt-stack">
-                      <span class="gen-opt-label">Number of words</span>
+                      <span class="gen-opt-label">{t('gen.wordCount')}</span>
                       <div class="gen-opt-row">
                         <input
                           class="gen-slider"
@@ -766,7 +768,7 @@ export default function GenerateOverlay() {
                           min="3"
                           max="20"
                           value={passphrase().words}
-                          aria-label="Number of words"
+                          aria-label={t('gen.wordCount')}
                           style={{ '--pct': `${((passphrase().words - 3) / (20 - 3)) * 100}%` }}
                           on:pointerdown={(e) => e.stopPropagation()}
                           on:mousedown={(e) => e.stopPropagation()}
@@ -774,7 +776,7 @@ export default function GenerateOverlay() {
                           on:click={(e) => e.stopPropagation()}
                         />
                         <Stepper
-                          label="Number of words"
+                          label={t('gen.wordCount')}
                           value={passphrase().words}
                           min={3}
                           max={20}
@@ -783,13 +785,13 @@ export default function GenerateOverlay() {
                       </div>
                     </div>
                     <div class="gen-opt-row">
-                      <span class="gen-opt-label">Separator</span>
+                      <span class="gen-opt-label">{t('gen.separator')}</span>
                       <input
                         class="gen-sep"
                         type="text"
                         maxlength={3}
                         value={passphrase().separator}
-                        aria-label="Word separator"
+                        aria-label={t('gen.wordSeparator')}
                         on:input={(e) => {
                           const v = (e.currentTarget as HTMLInputElement).value.slice(0, 3);
                           patchPassphrase({ separator: v });
@@ -798,13 +800,13 @@ export default function GenerateOverlay() {
                       />
                     </div>
                     <div class="gen-switch">
-                      <span>Capitalize</span>
+                      <span>{t('gen.capitalize')}</span>
                       <button
                         type="button"
                         class="gen-toggle"
                         role="switch"
                         aria-checked={passphrase().capitalize}
-                        aria-label="Capitalize"
+                        aria-label={t('gen.capitalize')}
                         data-on={passphrase().capitalize}
                         on:click={(e) => {
                           e.stopPropagation();
@@ -813,13 +815,13 @@ export default function GenerateOverlay() {
                       />
                     </div>
                     <div class="gen-switch">
-                      <span>Include number</span>
+                      <span>{t('gen.includeNumber')}</span>
                       <button
                         type="button"
                         class="gen-toggle"
                         role="switch"
                         aria-checked={passphrase().includeNumber}
-                        aria-label="Include number"
+                        aria-label={t('gen.includeNumber')}
                         data-on={passphrase().includeNumber}
                         on:click={(e) => {
                           e.stopPropagation();
@@ -836,7 +838,7 @@ export default function GenerateOverlay() {
                   disabled={!m().value}
                   on:click={() => use(m())}
                 >
-                  {m().kind === 'passphrase' ? 'Use Passphrase' : 'Use Password'}
+                  {m().kind === 'passphrase' ? t('gen.usePassphrase') : t('gen.usePassword')}
                 </button>
               </Show>
             </div>

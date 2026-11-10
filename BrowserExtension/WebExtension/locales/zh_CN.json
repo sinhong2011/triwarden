@@ -1,0 +1,76 @@
+{
+  "extName": "Triwarden",
+  "extDescription": "从 Triwarden 保险库填充并保存登录信息。填充时会在应用中要求 Touch ID。",
+  "cmdFillLogin": "填充此页面的登录信息或一次性验证码",
+
+  "noAnswer": "Triwarden 没有响应。",
+  "unavailable": "无法使用 Triwarden。",
+  "dismiss": "关闭",
+
+  "bridge": {
+    "appNotRunning": "Triwarden 未在运行 — 请打开 Triwarden 以使用浏览器扩展。",
+    "connectionDisabled": "此连接已在“设置 › 浏览器”或“开发者”中关闭。"
+  },
+
+  "overlay": {
+    "fillWithTriwarden": "用 Triwarden 填充",
+    "lookingForLogins": "正在查找登录信息…",
+    "noLogins": "此网站没有登录信息。",
+    "noLoginsShort": "此网站没有登录信息",
+    "noOtpLogin": "此网站没有含一次性验证码的登录信息。",
+    "noLoginHasCode": "没有含验证码的登录信息",
+    "passwords": "密码",
+    "passkeys": "通行密钥",
+    "hintChoose": "选择",
+    "hintFill": "填充",
+    "hintClose": "关闭",
+    "codeValidFor": "验证码还剩 $1 秒有效"
+  },
+
+  "ctx": {
+    "autofill": "自动填充登录信息",
+    "copyUsername": "拷贝用户名",
+    "copyPassword": "拷贝密码",
+    "copyTotp": "拷贝验证码"
+  },
+
+  "gen": {
+    "suggestPassword": "建议一组强密码",
+    "suggestPasswordAria": "用 Triwarden 建议一组强密码",
+    "suggestedPassword": "建议密码",
+    "suggestedPassphrase": "建议密码短语",
+    "dragToMove": "拖动以移动",
+    "kind": "类型",
+    "password": "密码",
+    "passphrase": "密码短语",
+    "fillPassword": "填充密码",
+    "fillPasswordAndConfirm": "填充密码与确认栏",
+    "generating": "生成中…",
+    "anotherOne": "换一组",
+    "generateAnother": "再生成一组",
+    "copy": "拷贝",
+    "copied": "已复制",
+    "strength": "强度：$1",
+    "weak": "弱",
+    "fair": "一般",
+    "strong": "强",
+    "veryStrong": "非常强",
+    "length": "长度",
+    "include": "包含",
+    "minNumbers": "最少数字",
+    "minSpecial": "最少符号",
+    "minimumNumbers": "最少数字",
+    "minimumSpecial": "最少符号",
+    "avoidAmbiguous": "避免易混淆",
+    "avoidAmbiguousAria": "避免易混淆字符",
+    "wordCount": "单词数",
+    "separator": "分隔符",
+    "wordSeparator": "分隔符",
+    "capitalize": "首字母大写",
+    "includeNumber": "包含数字",
+    "usePassword": "使用此密码",
+    "usePassphrase": "使用此密码短语",
+    "decrease": "减少$1",
+    "increase": "增加$1"
+  }
+}

@@ -2,18 +2,20 @@ import { defineConfig } from 'wxt';
 
 // One source, three targets: Chrome/Edge/Brave (MV3 service worker), Firefox (MV3 event page) and Safari
 // (bundled into TriwardenSafari.appex by Xcode). The version comes from package.json.
+// Locales: `locales/*.json` → `_locales/*/messages.json` via `@wxt-dev/i18n` (browser UI language; en source of truth).
 export default defineConfig({
-  modules: ['@wxt-dev/module-solid'],
+  modules: ['@wxt-dev/module-solid', '@wxt-dev/i18n/module'],
   manifestVersion: 3,
   manifest: ({ browser }) => ({
-    name: 'Triwarden',
-    description: 'Fill and save logins from your Triwarden vault. Filling asks for Touch ID in the app.',
+    default_locale: 'en',
+    name: '__MSG_extName__',
+    description: '__MSG_extDescription__',
     icons: { 48: 'icon-48.png', 96: 'icon-96.png', 128: 'icon-128.png' },
     permissions: ['nativeMessaging', 'contextMenus', 'storage'],
     commands: {
       'fill-login': {
         suggested_key: { default: 'Ctrl+Shift+L', mac: 'Command+Shift+L' },
-        description: 'Fill the login or one-time code on this page',
+        description: '__MSG_cmdFillLogin__',
       },
     },
     // Chromium: the Chrome Web Store's public key, so an unpacked build has the store's extension ID (deiehcliaaoigminkkbnjlgmaoagimdm)
