@@ -35,8 +35,8 @@ public struct CLIRequest: Codable, Sendable, Equatable {
     public var includeNumber: Bool?
     /// `match`: also return each login's current one-time code. Only a code field asks for this.
     public var codes: Bool?
-    /// `match` with `codes`: the person asked for them (clicked the icon, pressed the shortcut). A field that merely
-    /// took focus does not set this, and gets no codes.
+    /// `match`: the person asked (clicked the icon, pressed the shortcut). A field that merely took focus does not
+    /// set this. With `codes`, this also returns the digits.
     public var reveal: Bool?
     /// `match`: the person asked Triwarden to fill (icon, shortcut). While locked, the app brings its window
     /// forward so they can unlock. Background `match` (rebuilding the right-click menu) does not set this.

@@ -42,6 +42,7 @@ public enum NativeHost {
     public static let browsers: [Browser] = [
         .init(id: "chrome", title: "Google Chrome", bundleID: "com.google.Chrome", family: .chromium, dataFolder: "Google/Chrome", hostFolder: "Google/Chrome/NativeMessagingHosts"),
         .init(id: "chrome-beta", title: "Chrome Beta", bundleID: "com.google.Chrome.beta", family: .chromium, dataFolder: "Google/Chrome Beta", hostFolder: "Google/Chrome Beta/NativeMessagingHosts"),
+        .init(id: "chrome-for-testing", title: "Chrome for Testing", bundleID: "com.google.chrome.for.testing", family: .chromium, dataFolder: "Google/Chrome for Testing", hostFolder: "Google/Chrome for Testing/NativeMessagingHosts"),
         .init(id: "chromium", title: "Chromium", bundleID: "org.chromium.Chromium", family: .chromium, dataFolder: "Chromium", hostFolder: "Chromium/NativeMessagingHosts"),
         .init(id: "edge", title: "Microsoft Edge", bundleID: "com.microsoft.edgemac", family: .chromium, dataFolder: "Microsoft Edge", hostFolder: "Microsoft Edge/NativeMessagingHosts"),
         .init(id: "brave", title: "Brave", bundleID: "com.brave.Browser", family: .chromium, dataFolder: "BraveSoftware/Brave-Browser", hostFolder: "BraveSoftware/Brave-Browser/NativeMessagingHosts"),

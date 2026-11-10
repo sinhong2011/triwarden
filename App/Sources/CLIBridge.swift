@@ -208,9 +208,12 @@ final class CLIBridge {
             guard Self.isOwnBinary(peer) else { return .failure("Unknown client.") }
             let autoShow = UserDefaults.standard.bool(forKey: Pref.browserAutoShow)
             guard model.isUnlocked else {
-                // Only an explicit fill (icon or shortcut) sends `foreground`. Page load, OTP refresh,
-                // and the right-click menu rebuild must not steal focus.
-                if request.foreground == true { offerUnlock() }
+                // Icon / shortcut set `foreground` and `reveal`. Background match (page load, OTP tick,
+                // right-click rebuild) sets `silent`. An older `tw` may drop unknown keys, so `reveal`
+                // (already on the wire for a clicked code field) is the fallback.
+                if request.silent != true, request.foreground == true || request.reveal == true {
+                    offerUnlock()
+                }
                 var locked = CLIResponse.failure(Self.locked, code: Self.lockedCode)
                 locked.autoShow = autoShow // the setting is known even while the vault is locked
                 return locked

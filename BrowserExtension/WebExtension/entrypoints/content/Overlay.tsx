@@ -210,7 +210,8 @@ export default function Overlay() {
     const reply = await send({
       command: 'match',
       codes: !!target.otp && !auto,
-      reveal: !!target.otp && !auto,
+      // Icon / shortcut: the person asked. `reveal` also survives an older `tw` that drops `foreground`.
+      reveal: !auto,
       ...(auto ? { silent: true } : { foreground: true }),
     });
     if (mine !== asking) return; // closed, or a newer ask took over

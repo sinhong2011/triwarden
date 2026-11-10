@@ -64,7 +64,7 @@ export type Request = {
   /** `get` / `copy` / `generate`: for generate, `passphrase` asks for a passphrase instead of a password. */
   field?: string;
   codes?: boolean;
-  /** With `codes`: the person asked to see them. A field that only took focus never sets this. */
+  /** The person asked (icon or shortcut). With `codes`, also return the digits. A field that only took focus never sets this. */
   reveal?: boolean;
   /**
    * `match`: the person asked to fill (icon or shortcut). The app brings its window forward when the
