@@ -208,7 +208,10 @@ final class CLIBridge {
             guard Self.isOwnBinary(peer) else { return .failure("Unknown client.") }
             let autoShow = UserDefaults.standard.bool(forKey: Pref.browserAutoShow)
             guard model.isUnlocked else {
-                var locked = CLIResponse.failure(Self.locked)
+                // Icon / shortcut (and older content scripts that omit `foreground`) open unlock.
+                // The right-click menu rebuilds with `silent`, so tab switches do not steal focus.
+                if request.silent != true { offerUnlock() }
+                var locked = CLIResponse.failure(Self.locked, code: Self.lockedCode)
                 locked.autoShow = autoShow // the setting is known even while the vault is locked
                 return locked
             }
@@ -243,7 +246,7 @@ final class CLIBridge {
                                 exact: $0.hosts.contains(host), passkey: $0.hasPasskey)
             }, autoShow: autoShow)
         case .fill:
-            guard model.isUnlocked else { return .failure(Self.locked) }
+            guard model.isUnlocked else { return lockedFillOrCopy() }
             guard let item = model.items.first(where: { $0.id == request.query && !$0.isDeleted && !$0.isArchived }) else {
                 return .failure("That login is no longer in your vault.")
             }
@@ -263,7 +266,7 @@ final class CLIBridge {
                                 totpRemaining: fresh.remaining, totpPeriod: totp.period)
         case .copy:
             guard Self.isOwnBinary(peer) else { return .failure("Unknown client.") }
-            guard model.isUnlocked else { return .failure(Self.locked) }
+            guard model.isUnlocked else { return lockedFillOrCopy() }
             guard let item = model.items.first(where: { $0.id == request.query && !$0.isDeleted && !$0.isArchived }) else {
                 return .failure("That login is no longer in your vault.")
             }
@@ -401,7 +404,21 @@ final class CLIBridge {
     }
 
     static let locked = "The vault is locked. Unlock Triwarden first."
+    static let lockedCode = "vault_locked"
     static let denied = "Not approved."
+
+    /// Fill, copy, or the in-page icon: the person asked Triwarden to do something. Open unlock where
+    /// Settings › Browser says (window, palette, or menu bar). Background `match` does not.
+    private func lockedFillOrCopy() -> CLIResponse {
+        offerUnlock()
+        return .failure(Self.locked, code: Self.lockedCode)
+    }
+
+    private func offerUnlock() {
+        // After this reply is on the wire: presenting during the blocking socket handler
+        // often never becomes visible (the run loop is waiting on the semaphore).
+        DispatchQueue.main.async { [weak self] in self?.model?.offerUnlockFromBrowser() }
+    }
 
     /// `browser`: asked on behalf of the browser extension. It has its own window (Settings › Browser), apart from the
     /// `tw` command's, and its own grants, so approving a browser does not approve the terminal.

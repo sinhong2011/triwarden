@@ -54,11 +54,8 @@ struct MenuBarContent: View {
         .frame(width: 380)
         // Light: a soft grey wash over the system's near-white glass, so the white cards have something to stand on.
         .background(Color.menuWash)
-        .onAppear {
-            MenuBarOpener.isOpen = true
-            model.captureForeground()
-        }
-        .onDisappear { MenuBarOpener.isOpen = false }
+        .background { MenuBarPanelProbe().allowsHitTesting(false) }
+        .onAppear { model.captureForeground() }
         .animation(.snappy(duration: 0.22), value: query.isEmpty)
         // Unlocking, locking and signing out swap whole cards; ease them rather than snap.
         .animation(.snappy(duration: 0.3), value: model.hasOpenVault)

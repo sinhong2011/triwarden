@@ -857,6 +857,36 @@ final class AppModel {
         openMainWindowAction()
     }
 
+    /// The browser asked to fill while locked. Open unlock where Settings › Browser says: the vault window,
+    /// the command palette, or the menu bar panel (falls back to the window if the menu bar icon is off).
+    func offerUnlockFromBrowser() {
+        switch UserDefaults.standard.string(forKey: Pref.browserUnlock) {
+        case "palette":
+            if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
+            openPalette()
+        case "menuBar" where UserDefaults.standard.bool(forKey: Pref.showMenuBar):
+            MenuBarOpener.open()
+        default:
+            reopenForUnlock()
+        }
+    }
+
+    /// Dock-click equivalent: reopen the vault over the browser, even when we have no user gesture in-app.
+    private func reopenForUnlock() {
+        if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
+        NSApp.unhide(nil)
+        openMainWindowAction()
+        for window in NSApp.windows where window.canBecomeMain {
+            if window.isMiniaturized { window.deminiaturize(nil) }
+            window.orderFrontRegardless()
+            window.makeKeyAndOrderFront(nil)
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        let config = NSWorkspace.OpenConfiguration()
+        config.activates = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: config)
+    }
+
     /// The vault window is showing: Triwarden belongs in the Dock again.
     func windowDidOpen() {
         if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }

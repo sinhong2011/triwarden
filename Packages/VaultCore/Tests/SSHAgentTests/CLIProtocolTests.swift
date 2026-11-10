@@ -23,6 +23,20 @@ struct CLIProtocolTests {
         #expect(json["totpPeriod"] == nil)
     }
 
+    @Test func matchCanAskToBringTheWindowForward() throws {
+        let asking = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"match","foreground":true}"#.utf8))
+        #expect(asking.foreground == true)
+        let background = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"match"}"#.utf8))
+        #expect(background.foreground == nil)
+        let menu = try JSONDecoder().decode(CLIRequest.self, from: Data(#"{"command":"match","silent":true}"#.utf8))
+        #expect(menu.silent == true)
+    }
+
+    @Test func lockedFailureHasAStableCode() throws {
+        let json = try object(.failure("The vault is locked. Unlock Triwarden first.", code: "vault_locked"))
+        #expect(json["code"] as? String == "vault_locked")
+    }
+
     @Test func matchRowsSayWhetherALoginHasACode() throws {
         let json = try object(.list([
             .init(id: "1", name: "With", detail: "a", totpPeriod: 60),

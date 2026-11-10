@@ -80,6 +80,8 @@ type Menu = {
   state: 'rows' | 'note';
   rows: Row[];
   note: string;
+  /** `vault_locked`: the note is a control that asks the app to show the unlock window again. */
+  noteCode?: string;
   at: number;
   /** The person asked to see codes (icon or shortcut), so rolled-over codes are fetched again without asking. */
   revealed: boolean;
@@ -205,13 +207,23 @@ export default function Overlay() {
     autoOpened = false;
     if (!auto) setMenu({ ...base, state: 'note', note: t('overlay.lookingForLogins') });
     // Digits only when asked for: a field that merely took focus gets names and countdowns, never the code.
-    const reply = await send({ command: 'match', codes: !!target.otp && !auto, reveal: !!target.otp && !auto });
+    const reply = await send({
+      command: 'match',
+      codes: !!target.otp && !auto,
+      reveal: !!target.otp && !auto,
+      ...(!auto ? { foreground: true } : {}),
+    });
     if (mine !== asking) return; // closed, or a newer ask took over
     if (reply.autoShow !== undefined) autoShow = reply.autoShow;
     if (auto) {
       if (!reply.ok || !autoShow) return;
     } else if (!reply.ok) {
-      return setMenu({ ...base, state: 'note', note: replyErrorMessage(reply) });
+      return setMenu({
+        ...base,
+        state: 'note',
+        note: replyErrorMessage(reply),
+        noteCode: reply.code,
+      });
     }
     // A code field only offers the logins that have a code.
     const found = target.otp ? (reply.rows ?? []).filter((row) => row.totpPeriod) : (reply.rows ?? []);
@@ -263,7 +275,21 @@ export default function Overlay() {
   async function choose(row: Row, target: Target) {
     close();
     const filled = await send({ command: 'fill', query: row.id });
-    if (!filled.ok) return;
+    if (!filled.ok) {
+      if (filled.code === 'vault_locked') {
+        setMenu({
+          target,
+          auto: false,
+          state: 'note',
+          rows: [],
+          note: replyErrorMessage(filled),
+          noteCode: filled.code,
+          at: Date.now(),
+          revealed: true,
+        });
+      }
+      return;
+    }
     filling = true;
     try {
       if (target.otp) {
@@ -383,7 +409,30 @@ export default function Overlay() {
           const mixed = () => !m().target.otp && new Set(m().rows.map(groupOf)).size > 1;
           return (
             <div class="menu" role="menu" style={menuStyle(m())} data-rtl={isRTL(m().target.field)} data-above={menuAbove(m())}>
-              <Show when={m().state === 'rows'} fallback={<div class="note" dir="auto">{m().note}</div>}>
+              <Show
+                when={m().state === 'rows'}
+                fallback={
+                  <Show
+                    when={m().noteCode === 'vault_locked'}
+                    fallback={
+                      <div class="note" dir="auto">
+                        {m().note}
+                      </div>
+                    }
+                  >
+                    <button
+                      class="note note-action"
+                      type="button"
+                      dir="auto"
+                      title={t('overlay.openToUnlock')}
+                      on:mousedown={(e) => e.preventDefault()}
+                      on:click={() => open(m().target)}
+                    >
+                      {m().note}
+                    </button>
+                  </Show>
+                }
+              >
                 <div class="list">
                   <For each={m().rows}>
                     {(row, i) => (

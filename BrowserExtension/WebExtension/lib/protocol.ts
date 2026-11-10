@@ -38,7 +38,7 @@ export type GeneratorOptions = {
 export type Reply = {
   ok: boolean;
   error?: string;
-  /** Machine-readable failure: `app_not_running`, `connection_disabled`, … */
+  /** Machine-readable failure: `app_not_running`, `connection_disabled`, `vault_locked`, … */
   code?: string;
   rows?: Row[];
   /** `match`: the Browser setting "Show suggestions when a field is focused". */
@@ -66,6 +66,13 @@ export type Request = {
   codes?: boolean;
   /** With `codes`: the person asked to see them. A field that only took focus never sets this. */
   reveal?: boolean;
+  /**
+   * `match`: the person asked to fill (icon or shortcut). The app brings its window forward when the
+   * vault is locked. Omit on background match (right-click menu rebuild).
+   */
+  foreground?: boolean;
+  /** `match`: rebuilding the right-click menu — do not open unlock while locked. */
+  silent?: boolean;
   /** `generate` password: optional length override (passphrase: word count). */
   length?: number;
   /** `generate` password charset / rules — persisted into the app's `generator` prefs when sent. */

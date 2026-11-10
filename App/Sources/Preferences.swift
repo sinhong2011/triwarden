@@ -20,6 +20,8 @@ enum Pref {
     static let browser = "browser"                       // answer the Safari/Chrome extension
     static let browserApprovalSeconds = "browserApprovalSeconds" // how long a Touch ID covers the extension (0 = every time)
     static let browserAutoShow = "browserAutoShow"       // the extension opens its suggestions when a login field is focused (on by default)
+    /// Where to unlock when the browser asks to fill while the vault is locked: "window" | "palette" | "menuBar".
+    static let browserUnlock = "browserUnlock"
     static let accessStatus = "accessStatus"             // temporary access shows at the notch (on unless turned off)
     static let accessStatusPosition = "accessStatusPosition" // NotchPosition: "notch" | "topLeft" | "topRight" | "custom"
     static let approvalStyle = "approvalStyle"               // "window" (default) | "notch": where approval requests appear
@@ -46,6 +48,7 @@ enum Pref {
             hideFromCapture: false, timeoutAction: "lock", // opt-in: some screen tools and recordings need the window
             showMenuBar: true, closeToMenuBar: false, matchFrontTab: false, matchFrontTabDismissed: false,
             rememberPalettePosition: false, newItemSiteOnly: false, browserAutoShow: true, browserApprovalSeconds: 600,
+            browserUnlock: "window",
         ])
         UserDefaults.standard.removeObject(forKey: "lockAnimations") // retired (see fullDoorAnimation)
     }

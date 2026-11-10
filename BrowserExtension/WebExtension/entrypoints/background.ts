@@ -72,7 +72,7 @@ function setUpContextMenu() {
     let problem = '';
     if (url) {
       try {
-        const reply = (await browser.runtime.sendNativeMessage(HOST, { command: 'match', url })) as Reply | undefined;
+        const reply = (await browser.runtime.sendNativeMessage(HOST, { command: 'match', url, silent: true })) as Reply | undefined;
         if (reply?.ok) logins = (reply.rows ?? []).map((r) => ({ id: r.id, label: label(r), totp: !!r.totpPeriod }));
         else problem = replyErrorMessage(reply);
       } catch (error) {

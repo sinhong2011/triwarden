@@ -173,6 +173,23 @@
   padding: 10px 10px 10px;
   color: color-mix(in srgb, var(--ink) 62%, transparent);
 }
+button.note-action {
+  display: block;
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  pointer-events: auto;
+}
+button.note-action:hover,
+button.note-action:focus-visible {
+  color: var(--ink);
+  background: var(--wash);
+  outline: none;
+}
 
 /* ---- A login row: site icon, name, username, and for code fields the code with its countdown ---- */
 .row {

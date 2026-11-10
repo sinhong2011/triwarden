@@ -238,7 +238,7 @@ struct UnlockCapsuleField: View {
         HStack(spacing: 4) {
             PasswordField(title: pinMode ? "PIN" : "Master password", text: $password, look: .plain,
                           prompt: pinMode ? "PIN" : "Master password",
-                          isFocused: focused, onSubmit: submit)
+                          isFocused: focused, onSubmit: submit, autofill: false)
                 .font(.system(size: 13))
             Button(action: submit) {
                 ZStack {

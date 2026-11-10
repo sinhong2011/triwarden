@@ -136,23 +136,102 @@ enum SSHAccessClock {
     }
 }
 
-/// Opens the menu bar panel. The status item belongs to SwiftUI, so this clicks Triwarden's button.
+/// Shows the menu bar panel the same way a click on the icon does. Ordering the stored window
+/// forward skips AppKit's status-item session: the generator stretches, and a click outside
+/// never closes it. On macOS 27 that session is `_beginExpandedInterfaceSession:`; earlier
+/// releases still use the button's click.
 @MainActor
 enum MenuBarOpener {
-    static var isOpen = false
+    static weak var panel: NSWindow?
 
-    static func open() {
-        guard !isOpen, let button = triwardenButton() else { return }
-        button.performClick(nil)
+    static var isOpen: Bool {
+        if let item = statusItem(), isPresented(item) { return true }
+        return panel.map { $0.isVisible && !$0.isMiniaturized } ?? false
     }
 
-    private static func triwardenButton() -> NSStatusBarButton? {
+    static func open() {
+        guard let item = statusItem() else { return }
+        if isPresented(item) { return }
+        // A previous orderFront left the panel up without a session. Hide it so the real
+        // presentation can take over (click-outside dismiss, unstretched generator).
+        if let panel, panel.isVisible { panel.orderOut(nil) }
+        present(item)
+    }
+
+    private static func present(_ item: NSStatusItem) {
+        let begin = NSSelectorFromString("_beginExpandedInterfaceSession:")
+        if item.responds(to: begin), let imp = item.method(for: begin) {
+            // Timestamp must post-date the last session end, or AppKit drops the begin. A
+            // programmatic open has no event, so pass the maximum.
+            typealias Begin = @convention(c) (AnyObject, Selector, TimeInterval) -> Void
+            unsafeBitCast(imp, to: Begin.self)(item, begin, .greatestFiniteMagnitude)
+            return
+        }
+        item.button?.performClick(nil)
+    }
+
+    private static func isPresented(_ item: NSStatusItem) -> Bool {
+        let session = NSSelectorFromString("expandedInterfaceSession")
+        if item.responds(to: session),
+           let value = item.perform(session)?.takeUnretainedValue(), !(value is NSNull) {
+            return true
+        }
+        return item.button?.isHighlighted == true
+    }
+
+    private static func statusItem() -> NSStatusItem? {
+        if let panel, let item = item(from: panel), isUsable(item) { return item }
+        for window in NSApp.windows where window.className.contains("NSStatusBarWindow") {
+            if let item = item(from: window), isUsable(item) { return item }
+        }
+        let listed = listedItems()
+        return listed.first(where: isOurs) ?? listed.first(where: isUsable)
+    }
+
+    private static func item(from window: NSWindow) -> NSStatusItem? {
+        let sel = NSSelectorFromString("statusItem")
+        if window.responds(to: sel) {
+            return window.perform(sel)?.takeUnretainedValue() as? NSStatusItem
+        }
+        return Mirror(reflecting: window).descendant("statusItem") as? NSStatusItem
+    }
+
+    /// Other displays get an `NSStatusItemReplicant`; only the real item presents the panel.
+    private static func isUsable(_ item: NSStatusItem) -> Bool {
+        !item.className.contains("Replicant")
+    }
+
+    private static func isOurs(_ item: NSStatusItem) -> Bool {
+        guard isUsable(item) else { return false }
+        let button = item.button
+        let desc = button?.image?.accessibilityDescription ?? ""
+        let tip = button?.toolTip ?? ""
+        let title = button?.title ?? ""
+        return desc.localizedCaseInsensitiveContains("Triwarden")
+            || tip.localizedCaseInsensitiveContains("Triwarden")
+            || title.localizedCaseInsensitiveContains("Triwarden")
+    }
+
+    private static func listedItems() -> [NSStatusItem] {
         let bar = NSStatusBar.system
         let sel = NSSelectorFromString("_statusItems")
-        guard bar.responds(to: sel), let value = bar.perform(sel)?.takeUnretainedValue() else { return nil }
-        let items = (value as? [NSStatusItem]) ?? (value as? NSArray)?.compactMap { $0 as? NSStatusItem } ?? []
-        return items.first { item in
-            item.button?.image?.accessibilityDescription?.contains("Triwarden") == true
-        }?.button
+        guard bar.responds(to: sel), let value = bar.perform(sel)?.takeUnretainedValue() else { return [] }
+        return (value as? [NSStatusItem]) ?? (value as? NSArray)?.compactMap { $0 as? NSStatusItem } ?? []
+    }
+}
+
+/// Remembers the MenuBarExtra window so a leftover orderFront can be ordered out before a real open.
+struct MenuBarPanelProbe: NSViewRepresentable {
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ view: Probe, context: Context) { view.register() }
+
+    final class Probe: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            register()
+        }
+        func register() {
+            if let window { MenuBarOpener.panel = window }
+        }
     }
 }

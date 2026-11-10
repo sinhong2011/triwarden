@@ -50,6 +50,8 @@ struct PasswordField: View {
     /// never attaches with `.focused(_:)` drops writes, so setting it to true would not focus this field.
     var isFocused: Binding<Bool>?
     var onSubmit: () -> Void = {}
+    /// Unlock fields skip this: AutoFill would offer vault items for the master password.
+    var autofill = true
 
     @State private var visible = false
     /// ⌥ peek, after a short hold, and only while this field is focused.
@@ -79,7 +81,7 @@ struct PasswordField: View {
                     SecureField(spokenTitle, text: $text, prompt: Text(verbatim: spokenPrompt))
                 }
             }
-            .textContentType(.password)
+            .textContentType(autofill ? .password : nil)
             .labelsHidden()
             .focused($focused)
             .onSubmit(onSubmit))

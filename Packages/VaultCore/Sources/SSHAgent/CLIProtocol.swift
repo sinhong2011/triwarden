@@ -38,6 +38,11 @@ public struct CLIRequest: Codable, Sendable, Equatable {
     /// `match` with `codes`: the person asked for them (clicked the icon, pressed the shortcut). A field that merely
     /// took focus does not set this, and gets no codes.
     public var reveal: Bool?
+    /// `match`: the person asked Triwarden to fill (icon, shortcut). While locked, the app brings its window
+    /// forward so they can unlock. Background `match` (rebuilding the right-click menu) does not set this.
+    public var foreground: Bool?
+    /// `match`: rebuilding the right-click menu — do not open unlock while locked.
+    public var silent: Bool?
     /// Added by `tw` when a browser started it: that browser's extension origin (`chrome-extension://<id>/`) or, for
     /// Firefox, the add-on id. The app uses it to show which browsers are connected, since a sandboxed app cannot read
     /// their folders. The extension itself never sets it.
@@ -51,12 +56,15 @@ public struct CLIRequest: Codable, Sendable, Equatable {
                 avoidAmbiguous: Bool? = nil, minNumbers: Int? = nil, minSpecial: Int? = nil,
                 separator: String? = nil, capitalize: Bool? = nil, includeNumber: Bool? = nil,
                 url: String? = nil, username: String? = nil, password: String? = nil, codes: Bool? = nil,
-                reveal: Bool? = nil, origin: String? = nil, browser: String? = nil) {
+                reveal: Bool? = nil, foreground: Bool? = nil, silent: Bool? = nil,
+                origin: String? = nil, browser: String? = nil) {
         self.command = command; self.query = query; self.field = field; self.length = length
         self.uppercase = uppercase; self.lowercase = lowercase; self.digits = digits; self.symbols = symbols
         self.avoidAmbiguous = avoidAmbiguous; self.minNumbers = minNumbers; self.minSpecial = minSpecial
         self.separator = separator; self.capitalize = capitalize; self.includeNumber = includeNumber
-        self.url = url; self.username = username; self.password = password; self.codes = codes; self.reveal = reveal; self.origin = origin; self.browser = browser
+        self.url = url; self.username = username; self.password = password; self.codes = codes; self.reveal = reveal
+        self.foreground = foreground; self.silent = silent
+        self.origin = origin; self.browser = browser
     }
 }
 
@@ -95,7 +103,7 @@ public struct CLIResponse: Codable, Sendable, Equatable {
     public var totpPeriod: Int?
     public var rows: [Row]?
     public var error: String?
-    /// Machine-readable reason when `ok` is false: `app_not_running`, `connection_disabled`, …
+    /// Machine-readable reason when `ok` is false: `app_not_running`, `connection_disabled`, `vault_locked`, …
     public var code: String?
     /// `match`: whether the Browser setting "Show suggestions when a field is focused" is on. The extension keeps it.
     public var autoShow: Bool?
