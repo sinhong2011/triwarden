@@ -168,12 +168,13 @@ struct GeneratorView: View {
             options
 
             if let onUse {
-                HStack {
-                    Spacer()
-                    Button(useTitle) { remember(); onUse(value) }
-                        .buttonStyle(.appPrimary)
-                        .disabled(value.isEmpty)
-                }
+                // Single CTA, centered: a trailing pill sat under the popover arrow
+                // (every compact presentation uses arrowEdge: .trailing) and the
+                // "Use Password" label was clipped on the right.
+                Button(useTitle) { remember(); onUse(value) }
+                    .buttonStyle(.appPrimary)
+                    .disabled(value.isEmpty)
+                    .frame(maxWidth: .infinity)
             }
         }
         .padding(16)
