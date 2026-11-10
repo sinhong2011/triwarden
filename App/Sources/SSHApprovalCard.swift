@@ -149,13 +149,16 @@ enum MenuBarOpener {
         return panel.map { $0.isVisible && !$0.isMiniaturized } ?? false
     }
 
-    static func open() {
-        guard let item = statusItem() else { return }
-        if isPresented(item) { return }
-        // A previous orderFront left the panel up without a session. Hide it so the real
-        // presentation can take over (click-outside dismiss, unstretched generator).
+    @discardableResult
+    static func open() -> Bool {
+        guard let item = statusItem() else { return false }
+        // A `.window` MenuBarExtra stays mounted, so `expandedInterfaceSession` can look
+        // presented while the panel is hidden. Always begin a session unless the panel is
+        // actually on screen.
+        if let panel, panel.isVisible, isPresented(item) { return true }
         if let panel, panel.isVisible { panel.orderOut(nil) }
         present(item)
+        return true
     }
 
     private static func present(_ item: NSStatusItem) {

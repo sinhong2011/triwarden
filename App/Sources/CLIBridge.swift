@@ -420,7 +420,7 @@ final class CLIBridge {
     private func offerUnlock() {
         // After this reply is on the wire: presenting during the blocking socket handler
         // often never becomes visible (the run loop is waiting on the semaphore).
-        DispatchQueue.main.async { [weak self] in self?.model?.offerUnlockFromBrowser() }
+        Task { @MainActor [weak self] in self?.model?.offerUnlockFromBrowser() }
     }
 
     /// `browser`: asked on behalf of the browser extension. It has its own window (Settings › Browser), apart from the

@@ -865,7 +865,8 @@ final class AppModel {
             if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
             openPalette()
         case "menuBar" where UserDefaults.standard.bool(forKey: Pref.showMenuBar):
-            MenuBarOpener.open()
+            if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
+            if !MenuBarOpener.open() { reopenForUnlock() }
         default:
             reopenForUnlock()
         }
