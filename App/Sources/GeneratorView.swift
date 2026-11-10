@@ -185,26 +185,25 @@ struct GeneratorView: View {
 
     private var output: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .center, spacing: 6) {
-                Rolling(value, keep: rollKeep) { shown in
-                    ColoredSecret(value: shown, separator: mode == .passphrase ? passphrase.separator : nil)
+            Rolling(value, keep: rollKeep) { shown in
+                ColoredSecret(value: shown, separator: mode == .passphrase ? passphrase.separator : nil)
+            }
+                .font(.system(size: 15, weight: .medium, design: .monospaced))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentTransition(.opacity)
+                .accessibilityLabel(Text(verbatim: value))
+            HStack(spacing: 6) {
+                if mode != .username {
+                    StrengthMeter(bits: mode == .password ? password.entropyBits : passphrase.entropyBits)
+                } else if value.isEmpty {
+                    Text(username.kind == .plusAddressed ? "Enter your email address below." : "Enter your catch-all domain below.")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                    .font(.system(size: 15, weight: .medium, design: .monospaced))
-                    .textSelection(.enabled)
-                    .lineLimit(3)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .contentTransition(.opacity)
-                    .accessibilityLabel(Text(verbatim: value))
+                Spacer(minLength: 8)
                 iconButton("arrow.clockwise", help: "Regenerate") { regenerate() }
                     .keyboardShortcut("r", modifiers: .command)
                 iconButton(copied ? "checkmark" : "doc.on.doc", help: "Copy") { copy() }
                     .keyboardShortcut("c", modifiers: [.command, .shift])
-            }
-            if mode != .username {
-                StrengthMeter(bits: mode == .password ? password.entropyBits : passphrase.entropyBits)
-            } else if value.isEmpty {
-                Text(username.kind == .plusAddressed ? "Enter your email address below." : "Enter your catch-all domain below.")
-                    .font(.caption).foregroundStyle(.secondary)
             }
         }
         .padding(12)
@@ -349,24 +348,53 @@ struct GeneratorView: View {
 }
 
 /// Digits in brand blue, symbols (and passphrase separators) in coral, letters in the text colour.
+/// Glyphs wrap at the container edge (not at letter-runs), so a 128-character password fills each line.
 struct ColoredSecret: View {
     let value: String
     var separator: String?
 
     var body: some View {
-        var text = AttributedString()
-        for ch in value {
-            var piece = AttributedString(String(ch))
-            if ch.isNumber {
-                piece.foregroundColor = .brand
-            } else if let separator, separator.contains(ch) {
-                piece.foregroundColor = Color(red: 0.90, green: 0.32, blue: 0.36)
-            } else if !ch.isLetter {
-                piece.foregroundColor = Color(red: 0.90, green: 0.32, blue: 0.36)
+        GlyphWrap {
+            ForEach(Array(value.enumerated()), id: \.offset) { _, ch in
+                Text(verbatim: String(ch)).foregroundStyle(Self.color(ch, separator: separator))
             }
-            text += piece
         }
-        return Text(text)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(verbatim: value))
+    }
+
+    static func color(_ ch: Character, separator: String?) -> Color {
+        if ch.isNumber { return .brand }
+        if let separator, separator.contains(ch) { return Color(red: 0.90, green: 0.32, blue: 0.36) }
+        if !ch.isLetter { return Color(red: 0.90, green: 0.32, blue: 0.36) }
+        return .primary
+    }
+}
+
+/// Places one glyph after another and wraps at `proposal.width`, like `lineBreakMode = .byCharWrapping`.
+private struct GlyphWrap: Layout {
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, row: CGFloat = 0, widest: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { y += row; x = 0; row = 0 }
+            x += size.width
+            row = max(row, size.height)
+            widest = max(widest, x)
+        }
+        return CGSize(width: min(widest, width), height: y + row)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, row: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX { y += row; x = bounds.minX; row = 0 }
+            view.place(at: CGPoint(x: x, y: y), proposal: .unspecified)
+            x += size.width
+            row = max(row, size.height)
+        }
     }
 }
 
