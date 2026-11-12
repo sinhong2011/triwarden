@@ -9,8 +9,8 @@ type Box = Pick<DOMRect, 'left' | 'right' | 'top' | 'height'>;
 export const SYSTEM_AUTOFILL_ICON_CLEARANCE = 28;
 
 const ICON_SIZE = 22;
-/** Space between the field's border box and an icon sitting just outside it. Same gap one-time-code rows already used. */
-const ICON_OUTSIDE_GAP = 6;
+/** Space between the field's border box and an icon sitting just outside it. Flush reads as belonging to the field. */
+const ICON_OUTSIDE_GAP = 0;
 const VIEWPORT_MARGIN = 8;
 
 /**

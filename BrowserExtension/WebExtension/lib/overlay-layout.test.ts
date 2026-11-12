@@ -17,9 +17,9 @@ const field = { left: 100, right: 300, top: 40, height: 42 } as DOMRect;
 
 describe('overlay placement', () => {
   it('places every icon just outside the trailing edge of the field', () => {
-    // LTR: 6px past the right edge. RTL: the 22px icon ends 6px before the left edge (100 - 22 - 6).
-    expect(iconPosition(field, false)).toMatchObject({ left: '306px', top: '50px' });
-    expect(iconPosition(field, true)).toMatchObject({ left: '72px', top: '50px' });
+    // LTR: flush with the right edge. RTL: the 22px icon ends at the left edge (100 - 22).
+    expect(iconPosition(field, false)).toMatchObject({ left: '300px', top: '50px' });
+    expect(iconPosition(field, true)).toMatchObject({ left: '78px', top: '50px' });
   });
 
   it('keeps the icon outside the value when the viewport has room beside the field', () => {
@@ -32,7 +32,7 @@ describe('overlay placement', () => {
 
   it('pulls a left-to-right icon back inside the viewport without covering the native decoration', () => {
     const viewport = 1600;
-    // Preferred 1576 is past the margin; the icon can sit flush with the field and stay outside.
+    // Preferred 1570 is flush with the field and at the viewport margin, so it stays outside.
     const shrink = { left: 100, right: 1570, top: 40, height: 42 } as DOMRect;
     expect(iconPosition(shrink, false, viewport).left).toBe('1570px');
 
@@ -47,9 +47,9 @@ describe('overlay placement', () => {
 
   it('mirrors viewport clamping for right-to-left fields', () => {
     const viewport = 1600;
-    // Preferred is 4px; the margin still leaves the icon outside the field.
+    // Preferred is 10px; the 8px margin still leaves the icon outside the field.
     const shrink = { left: 32, right: 300, top: 40, height: 42 } as DOMRect;
-    expect(iconPosition(shrink, true, viewport).left).toBe('8px');
+    expect(iconPosition(shrink, true, viewport).left).toBe('10px');
 
     // No room outside: start just after the native control on the trailing (left) edge.
     const flush = { left: 10, right: 200, top: 40, height: 42 } as DOMRect;
@@ -101,7 +101,7 @@ describe('generateMenuPlace', () => {
   it('sits above the new password when it fits, ending at the outside icon', () => {
     const p = generateMenuPlace(field, confirm, 280, 110, viewport, false);
     expect(p.vertical).toEqual({ top: `${300 - 6 - 110}px`, above: true });
-    const iconLeft = 400 + 6;
+    const iconLeft = 400;
     expect(p.left).toBe(menuLeftNearIcon(iconLeft, 280, false, 1200));
   });
 
