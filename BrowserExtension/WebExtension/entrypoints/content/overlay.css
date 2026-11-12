@@ -51,7 +51,7 @@
   box-sizing: border-box;
 }
 
-/* ---- The app icon inside a field ---- */
+/* ---- The app icon just outside a field, on its trailing side ---- */
 .key {
   /* absolute inside the viewport-pinned host (fixed was resolving against WXT's 0×0 host in Safari). */
   position: absolute;
