@@ -93,11 +93,12 @@ def render(notes: str) -> str:
         line = raw.rstrip()
         if not line.strip():
             continue
-        if line.startswith("### "):
+        heading = re.match(r"^#{1,4}\s+(.*)$", line)
+        if heading:
             if in_list:
                 parts.append("</ul>")
                 in_list = False
-            title = line[4:].strip()
+            title = heading[1].strip()
             attr = ' class="breaking"' if "BREAKING" in title.upper() else ""
             parts.append(f"<h3{attr}>{html.escape(title)}</h3>")
         elif re.match(r"^\s*[*-]\s+", line):
@@ -166,6 +167,11 @@ def self_test() -> None:
 
     assert "<script>" not in page("* fix <script>alert(1)</script>")
     print("PASS: HTML escapes subjects")
+
+    out = page("## Highlights\n\n- **Sign up anywhere.** The generator is in every browser.\n\n## Fixes\n\n- x")
+    assert "<h3>Highlights</h3>" in out and "<h3>Fixes</h3>" in out and "##" not in out, out
+    assert "<li><b>Sign up anywhere.</b> The generator is in every browser.</li>" in out, out
+    print("PASS: hand-written ## headings and - bullets render too")
 
     assert EMPTY in page("")
     print("PASS: empty notes still render a line")
