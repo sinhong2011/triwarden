@@ -31,6 +31,9 @@ repository is bumped, so the app, its Safari extension and the Chrome/Firefox zi
    - create the GitHub release with the tag's notes and, in the same step, the DMG, the zip, `appcast.xml` and
      the Homebrew cask (`triwarden.rb`), so `/releases/latest` never lacks them;
    - push the cask to `Casks/triwarden.rb` in `sinhong2011/homebrew-tap`.
+   - start the **Site** workflow on `main`, so the website's version, size and download line show the new
+     release (a release created by the workflow's token can't trigger it any other way). To redeploy the site
+     by hand: **Actions › Site › Run workflow**.
 4. Installed copies with automatic checks on find the update through
    `https://github.com/sinhong2011/triwarden/releases/latest/download/appcast.xml`. They verify the EdDSA
    signature and the notarization, install, and relaunch. Everyone else gets it from **Check for Updates…**.
