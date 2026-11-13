@@ -234,7 +234,11 @@ struct MenuBarPanelProbe: NSViewRepresentable {
             register()
         }
         func register() {
-            if let window { MenuBarOpener.panel = window }
+            guard let window else { return }
+            MenuBarOpener.panel = window
+            // The panel otherwise reads as a system dialog, and VoiceOver reads every text in a dialog aloud when it
+            // opens (the generated password among them). As a floating window it says its name and the first control.
+            window.setAccessibilitySubrole(.floatingWindow)
         }
     }
 }

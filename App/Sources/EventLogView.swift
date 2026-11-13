@@ -22,6 +22,7 @@ struct EventLogSheet: View {
                     FormHeader(symbol: "list.bullet.rectangle", title: "Event log", subtitle: "\(organization?.name ?? "")")
                     Spacer()
                     AppSegmented(options: [(1, LocalizedStringKey("Day")), (7, "Week"), (30, "Month")], selection: $days)
+                        .accessibilityLabel(Text("Event log"))
                         .frame(width: 220)
                 }
                 FormCard {

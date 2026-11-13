@@ -49,6 +49,7 @@ struct GeneratorView: View {
     private var modePicker: some View {
         AppSegmented(options: modes.map { ($0, $0.title) },
                      selection: Binding(get: { mode }, set: { storedMode = $0.rawValue }))
+            .accessibilityLabel(Text("Type"))
     }
 
     @ViewBuilder private var options: some View {
@@ -287,6 +288,7 @@ struct GeneratorView: View {
             AppSegmented(options: [(UsernameGenerator.Kind.randomWord, "Random word"),
                                    (.plusAddressed, "Plus-addressed email"), (.catchAll, "Catch-all email")],
                          selection: $username.kind)
+                .accessibilityLabel(Text("Username"))
             switch username.kind {
             case .randomWord:
                 SwitchRow("Capitalize", isOn: $username.capitalize)

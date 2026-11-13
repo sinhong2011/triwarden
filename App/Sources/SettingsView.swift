@@ -295,6 +295,7 @@ private struct GeneralSettings: View {
                         (.light, "Light"),
                         (.dark, "Dark"),
                     ], selection: $selectedAppearance, compact: true)
+                    .accessibilityLabel(Text("Appearance"))
                     .frame(width: 210)
                     .onChange(of: selectedAppearance) { _, selected in
                         // Commit the picker movement before invalidating all themed windows.
@@ -542,6 +543,7 @@ private struct BrowserSettings: View {
                         ("palette", "Palette"),
                         ("menuBar", "Menu bar"),
                     ], selection: $unlockIn, compact: true)
+                    .accessibilityLabel(Text("When locked, unlock in"))
                     .frame(width: 248)
                 }
                 .disabled(!browserEnabled)

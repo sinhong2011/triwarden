@@ -95,6 +95,7 @@ struct ExportSheet: View {
                                        (.kdbx, LocalizedStringKey("KeePass")),
                                        (.json, LocalizedStringKey("JSON")), (.csv, LocalizedStringKey("CSV"))],
                              selection: Binding(get: { format }, set: { formatRaw = $0.rawValue; error = nil }))
+                    .accessibilityLabel(Text("Format"))
                 // Every format's line laid over the others, so switching never changes the sheet's height (a height
                 // change mid-switch broke the segment's sliding thumb).
                 ZStack(alignment: .topLeading) {

@@ -767,6 +767,7 @@ struct SendComposer: View {
                     HStack(spacing: 12) {
                         AppSegmented(options: [(Kind.text, LocalizedStringKey("Text")), (.file, LocalizedStringKey("File"))],
                                      selection: $kind)
+                            .accessibilityLabel(Text("Type"))
                             .frame(maxWidth: 260)
                         Spacer()
                         if editing == nil && destinationSessions.count > 1 {

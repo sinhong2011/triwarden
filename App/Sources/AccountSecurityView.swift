@@ -570,6 +570,7 @@ private struct ChangePasswordSheet: View {
             }
             if changeKDF {
                 AppSegmented(options: [(false, LocalizedStringKey("PBKDF2")), (true, "Argon2id")], selection: $argon)
+                    .accessibilityLabel(Text("Type"))
                 if argon {
                     Stepper("Iterations: \(argonIterations)", value: $argonIterations, in: 2...10)
                     Stepper("Memory: \(memory) MiB", value: $memory, in: 16...1024, step: 16)

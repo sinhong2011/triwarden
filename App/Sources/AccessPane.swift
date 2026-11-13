@@ -74,7 +74,6 @@ struct AccessPane: View {
                     Spacer()
                     AppSegmented(options: [(false, LocalizedStringKey("Permissions")), (true, "History")], selection: $history)
                         .frame(width: 220)
-                        .accessibilityElement(children: .contain)
                         .accessibilityLabel("Access view")
                         .accessibilityIdentifier("accessTabs")
                 }

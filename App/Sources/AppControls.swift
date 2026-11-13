@@ -42,6 +42,7 @@ struct AppButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed && Motion.animation(.default) != nil ? 0.97 : 1)
             .animation(Motion.animation(.snappy(duration: 0.15)), value: configuration.isPressed)
             .contentShape(.capsule)
+            .pointerStyle(.link)
     }
 
     private func foreground(_ dark: Bool, _ kind: Kind) -> Color {
@@ -59,6 +60,41 @@ extension ButtonStyle where Self == AppButtonStyle {
     static var appPrimarySmall: AppButtonStyle { AppButtonStyle(kind: .primary, small: true) }
     static var appSecondarySmall: AppButtonStyle { AppButtonStyle(kind: .secondary, small: true) }
     static var appDestructive: AppButtonStyle { AppButtonStyle(kind: .destructive) }
+}
+
+/// Icon and tile buttons that draw their own look (the menu bar panel's): a soft wash in their shape on hover, a
+/// deeper one and a slight press while pressed, the pointing hand, and the keyboard focus ring in the same shape.
+struct HoverButtonStyle: ButtonStyle {
+    var shape = AnyShape(.circle)
+
+    func makeBody(configuration: Configuration) -> some View {
+        Hoverable(configuration: configuration, shape: shape)
+    }
+
+    private struct Hoverable: View {
+        let configuration: Configuration
+        let shape: AnyShape
+        @State private var hovering = false
+
+        var body: some View {
+            configuration.label
+                .overlay(shape.fill(Color.primary.opacity(configuration.isPressed ? 0.12 : hovering ? 0.06 : 0)))
+                .scaleEffect(configuration.isPressed && Motion.animation(.default) != nil ? 0.96 : 1)
+                .contentShape(shape)
+                .contentShape(.focusEffect, shape)
+                .pointerStyle(.link)
+                .onHover { hovering = $0 }
+                .animation(Motion.animation(.snappy(duration: 0.15)), value: hovering)
+                .animation(Motion.animation(.snappy(duration: 0.15)), value: configuration.isPressed)
+        }
+    }
+}
+
+extension ButtonStyle where Self == HoverButtonStyle {
+    static var hover: HoverButtonStyle { HoverButtonStyle() }
+    static func hover(cornerRadius: CGFloat) -> HoverButtonStyle {
+        HoverButtonStyle(shape: AnyShape(.rect(cornerRadius: cornerRadius, style: .continuous)))
+    }
 }
 
 /// A switch at the end of its row, like the app's other inputs (label on the left, control on the right).
@@ -154,7 +190,11 @@ struct AppSegmented<Value: Hashable>: View {
                         .contentShape(.capsule)
                 }
                 .buttonStyle(.plain)
-                .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+                .pointerStyle(.link)
+                // Each segment is a plain button: a Tab stop with Keyboard navigation on (a click never focuses it),
+                // Space chooses, and its focus ring hugs the segment.
+                .contentShape(.focusEffect, .capsule)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
         .background(alignment: .leading) {
@@ -166,6 +206,11 @@ struct AppSegmented<Value: Hashable>: View {
         }
         .padding(compact ? 2 : 3)
         .background(dark ? Color.white.opacity(0.06) : Color.black.opacity(0.05), in: .capsule)
+        // VoiceOver: a group named by the caller's .accessibilityLabel, holding one button per segment, the chosen one
+        // "selected" ("Codes, selected, button"). Tried and dropped: one adjustable element (read "Codes Items", with
+        // no role or way to change it), a system Picker as its representation (tabs with no names), and a focusable
+        // container with ← → (Tab could no longer leave the menu bar panel's search field).
+        .accessibilityElement(children: .contain)
         .onPreferenceChange(SegmentWidthKey.self) { new in
             let changed = new.count != widths.count || new.contains { index, width in
                 abs((widths[index] ?? 0) - width) > 0.5

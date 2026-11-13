@@ -130,7 +130,6 @@ struct SecretsApprovalView: View {
                         AppSegmented(options: [(.once, "Once"), (.tenMinutes, "10 minutes"), (.untilLock, "Until lock")],
                                      selection: $duration, compact: true)
                             .frame(maxWidth: 260)
-                            .accessibilityElement(children: .contain)
                             .accessibilityLabel("How long to allow")
                             .accessibilityIdentifier("secretsApprovalDuration")
                             .disabled(authenticating)

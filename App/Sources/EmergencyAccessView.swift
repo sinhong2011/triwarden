@@ -166,6 +166,7 @@ private struct AddEmergencyContactSheet: View {
                     }
                     FormField(label: "Access") {
                         AppSegmented(options: [(false, LocalizedStringKey("View")), (true, "Takeover")], selection: $takeover)
+                            .accessibilityLabel(Text("Access"))
                         Text(takeover ? "They can set a new master password and use your account." : "They can see your items, read-only.")
                             .font(.system(size: 11)).foregroundStyle(.secondary)
                     }

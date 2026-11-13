@@ -84,6 +84,7 @@ struct MenuBarContent: View {
     private var searchField: some View {
         HStack(spacing: 8) {
             Image(systemName: "magnifyingglass").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
+                .accessibilityHidden(true)
             TextField("Search vault", text: $query)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
@@ -101,12 +102,16 @@ struct MenuBarContent: View {
                     ShortcutKeycaps(keys: (Shortcut.current(for: .palette) ?? .paletteDefault).parts)
                 }
                 .buttonStyle(.plain)
+                .pointerStyle(.link)
                 .help(Text("Open the command palette"))
+                .accessibilityLabel(Text("Open the command palette"))
             } else {
                 Button { query = "" } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 13)).foregroundStyle(.tertiary)
                 }
                 .buttonStyle(.plain)
+                .pointerStyle(.link)
+                .help(Text("Clear"))
                 .accessibilityLabel(Text("Clear"))
             }
         }
@@ -118,24 +123,17 @@ struct MenuBarContent: View {
 
     private var footer: some View {
         HStack(spacing: 6) {
+            // The dot carries the state for VoiceOver too: the word beside it is hidden until hover.
             TimelineView(.periodic(from: .now, by: 30)) { _ in
                 Circle().fill(model.isOnline ? Color.green : Color.secondary).frame(width: 7, height: 7)
-            }.accessibilityHidden(true)
+                    .accessibilityElement()
+                    .accessibilityLabel(Text(verbatim: statusSpoken))
+                    .accessibilityAddTraits(.isStaticText)
+            }
             // The state word only on hover: the dot already says it, and the row stays quiet the rest of the time.
             // Trouble (a sync error) always shows, hover or not.
-            Group {
-                if model.isSyncing {
-                    Text("Syncing…")
-                } else if model.hasSyncError {
-                    Text("Couldn't sync")
-                } else if let synced = model.lastSynced {
-                    Text("Synced \(synced.formatted(.relative(presentation: .named)))")
-                } else if model.isSignedOut {
-                    Text("Not signed in")
-                } else {
-                    Text(model.hasOpenVault ? "Offline · saved vault" : "Locked")
-                }
-            }
+            Text(verbatim: statusString)
+            .accessibilityHidden(true)
             .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
             .fixedSize()
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { footerLabelWidth = $0 }
@@ -162,6 +160,21 @@ struct MenuBarContent: View {
         .contentShape(.rect)
         .onHover { hovering in footerHovering = hovering }
         .animation(.easeOut(duration: 0.18), value: footerLabelShown)
+    }
+
+    private var statusString: String {
+        if model.isSyncing { return String(localized: "Syncing…") }
+        if model.hasSyncError { return String(localized: "Couldn't sync") }
+        if let synced = model.lastSynced { return String(localized: "Synced \(synced.formatted(.relative(presentation: .named)))") }
+        if model.isSignedOut { return String(localized: "Not signed in") }
+        return model.hasOpenVault ? String(localized: "Offline · saved vault") : String(localized: "Locked")
+    }
+
+    /// What VoiceOver reads on the dot: the state word, "Offline" when the dot says so and the word doesn't, and the server.
+    private var statusSpoken: String {
+        let offlineWord = !model.isOnline && (model.lastSynced != nil || model.isSyncing || model.hasSyncError)
+        return ([offlineWord ? String(localized: "Offline") : nil, statusString, model.serverDisplayName] as [String?])
+            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: ", ")
     }
 }
 
@@ -238,9 +251,8 @@ private struct CircleButton: View {
                 .frame(width: 36, height: 36)
                 .background(Color.menuCard, in: .circle)
                 .overlay(Circle().strokeBorder(Color.menuEdge))
-                .contentShape(.circle)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hover)
         .help(Text(help))
         .accessibilityLabel(Text(help))
     }
@@ -256,9 +268,9 @@ private struct FooterButton: View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 12, weight: .medium))
                 .symbolEffect(.rotate, isActive: spinning)
-                .frame(width: 26, height: 26).contentShape(.circle)
+                .frame(width: 28, height: 28)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hover)
         .foregroundStyle(.secondary)
         .help(Text(help))
         .accessibilityLabel(Text(help))
@@ -282,11 +294,10 @@ private struct CopyIcon: View {
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(done ? Color.primary : .secondary)
                 .contentTransition(.symbolEffect(.replace))
-                .frame(width: 26, height: 26)
+                .frame(width: 28, height: 28)
                 .background(Color.primary.opacity(0.06), in: .circle)
-                .contentShape(.circle)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hover)
         .help(Text(help))
         .accessibilityLabel(Text(help))
     }
@@ -343,12 +354,12 @@ private struct SiteCard: View {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
                             if let icon = NSRunningApplication(processIdentifier: context.pid)?.icon {
-                                Image(nsImage: icon).resizable().frame(width: 14, height: 14)
+                                Image(nsImage: icon).resizable().frame(width: 14, height: 14).accessibilityHidden(true)
                             }
                             Text(context.host != nil ? "On \(context.label)" : "For \(context.label)")
                                 .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
                             Spacer()
-                            Text("Click to fill").font(.system(size: 10)).foregroundStyle(.tertiary)
+                            Text("Click to fill").font(.system(size: 11)).foregroundStyle(.secondary)
                         }
                         .padding(.horizontal, 8).padding(.top, 2)
                         VStack(spacing: 0) {
@@ -389,6 +400,7 @@ private struct ShelfCard: View {
             VStack(spacing: 6) {
                 AppSegmented(options: [(Tab.favorites, LocalizedStringKey("Favorites")), (.codes, "Codes"), (.recent, "Recent")],
                              selection: tab)
+                    .accessibilityLabel(Text("Items"))
                 if items.isEmpty {
                     Text(tab.wrappedValue == .favorites ? "Star items to keep them here." : tab.wrappedValue == .codes
                          ? "Add a code secret to a login to see it here." : "Nothing yet.")
@@ -415,6 +427,10 @@ private struct QuickRow: View {
     /// A click types the login into the app the panel was opened over (the site card), rather than copying.
     var fillsOnClick = false
     @State private var hovering = false
+    /// Keyboard focus on the row reveals its buttons, as hover does. The row is one Tab stop; its buttons stay off
+    /// the Tab loop (Return does the click, VoiceOver gets each button as an action).
+    @FocusState private var focused: Bool
+    private var revealed: Bool { hovering || focused }
 
     var body: some View {
         HStack(spacing: 10) {
@@ -426,19 +442,23 @@ private struct QuickRow: View {
                 }
             }
             Spacer(minLength: 6)
-            if hovering {
+            if revealed {
                 HStack(spacing: 4) {
                     if QuickCopy.canFill(item, model), !fillsOnClick, let context = model.foreground {
                         CopyIcon(symbol: "keyboard", help: "Fill into \(context.app)") { QuickCopy.fill(item, model) }
+                            .focusable(false)
                     }
                     if let username = item.username {
                         CopyIcon(symbol: "person", help: "Copy Username") { model.copy(username, label: String(localized: "Username")) }
+                            .focusable(false)
                     }
-                    if let password = item.password {
+                    if item.password != nil {
                         CopyIcon(symbol: "key", help: "Copy Password") { model.copyPassword(item) }
+                            .focusable(false)
                     }
                     if let host = item.host, let url = URL(string: "https://\(host)") {
                         CopyIcon(symbol: "arrow.up.right", help: "Open Website") { NSWorkspace.shared.open(url) }
+                            .focusable(false)
                     }
                 }
                 .transition(.opacity.combined(with: .move(edge: .trailing)))
@@ -448,31 +468,87 @@ private struct QuickRow: View {
                     // On the app's shared clock: only the code and ring refresh, never the list around them.
                     HStack(spacing: 8) {
                         LiveOTPCode(totp: totp, size: 14)
-                        LiveCountdownRing(totp: totp, size: 22)
+                        LiveCountdownRing(totp: totp, size: 22).accessibilityHidden(true)
                     }
                     .fixedSize() // the code keeps its width; the name truncates instead
                     .contentShape(.rect)
                 }
                 .buttonStyle(.plain)
                 .help(Text("Copy code"))
+                .accessibilityLabel(Text("Copy code"))
+                .focusable(false)
             }
         }
         .padding(.horizontal, 8).frame(height: 44)
-        .background(hovering ? Color.primary.opacity(0.05) : .clear, in: .rect(cornerRadius: 11, style: .continuous))
+        .background(revealed ? Color.primary.opacity(0.05) : .clear, in: .rect(cornerRadius: 11, style: .continuous))
         .contentShape(.rect)
-        .onTapGesture {
-            if fillsOnClick, QuickCopy.canFill(item, model) {
-                QuickCopy.fill(item, model)
-            } else if preferCode, let totp = item.totp {
-                model.guarded(item) { model.copy(totp.code(), label: String(localized: "Code")) }
-            } else {
-                QuickCopy.primary(item, model)
+        .onTapGesture(perform: activate)
+        .onHover { inside in withAnimation(.snappy(duration: 0.15)) { hovering = inside } }
+        .pointerStyle(.link)
+        // Reachable by Tab (with Keyboard navigation on; a click never focuses it); Return or Space does what a click
+        // does. The ring follows the row's rounded shape.
+        .contentShape(.focusEffect, .rect(cornerRadius: 11, style: .continuous))
+        .focusable(interactions: .activate)
+        .focused($focused)
+        .onKeyPress(keys: [.return, .space]) { _ in activate(); return .handled }
+        .animation(.snappy(duration: 0.15), value: focused)
+        .appContextMenu(model.itemContextActions(item))
+        // One element for VoiceOver: activating it does the click; the hover buttons are its actions.
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(spokenLabel)
+        .accessibilityHint(Text(hint))
+        .accessibilityAddTraits(.isButton)
+        .accessibilityAction(.default, activate)
+        .accessibilityActions {
+            if QuickCopy.canFill(item, model), !fillsOnClick, let context = model.foreground {
+                Button("Fill into \(context.app)") { QuickCopy.fill(item, model) }
+            }
+            if let username = item.username {
+                Button("Copy Username") { model.copy(username, label: String(localized: "Username")) }
+            }
+            if item.password != nil {
+                Button("Copy Password") { model.copyPassword(item) }
+            }
+            if let totp = item.totp {
+                Button("Copy code") { model.guarded(item) { model.copy(totp.code(), label: String(localized: "Code")) } }
+            }
+            if let host = item.host, let url = URL(string: "https://\(host)") {
+                Button("Open Website") { NSWorkspace.shared.open(url) }
             }
         }
-        .onHover { inside in withAnimation(.snappy(duration: 0.15)) { hovering = inside } }
-        .appContextMenu(model.itemContextActions(item))
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(Text(verbatim: item.name))
+    }
+
+    /// "GitHub, alexchen, code 2 6 2 8 4 3": all in the label, since VoiceOver on macOS reads a value before the
+    /// name. The code is spelled out digit by digit and read from the shared clock, so it's never an expired one.
+    /// ponytail: a code row so redraws once a second, not only its code; fine for the panel's handful of rows.
+    private var spokenLabel: Text {
+        var label = Text(verbatim: item.name)
+        if let username = item.username { label = label + Text(verbatim: ", \(username)") }
+        if let totp = item.totp {
+            let code = totp.code(at: Date(timeIntervalSince1970: TimeInterval(OTPClock.shared.second)))
+            label = label + Text(verbatim: ", ") + Text("Code") + Text(verbatim: " ") + Text(verbatim: code).speechSpellsOutCharacters()
+        }
+        return label
+    }
+
+    /// What a click (or Return, or VoiceOver's activate) does.
+    private func activate() {
+        if fillsOnClick, QuickCopy.canFill(item, model) {
+            QuickCopy.fill(item, model)
+        } else if preferCode, let totp = item.totp {
+            model.guarded(item) { model.copy(totp.code(), label: String(localized: "Code")) }
+        } else {
+            QuickCopy.primary(item, model)
+        }
+    }
+
+    private var hint: LocalizedStringKey {
+        if fillsOnClick, QuickCopy.canFill(item, model), let context = model.foreground { return "Fills the login into \(context.app)" }
+        if preferCode, item.totp != nil { return "Copies the code" }
+        if item.password != nil { return "Copies the password" }
+        if item.totp != nil { return "Copies the code" }
+        if item.username != nil { return "Copies the username" }
+        return ""
     }
 }
 
@@ -498,7 +574,7 @@ private struct SearchResults: View {
                     ForEach(results) { QuickRow(item: $0) }
                     Text(model.foreground != nil && results.first.map { QuickCopy.canFill($0, model) } == true
                          ? "Return fills the first login · hover for more" : "Return copies the first password · hover for more")
-                        .font(.system(size: 10)).foregroundStyle(.tertiary).padding(.top, 6)
+                        .font(.system(size: 11)).foregroundStyle(.secondary).padding(.top, 6)
                 }
             }
         }
@@ -536,11 +612,14 @@ private struct QuickActions: View {
             VStack(spacing: 5) {
                 Image(systemName: symbol).font(.system(size: 15, weight: .medium)).foregroundStyle(.primary)
                     .frame(height: 18)
+                    // The label says it all; and a "checkmark…" symbol made VoiceOver call the tile "selected".
+                    .accessibilityHidden(true)
                     .overlay(alignment: .topTrailing) {
                         if badge > 0 {
-                            Text(verbatim: "\(badge)").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                            Text(verbatim: "\(badge)").font(.system(size: 10, weight: .bold)).foregroundStyle(.black) // black on orange reads at about 10:1; white was 2:1
                                 .padding(.horizontal, 4).frame(minWidth: 15, minHeight: 15)
-                                .background(Color.orange, in: .capsule)
+                                // sRGB, not .orange: the system colour picks up the panel's vibrancy and reads translucent.
+                                .background(Color(.sRGB, red: 1, green: 0.584, blue: 0, opacity: 1), in: .capsule)
                                 .fixedSize() // its own width: laid out in the icon's, "56" came out as "5…"
                                 .offset(x: 12, y: -7)
                         }
@@ -551,11 +630,10 @@ private struct QuickActions: View {
             .background(Color.menuCard, in: .rect(cornerRadius: 14, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Color.menuEdge))
             .shadow(color: .menuShadow, radius: 5, y: 1)
-            .contentShape(.rect)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text(title))
-        .accessibilityValue(badge > 0 ? Text("^[\(badge) issue](inflect: true)") : Text(verbatim: ""))
+        .buttonStyle(.hover(cornerRadius: 14))
+        // "Watchtower, 1 issue": the count in the label, since VoiceOver on macOS reads a value before the name.
+        .accessibilityLabel(badge > 0 ? Text(title) + Text(verbatim: ", ") + Text("^[\(badge) issue](inflect: true)") : Text(title))
     }
 }
 
@@ -587,16 +665,16 @@ private struct GeneratorCard: View {
                     AppSegmented(options: [(false, LocalizedStringKey("Password")), (true, "Passphrase")],
                                  selection: Binding(get: { passphrase },
                                                     set: { storedMode = ($0 ? GeneratorView.Mode.passphrase : .password).rawValue }))
+                        .accessibilityLabel(Text("Generator"))
                         .frame(width: 190)
                         .controlSize(.small)
                     Button { showGenerator = true } label: {
                         Image(systemName: "dice").font(.system(size: 12, weight: .medium))
                             .foregroundStyle(showGenerator ? Color.primary : .secondary)
-                            .frame(width: 26, height: 26)
+                            .frame(width: 28, height: 28)
                             .background(Color.primary.opacity(showGenerator ? 0.12 : 0.06), in: .circle)
-                            .contentShape(.circle)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.hover)
                     .help(Text("Generator options: length, characters and more"))
                     .accessibilityLabel(Text("Generator options"))
                     .popover(isPresented: $showGenerator, arrowEdge: .trailing) {
@@ -609,7 +687,9 @@ private struct GeneratorCard: View {
                 ColoredSecret(value: value, separator: passphrase ? phrase.separator : nil)
                     .font(.system(size: 13, design: .monospaced))
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityLabel(Text(verbatim: value))
+                    // Name first: VoiceOver on macOS reads a value before the name.
+                    .accessibilityLabel((passphrase ? Text("Generated passphrase") : Text("Generated password")) + Text(verbatim: ", \(value)"))
+                    .accessibilityAddTraits(.isStaticText)
                 HStack(spacing: 6) {
                     StrengthMeter(bits: passphrase ? phrase.entropyBits : password.entropyBits)
                     Spacer(minLength: 8)
@@ -644,6 +724,7 @@ private struct SSHRow: View {
                 HStack(spacing: 10) {
                         // Plain glyph, no tile: the panel's other rows don't decorate their icons either.
                         Image(systemName: "terminal").font(.system(size: 14, weight: .medium))
+                            .accessibilityHidden(true)
                             .foregroundStyle(.secondary)
                             .frame(width: 22)
                         VStack(alignment: .leading, spacing: 1) {
@@ -817,9 +898,8 @@ private struct LockedCard: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 28, height: 28)
                 .background(Color.primary.opacity(0.07), in: .circle)
-                .contentShape(.circle)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(.hover)
         .disabled(model.isBusy)
         .help(Text("Unlock with Touch ID"))
         .accessibilityLabel(Text("Unlock with Touch ID"))
@@ -834,6 +914,7 @@ private struct LockedCard: View {
             focused = true
         }
         .buttonStyle(.plain).foregroundStyle(.secondary)
+        .pointerStyle(.link)
     }
 
     private func submit() {
@@ -915,6 +996,7 @@ private struct AccountMenu: View {
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
+        .pointerStyle(.link)
         .menuIndicator(.hidden)
         .fixedSize()
         .help(Text(focused?.email ?? String(localized: "All accounts")))
