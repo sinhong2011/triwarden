@@ -215,7 +215,7 @@ export default function GenerateOverlay() {
   const place = (t: Target) => {
     tick();
     if (!t.field.isConnected || !visible(t.field)) return { display: 'none' };
-    return iconPosition(t.field.getBoundingClientRect(), isRTL(t.field), false);
+    return iconPosition(t.field.getBoundingClientRect(), isRTL(t.field), innerWidth);
   };
 
   /** Fixed viewport place from menuPos (drag commits here); fall back to anchor only if unset. */

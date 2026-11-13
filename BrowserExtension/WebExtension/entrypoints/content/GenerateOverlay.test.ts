@@ -60,6 +60,8 @@ describe('GenerateOverlay', () => {
     const host = await mount();
     const keys = host.querySelectorAll<HTMLButtonElement>('.key');
     expect(keys).toHaveLength(1);
+    // The field rect is 0–300; the icon sits just to its right, not over the value.
+    expect(keys[0]!.style.left).toBe('300px');
     keys[0]!.click();
     await tick(5);
     expect(host.querySelector('.gen-value')!.textContent).toBe('Gen3rated!Pw');

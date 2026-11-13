@@ -1,6 +1,6 @@
 /**
  * The middle of the Triwarden app icon: the dial face with its three rings and the keyhole, without the blue tile or
- * the outer plate (Design/AppIcon/AppIcon.svg). Small and round, so it sits inside a field like a native control.
+ * the outer plate (Design/AppIcon/AppIcon.svg). Small and round, so it can sit just outside a field without covering the value.
  */
 export const AppMark = (props: { size: number }) => (
   <svg viewBox="168 168 688 688" width={props.size} height={props.size} aria-hidden="true">

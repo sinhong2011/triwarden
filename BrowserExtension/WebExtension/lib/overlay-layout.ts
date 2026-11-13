@@ -1,26 +1,61 @@
 type Box = Pick<DOMRect, 'left' | 'right' | 'top' | 'height'>;
 
 /**
- * Horizontal room left clear of Safari / Chrome's native AutoFill key decoration inside a field.
+ * Horizontal room left clear of Safari / Chrome's native AutoFill key decoration.
  * Geometric only — we do not observe the native icon (fragile across OS / browser builds).
  * Native control is ~20–24px at the trailing edge; 28px leaves a small gap beside our 22px mark.
+ * Used only when the viewport has no room to keep the icon outside the field.
  */
 export const SYSTEM_AUTOFILL_ICON_CLEARANCE = 28;
 
 const ICON_SIZE = 22;
+/** Space between the field's border box and an icon sitting just outside it. Flush reads as belonging to the field. */
+const ICON_OUTSIDE_GAP = 0;
+const VIEWPORT_MARGIN = 8;
 
-/** Position the field icon inside a normal field, or just beyond a row of one-character code fields. */
-export function iconPosition(box: Box, rtl: boolean, outside: boolean) {
-  // Outside a one-time-code row: past the field, so no clash with the native trailing decoration.
-  // Inside: sit inward of that decoration so our mark is not stacked on the system key icon.
-  const left = outside
-    ? rtl
-      ? box.left - 28
-      : box.right + 6
-    : rtl
-      ? box.left + 8 + SYSTEM_AUTOFILL_ICON_CLEARANCE
-      : box.right - 30 - SYSTEM_AUTOFILL_ICON_CLEARANCE;
+/**
+ * Place the field icon just outside the trailing edge of the box — to the right in left-to-right
+ * fields, to the left in right-to-left fields — so it never covers the value or the browser's own
+ * trailing decoration. Every overlay icon (fill, generate, one-time code, and any other) uses this.
+ *
+ * `viewportWidth` keeps the icon on screen. The outside gap shrinks before the icon is allowed to
+ * overlap the field. When the field itself runs into the viewport edge, the icon sits clear of the
+ * native AutoFill control instead of stacking on it.
+ */
+export function iconPosition(box: Box, rtl: boolean, viewportWidth = Number.POSITIVE_INFINITY) {
+  const preferred = rtl ? box.left - ICON_SIZE - ICON_OUTSIDE_GAP : box.right + ICON_OUTSIDE_GAP;
+  const left = clampIconLeft(preferred, box, rtl, viewportWidth);
   return { display: 'grid', left: `${left}px`, top: `${box.top + (box.height - ICON_SIZE) / 2}px` };
+}
+
+function clamp(value: number, min: number, max: number) {
+  // A viewport narrower than the icon plus margins cannot satisfy both edges. Keep the start margin.
+  if (max < min) return min;
+  return Math.max(min, Math.min(value, max));
+}
+
+function clampIconLeft(preferred: number, box: Box, rtl: boolean, viewportWidth: number) {
+  if (!Number.isFinite(viewportWidth)) return preferred;
+  const maxLeft = viewportWidth - ICON_SIZE - VIEWPORT_MARGIN;
+
+  if (rtl) {
+    if (preferred < VIEWPORT_MARGIN) {
+      // Still outside the field when the viewport margin clears its trailing (left) edge.
+      if (VIEWPORT_MARGIN + ICON_SIZE <= box.left && VIEWPORT_MARGIN <= maxLeft) return VIEWPORT_MARGIN;
+      return clamp(box.left + SYSTEM_AUTOFILL_ICON_CLEARANCE, VIEWPORT_MARGIN, maxLeft);
+    }
+    if (preferred > maxLeft) return clamp(preferred, VIEWPORT_MARGIN, maxLeft);
+    return preferred;
+  }
+
+  if (preferred > maxLeft) {
+    // Still outside the field when the viewport margin clears its trailing (right) edge.
+    if (maxLeft >= box.right && maxLeft >= VIEWPORT_MARGIN) return maxLeft;
+    const clearOfDecoration = box.right - SYSTEM_AUTOFILL_ICON_CLEARANCE - ICON_SIZE;
+    return clamp(clearOfDecoration, VIEWPORT_MARGIN, maxLeft);
+  }
+  if (preferred < VIEWPORT_MARGIN) return clamp(preferred, VIEWPORT_MARGIN, maxLeft);
+  return preferred;
 }
 
 /** Align the menu with the field's writing start while keeping it inside the viewport. */
@@ -30,7 +65,7 @@ export function menuLeft(box: Pick<Box, 'left' | 'right'>, width: number, rtl: b
 }
 
 /**
- * Horizontal place for a menu that belongs to the in-field icon: the menu's trailing edge meets the
+ * Horizontal place for a menu that belongs to the field icon: the menu's trailing edge meets the
  * icon's trailing edge (LTR ends at the icon; RTL starts at it), so it reads as that icon's panel.
  */
 export function menuLeftNearIcon(
@@ -99,8 +134,9 @@ export function menuVerticalGenerate(
 
 /**
  * The generate menu (Safari): tied to the new-password field's icon, and never over the confirm
- * field. Horizontally it ends at the icon (`menuLeftNearIcon`). Vertically: above the new password
- * when it fits; otherwise below the confirm (or the new password when there is none).
+ * field. Horizontally it ends at the icon (`menuLeftNearIcon`), using the same outside place as
+ * the icon itself. Vertically: above the new password when it fits; otherwise below the confirm
+ * (or the new password when there is none).
  */
 export function generateMenuPlace(
   field: Rect,
@@ -112,7 +148,7 @@ export function generateMenuPlace(
   gap = 6,
 ): { left: string; vertical: MenuVertical } {
   const iconLeft = Number.parseFloat(
-    iconPosition({ ...field, height: field.bottom - field.top }, rtl, false).left,
+    iconPosition({ ...field, height: field.bottom - field.top }, rtl, viewport.width).left,
   );
   return {
     left: menuLeftNearIcon(iconLeft, width, rtl, viewport.width),
