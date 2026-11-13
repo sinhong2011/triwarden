@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.10.1](https://github.com/sinhong2011/triwarden/compare/v0.10.0...v0.10.1) (2026-11-13)
+
+
+### Fixes
+
+* **a11y:** make the menu bar panel accessible by keyboard and VoiceOver ([#220](https://github.com/sinhong2011/triwarden/issues/220)) ([2b80ccf](https://github.com/sinhong2011/triwarden/commit/2b80ccf83b3c4c1963886fc0d7a2176ceecac56c))
+* **ci:** compare extension release version to the PR base manifest ([#215](https://github.com/sinhong2011/triwarden/issues/215)) ([8e3e5ba](https://github.com/sinhong2011/triwarden/commit/8e3e5ba1dc7b9f5fb5a731e7c37d706e5c85d447))
+* **extension:** place overlay icons outside the field ([#223](https://github.com/sinhong2011/triwarden/issues/223)) ([6cdd8e7](https://github.com/sinhong2011/triwarden/commit/6cdd8e79bc3e0b5cf68c7ae385306ef80f760559))
+* publish only the app GitHub release ([#218](https://github.com/sinhong2011/triwarden/issues/218)) ([a295227](https://github.com/sinhong2011/triwarden/commit/a295227a24739241dd329a6a2b29e10210d95b8d))
+* restore the release-please manifest after the extension 0.5.0 merge ([#217](https://github.com/sinhong2011/triwarden/issues/217)) ([1c3d1f6](https://github.com/sinhong2011/triwarden/commit/1c3d1f68394172951e605c4a9d26b9b8de87c21b))
+
 ## [0.10.0](https://github.com/sinhong2011/triwarden/compare/v0.9.1...v0.10.0) (2026-11-10)
 
 
