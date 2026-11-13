@@ -26,6 +26,8 @@ newer() {
   done
   return 1
 }
+# Drops <!-- … --> blocks and the blank lines at the start and end.
+strip_guide() { python3 -c 'import re,sys; print(re.sub(r"<!--.*?-->", "", sys.stdin.read(), flags=re.S).strip())'; }
 latest_tag() { git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1; }
 
 self_test() {
@@ -44,6 +46,7 @@ self_test() {
   refute newer 0.10.0 0.10.0
   refute newer 0.9.10 0.10.0
   check newer 0.08.1 0.8.0
+  check [ "$(printf '<!-- guide\n  more -->\n\n## Highlights\n\n- x\n' | strip_guide)" = "$(printf '## Highlights\n\n- x')" ]
   return $ok
 }
 
@@ -94,9 +97,34 @@ case $CI in
 esac
 
 NOTES=$(mktemp -t triwarden-notes)
-trap 'rm -f "$NOTES"' EXIT
+trap 'rm -f "$NOTES" "$NOTES.edit"' EXIT
 python3 scripts/release-notes.py markdown "$PREV" "$TARGET" >"$NOTES"
-[[ $EDIT == 1 ]] && "${EDITOR:-vi}" "$NOTES"
+if [[ $EDIT == 1 ]]; then
+  # A writing guide above the PR titles; strip_guide removes it (and any other <!-- … --> block) afterwards.
+  { cat <<'GUIDE'
+<!-- Release notes for people using Triwarden: the update window and the top of the GitHub release show them.
+  Below are the pull request titles since the last release. Rewrite them as what someone can now do or will
+  notice, in plain sentences, most important first. Bold the opening words of each point:
+
+    ## Highlights
+
+    - **Sign up anywhere, not just in Safari.** The password generator now appears on sign-up forms in
+      Chrome, Firefox, Edge and Zen too.
+
+    ## Fixes
+
+    - **Fill icons sit beside the field**, so long emails and passwords stay readable.
+
+  Leave out release, CI and test changes; GitHub lists every pull request under the notes anyway.
+  This block is removed before tagging. -->
+
+GUIDE
+    cat "$NOTES"; } >"$NOTES.edit"
+  "${EDITOR:-vi}" "$NOTES.edit"
+  strip_guide <"$NOTES.edit" >"$NOTES"
+  rm -f "$NOTES.edit"
+  [[ -n $(tr -d '[:space:]' <"$NOTES") ]] || die "the notes are empty; nothing tagged"
+fi
 
 echo
 echo "Triwarden $VERSION, since $PREV ($(git rev-list --count "$PREV..$TARGET") commits on main):"

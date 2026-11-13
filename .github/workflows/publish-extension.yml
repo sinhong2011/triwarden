@@ -7,6 +7,9 @@ name: Publish browser extension
 # version is always a released app version. It is not run for every release: each store reviews every upload,
 # so publish only when the extension itself changed. Safari needs nothing here: it ships inside Triwarden.app.
 #
+# After a real submission (not a dry run) the zips it sent are attached to that GitHub release, as the record of
+# what each store received. People install from the stores; the release page's footer links them.
+#
 # Secrets (repo or environment "extension-store"):
 #   Chrome  CHROME_EXTENSION_ID, CHROME_PUBLISHER_ID, CHROME_SERVICE_ACCOUNT_CLIENT_EMAIL, CHROME_SERVICE_ACCOUNT_PRIVATE_KEY
 #   Firefox FIREFOX_EXTENSION_ID, FIREFOX_JWT_ISSUER, FIREFOX_JWT_SECRET
@@ -43,6 +46,8 @@ jobs:
     name: Build and submit
     runs-on: ubuntu-latest
     environment: extension-store # secrets live here, so only this job can read them
+    permissions:
+      contents: write # attach the submitted zips to the release
     defaults:
       run:
         working-directory: BrowserExtension/WebExtension
@@ -50,8 +55,11 @@ jobs:
       - name: Version
         env:
           TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "not a version tag: $TAG"; exit 1; }
+          # Submit only released versions: the zips are attached to this release afterwards.
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null || { echo "no GitHub release $TAG"; exit 1; }
           echo "TRIWARDEN_VERSION=${TAG#v}" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
         with:
@@ -98,3 +106,18 @@ jobs:
           fi
           [[ ${#args[@]} -gt 0 ]] || { echo "Pick at least one store."; exit 1; }
           pnpm exec wxt submit "${args[@]}"
+
+      - name: Attach the submitted zips to the release
+        if: ${{ !inputs.dry_run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          CHROME: ${{ inputs.chrome }}
+          FIREFOX: ${{ inputs.firefox }}
+        run: |
+          files=()
+          [[ $CHROME == true ]] && files+=(".output/triwarden-extension-${TRIWARDEN_VERSION}-chrome.zip")
+          [[ $FIREFOX == true ]] && files+=(".output/triwarden-extension-${TRIWARDEN_VERSION}-firefox.zip"
+                                            ".output/triwarden-extension-${TRIWARDEN_VERSION}-sources.zip")
+          gh release upload "$TAG" "${files[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+          printf 'Attached to %s: %s\n' "$TAG" "${files[*]##*/}"
