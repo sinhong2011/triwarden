@@ -46,7 +46,9 @@ repository is bumped, so the app, its Safari extension and the Chrome/Firefox zi
    signature and the notarization, install, and relaunch. Everyone else gets it from **Check for Updates…**.
 5. Only when the extension itself changed, submit it to the Chrome Web Store and Firefox Add-ons:
    **Actions › Publish browser extension**, with the release tag (e.g. `v0.11.0`). The zips are built from that
-   tag with its version. Each store reviews every upload, so skip this for app-only releases; the store version
+   tag with its version. Run it with **dry_run** first; after a real submission the zips that were sent
+   (`triwarden-extension-X.Y.Z-chrome.zip`, `-firefox.zip`, `-sources.zip`) are attached to that release as
+   the record of what each store received. People install from the stores, which the release page links. Each store reviews every upload, so skip this for app-only releases; the store version
    then jumps to the next submitted app version, which both stores accept.
 
 Local builds report version `0.0.0` (`project.yml`, `package.json`): only a release sets the real one.

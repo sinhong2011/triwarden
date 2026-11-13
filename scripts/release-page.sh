@@ -8,7 +8,7 @@
 #      Sparkle's update window shows this part alone.
 #   2. GitHub's generated list of every pull request since the previous release, with authors, links and the
 #      Full Changelog comparison. Left out, with a warning, when GitHub can't make it (offline, no tag yet).
-#   3. How to install or update, and what it needs.
+#   3. How to install or update, where to get the browser extension, and what it needs.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -36,5 +36,6 @@ cat <<EOF
 
 **Install:** download [Triwarden-$VERSION.dmg](https://github.com/$REPO/releases/download/$TAG/Triwarden-$VERSION.dmg) and drag Triwarden to Applications, or \`brew install --cask sinhong2011/tap/triwarden\`.
 **Update:** Triwarden › Check for Updates…, or \`brew upgrade --cask triwarden\`. The Safari extension updates with the app.
+**Browser extension:** Safari's comes with the app. Chrome, Edge and Brave: [Chrome Web Store](https://chromewebstore.google.com/detail/triwarden/deiehcliaaoigminkkbnjlgmaoagimdm). Firefox and Zen: [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/triwarden/). Store updates follow review; any \`triwarden-extension-*\` zips below are the files sent to the stores, kept as a record.
 Requires macOS 26 (Tahoe) or later. Signed with Developer ID and notarized by Apple.
 EOF
