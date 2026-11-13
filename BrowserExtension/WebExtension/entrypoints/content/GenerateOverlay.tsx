@@ -1,18 +1,20 @@
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 import { replyErrorMessage } from '../../lib/bridge-status';
-import { generateTargets, isRTL, setValue, visible, type GenerateTarget } from '../../lib/dom';
-import { loadGenMenuPos, saveGenMenuPos, type GenMenuPos } from '../../lib/gen-menu-pos';
+import { generateTargets, isRTL, setValue, usernameFor, visible, wantsEmail, type GenerateTarget } from '../../lib/dom';
 import { t } from '../../lib/i18n';
-import { applyMenuDrag, generateMenuPlace, iconPosition } from '../../lib/overlay-layout';
+import { applyMenuDrag, generateMenuPlace, iconPosition, menuLeft, menuVertical } from '../../lib/overlay-layout';
 import type { Request } from '../../lib/protocol';
 import { send } from '../../lib/send';
 import { AppMark } from './AppMark';
 
 /**
- * Safari content UI: system AutoFill owns vault pick/fill on ordinary login fields.
- * Icons appear only on generate-relevant password fields (new-password, change-password,
- * registration), never on the confirm field: generating fills both. Save/Update still runs via `watchForSubmits` with
- * no field icon.
+ * Sign-up / change-password UI, in every browser (vault pick/fill on ordinary login fields is Safari's system AutoFill
+ * or, elsewhere, the fill overlay). Icons appear only on generate-relevant password fields (new-password,
+ * change-password, registration), never on the confirm field: generating fills both. Using a suggestion offers to save
+ * the login right away when the username is already typed; otherwise `watchForSubmits` offers it on submit.
+ *
+ * On a sign-up the username / email field gets its own icon: your emails from the vault, or a new username / private
+ * address from the app's username generator.
  *
  * The generate dialog mirrors the app's compact Generator popover (Length / Include chips / strength / Use),
  * while staying an in-page overlay with drag-to-move + per-origin place memory. Generation always runs in the
@@ -50,6 +52,19 @@ type Menu = {
 };
 
 const MENU_WIDTH = 360;
+const WHO_WIDTH = 300;
+
+/** Absolute viewport place of the password menu while it is dragged. */
+type MenuPos = { left: number; top: number };
+
+/** The username / email menu: your emails (unlocked vault only) and a freshly generated one. */
+type Who = {
+  /** The sign-up: its username field gets the name; its empty password a strong one, like 1Password. */
+  target: Target;
+  emails: string[];
+  value?: string;
+  note?: string;
+};
 /** Approximate height with password options open; used for placement + drag clamp until the node is measured. */
 const MENU_HEIGHT = 460;
 
@@ -129,13 +144,11 @@ export default function GenerateOverlay() {
   const [targets, setTargets] = createSignal<Target[]>([]);
   const [tick, setTick] = createSignal(0);
   const [menu, setMenu] = createSignal<Menu | null>(null);
-  /** Last absolute place on this origin (survives close + reload via extension storage). */
-  const [remembered, setRemembered] = createSignal<GenMenuPos | null>(null);
   /**
-   * Live absolute viewport place while the menu is open. Source of truth for left+top — not a drag
-   * delta that gets cleared on pointer-up (that snapped the card back and made X feel stuck).
+   * Where the person dragged the open menu. Null: it follows its field (scroll, resize). Never kept after closing:
+   * the menu always opens next to the field it belongs to.
    */
-  const [menuPos, setMenuPos] = createSignal<GenMenuPos | null>(null);
+  const [menuPos, setMenuPos] = createSignal<MenuPos | null>(null);
   const [dragging, setDragging] = createSignal(false);
   const [password, setPassword] = createSignal<PasswordOpts>({ ...DEFAULT_PASSWORD });
   const [passphrase, setPassphrase] = createSignal<PassphraseOpts>({ ...DEFAULT_PASSPHRASE });
@@ -144,6 +157,13 @@ export default function GenerateOverlay() {
   const [seededPassphrase, setSeededPassphrase] = createSignal(false);
   const [copied, setCopied] = createSignal(false);
   const [updating, setUpdating] = createSignal(false);
+  const [who, setWho] = createSignal<Who | null>(null);
+  /** The row the arrow keys are on; -1 until they are used, so Enter still submits the page's form. */
+  const [whoActive, setWhoActive] = createSignal(-1);
+  let askingWho = 0;
+  const whoField = (w: Who) => w.target.username!;
+  /** What the menu offers, in order: your emails, then the generated one. */
+  const whoChoices = (w: Who) => (w.value ? [...w.emails, w.value] : w.emails);
   let root!: HTMLDivElement;
   let menuEl: HTMLDivElement | undefined;
   let asking = 0;
@@ -152,12 +172,10 @@ export default function GenerateOverlay() {
   let copyTimer: number | undefined;
   let regenTimer: number | undefined;
 
-  const origin = () => location.origin;
-
   const menuHeight = () => menuEl?.offsetHeight || MENU_HEIGHT;
 
-  /** Anchor under the field icon (or confirm), ignoring any remembered / dragged place. */
-  function anchorPlace(m: Menu): GenMenuPos | null {
+  /** Anchor under the field icon (or confirm), ignoring any dragged place. */
+  function anchorPlace(m: Menu): MenuPos | null {
     tick();
     const f = m.target.field;
     if (!f.isConnected) return null;
@@ -190,16 +208,9 @@ export default function GenerateOverlay() {
     ).vertical.above;
   };
 
-  function persistPos(pos: GenMenuPos) {
-    setRemembered(pos);
-    void saveGenMenuPos(origin(), pos);
-  }
-
   const close = () => {
     asking++;
     clearTimeout(regenTimer);
-    const pos = menuPos();
-    if (pos) persistPos(pos);
     dragSession = null;
     setDragging(false);
     setMenuPos(null);
@@ -218,6 +229,9 @@ export default function GenerateOverlay() {
     return iconPosition(t.field.getBoundingClientRect(), isRTL(t.field), innerWidth);
   };
 
+  const fixedAt = (left: string, top: string, width: number) =>
+    ({ position: 'fixed' as const, left, top, width: `${width}px`, right: 'auto', bottom: 'auto' });
+
   /** Fixed viewport place from menuPos (drag commits here); fall back to anchor only if unset. */
   const menuStyle = (m: Menu) => {
     let pos = menuPos() ?? anchorPlace(m);
@@ -227,18 +241,11 @@ export default function GenerateOverlay() {
     }
     // `fixed` + clear right/bottom: same viewport coords as getBoundingClientRect; avoids the
     // absolute-in-0×0-host Safari trap that parked only the X edge wrong under WXT.
-    return {
-      position: 'fixed' as const,
-      left: `${pos.left}px`,
-      top: `${pos.top}px`,
-      width: `${MENU_WIDTH}px`,
-      right: 'auto',
-      bottom: 'auto',
-    };
+    return fixedAt(`${pos.left}px`, `${pos.top}px`, MENU_WIDTH);
   };
 
   /** Read the card's on-screen left/top, even if menuPos was never seeded (jsdom / Safari edge). */
-  function visualPlace(open: Menu): GenMenuPos {
+  function visualPlace(open: Menu): MenuPos {
     const seeded = menuPos();
     if (seeded && Number.isFinite(seeded.left) && Number.isFinite(seeded.top)) return seeded;
     const anchored = anchorPlace(open);
@@ -251,7 +258,7 @@ export default function GenerateOverlay() {
     return { left: 8, top: 8 };
   }
 
-  /** Drag from the "Suggested password" header; place is remembered for this origin across close/reload. */
+  /** Drag from the "Suggested password" header; the place lasts until the menu closes. */
   function onDragHandle(e: PointerEvent) {
     if (e.button !== 0) return;
     e.preventDefault();
@@ -297,8 +304,6 @@ export default function GenerateOverlay() {
 
     const up = (ev: PointerEvent) => {
       if (dragSession && ev.pointerId !== dragSession.pointerId) return;
-      const pos = menuPos();
-      if (pos) persistPos(pos);
       dragSession = null;
       setDragging(false);
       document.removeEventListener('pointermove', move, true);
@@ -367,11 +372,6 @@ export default function GenerateOverlay() {
   async function generate(target: Target, kind: Kind, opts: { soft?: boolean } = {}) {
     const mine = ++asking;
     lastKind = kind;
-    // Keep menuPos when regenerating / switching kind so the card does not jump.
-    if (!menuPos()) {
-      const seed = remembered() ?? anchorPlace({ target, kind });
-      if (seed) setMenuPos(seed);
-    }
     const prev = menu();
     // Keep the prior suggestion while a soft regen loads — including Password↔Passphrase tab
     // switches — so the panel cross-fades instead of flashing empty "Generating…".
@@ -423,10 +423,68 @@ export default function GenerateOverlay() {
     scheduleRegen('passphrase');
   }
 
+  const closeWho = () => {
+    askingWho++;
+    setWho(null);
+  };
+
+  async function openWho(target: Target, regen = false) {
+    const mine = ++askingWho;
+    if (!regen) {
+      setWhoActive(-1);
+      setWho({ target, emails: [], note: t('gen.lookingForEmails') });
+    }
+    const reply = await send({ command: 'generate', field: wantsEmail(target.username!) ? 'email' : 'username' });
+    if (mine !== askingWho) return;
+    const emails = (reply.rows ?? []).map((r) => r.name);
+    if (!reply.ok) return setWho({ target, emails: [], note: replyErrorMessage(reply) });
+    // An app older than this extension answers with a password (it carries entropyBits): never offer that as a name.
+    const outdated = reply.entropyBits != null;
+    const value = outdated ? undefined : reply.value;
+    setWho({
+      target,
+      emails,
+      value,
+      note:
+        value || emails.length
+          ? undefined
+          : outdated
+            ? t('gen.updateAppForNames')
+            : t('gen.unlockForEmails'),
+    });
+  }
+
+  function toggleWho(target: Target) {
+    if (who()?.target.username === target.username) return closeWho();
+    close();
+    void openWho(target);
+  }
+
+  /** One click, like 1Password: the name, and a strong password while that field is still empty, then offer to save. */
+  async function pickWho(w: Who, value: string) {
+    setValue(whoField(w), value);
+    closeWho();
+    if (w.target.field.value) return;
+    const mine = askingWho;
+    const reply = await send({ command: 'generate' });
+    // Another menu opened meanwhile, or the person typed a password: leave it.
+    if (mine !== askingWho || !reply.ok || !reply.value || w.target.field.value) return;
+    use({ target: w.target, kind: 'password', value: reply.value });
+  }
+
+  const whoStyle = (w: Who) => {
+    tick();
+    const field = whoField(w);
+    if (!field.isConnected) return { display: 'none' };
+    const r = field.getBoundingClientRect();
+    const rows = whoChoices(w).length || 1;
+    return fixedAt(menuLeft(r, WHO_WIDTH, isRTL(field), innerWidth), menuVertical(r, rows * 44 + 40, innerHeight).top, WHO_WIDTH);
+  };
+
   function toggle(target: Target) {
     if (menu()?.target.field === target.field) return close();
-    const seed = remembered() ?? null;
-    setMenuPos(seed); // null → generate() fills from the field anchor
+    closeWho();
+    setMenuPos(null);
     void generate(target, lastKind);
   }
 
@@ -437,6 +495,10 @@ export default function GenerateOverlay() {
     // The confirm field gets the same value, so the person does not retype a password they never saw.
     if (m.target.confirm?.isConnected && !m.target.confirm.disabled) setValue(m.target.confirm, m.value);
     m.target.field.focus();
+    // Offer to save now, like 1Password and Bitwarden. Without a username yet, the submit offers it instead (an empty
+    // username here would leave a second, nameless login waiting in the app).
+    const username = (m.target.username ?? usernameFor(m.target.field))?.value.trim();
+    if (username) void send({ command: 'save', username, password: m.value });
     close();
   }
 
@@ -453,9 +515,6 @@ export default function GenerateOverlay() {
   }
 
   onMount(() => {
-    void loadGenMenuPos(origin()).then((pos) => {
-      if (pos) setRemembered(pos);
-    });
     scan();
     let timer: number | undefined;
     const rescan = () => {
@@ -473,9 +532,26 @@ export default function GenerateOverlay() {
     const outside = (e: MouseEvent) => {
       if (dragging() || dragSession) return; // don't close while dragging
       const host = (root.getRootNode() as ShadowRoot).host;
-      if (menu() && !e.composedPath().includes(host)) close();
+      if (e.composedPath().includes(host)) return;
+      if (menu()) close();
+      if (who()) closeWho();
     };
     const keys = (e: KeyboardEvent) => {
+      const w = who();
+      if (w && e.key === 'Escape') closeWho();
+      // Like the vault fill menu: ↑ / ↓ from the field pick a row, Enter takes it.
+      else if (w && !w.note && e.target === whoField(w)) {
+        const choices = whoChoices(w);
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+          e.preventDefault();
+          e.stopPropagation();
+          setWhoActive((i) => (e.key === 'ArrowDown' ? Math.min(i + 1, choices.length - 1) : Math.max(i - 1, 0)));
+        } else if (e.key === 'Enter' && choices[whoActive()]) {
+          e.preventDefault();
+          e.stopPropagation();
+          void pickWho(w, choices[whoActive()]!);
+        }
+      }
       const m = menu();
       if (!m) return;
       if (e.key === 'Escape') close();
@@ -563,6 +639,96 @@ export default function GenerateOverlay() {
           </button>
         )}
       </For>
+      <For each={targets().filter((x) => x.username)}>
+        {(tg) => (
+          <button
+            class="key"
+            type="button"
+            title={wantsEmail(tg.username!) ? t('gen.yourEmails') : t('gen.suggestUsername')}
+            aria-label={wantsEmail(tg.username!) ? t('gen.chooseEmailAria') : t('gen.suggestUsernameAria')}
+            style={place({ field: tg.username! })}
+            on:mousedown={(e) => e.preventDefault()}
+            on:click={() => toggleWho(tg)}
+          >
+            <AppMark size={22} />
+          </button>
+        )}
+      </For>
+      <Show when={who()}>
+        {(w) => {
+          const email = () => wantsEmail(whoField(w()));
+          const row = (value: string, i: number, detail?: string) => (
+            <div
+              class="row"
+              role="menuitem"
+              data-active={i === whoActive()}
+              onMouseEnter={() => setWhoActive(i)}
+              on:click={() => void pickWho(w(), value)}
+            >
+              <span class="text">
+                <span class="name" dir="auto">
+                  {value}
+                </span>
+                <Show when={detail}>
+                  <span class="detail">{detail}</span>
+                </Show>
+              </span>
+            </div>
+          );
+          return (
+            <div
+              class="menu"
+              role="menu"
+              style={whoStyle(w())}
+              data-rtl={isRTL(whoField(w()))}
+              on:mousedown={(e) => e.preventDefault()}
+            >
+              <Show
+                when={!w().note}
+                fallback={
+                  <div class="note" dir="auto" role="status" aria-live="polite">
+                    {w().note}
+                  </div>
+                }
+              >
+                <div class="list">
+                  <Show when={w().emails.length}>
+                    <div class="group">{t('gen.yourEmails')}</div>
+                    <For each={w().emails}>{(address, i) => row(address, i())}</For>
+                  </Show>
+                  <Show when={w().value}>
+                    {(v) => (
+                      <>
+                        <div class="group">{email() ? t('gen.privateAddress') : t('gen.newUsername')}</div>
+                        {/* The refresh button sits beside the row, not inside it: no button within a menu item. */}
+                        <div class="who-generated">
+                          {row(
+                            v(),
+                            w().emails.length,
+                            email() ? t('gen.privateAddressDetail') : t('gen.newUsernameDetail'),
+                          )}
+                          <button
+                            class="icon-btn"
+                            type="button"
+                            title={t('gen.anotherOne')}
+                            aria-label={t('gen.generateAnother')}
+                            on:click={() => void openWho(w().target, true)}
+                          >
+                            {refreshIcon}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </Show>
+                </div>
+                <Show when={!w().target.field.value}>
+                  <div class="hint">{t('gen.alsoFillsPassword')}</div>
+                </Show>
+              </Show>
+            </div>
+          );
+        }}
+      </Show>
       <Show when={menu()}>
         {(m) => {
           const strength = () => strengthLevel(m().entropyBits ?? 0);

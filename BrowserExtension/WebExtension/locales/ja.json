@@ -73,6 +73,34 @@
     "usePassword": "このパスワードを使う",
     "usePassphrase": "このパスフレーズを使う",
     "decrease": "$1を減らす",
-    "increase": "$1を増やす"
+    "increase": "$1を増やす",
+    "yourEmails": "あなたのメールアドレス",
+    "suggestUsername": "ユーザー名を提案",
+    "chooseEmailAria": "Triwarden でメールアドレスを選択",
+    "suggestUsernameAria": "Triwarden でユーザー名を提案",
+    "lookingForEmails": "メールアドレスを検索中…",
+    "updateAppForNames": "ユーザー名とメールアドレスを提案するには Triwarden をアップデートしてください。",
+    "unlockForEmails": "メールアドレスを表示するには Triwarden のロックを解除してください。",
+    "privateAddress": "プライベートアドレス",
+    "newUsername": "新しいユーザー名",
+    "privateAddressDetail": "メールはいつもの受信箱に届きます",
+    "newUsernameDetail": "ほかのアカウントとは関連付けられません",
+    "alsoFillsPassword": "強いパスワードも入力します"
+  },
+
+  "save": {
+    "dialog": "ログインを保存",
+    "saveFor": "$1 のログインを保存しますか?",
+    "updateFor": "「$1」のパスワードを更新しますか?",
+    "noUsername": "ユーザー名なし",
+    "close": "閉じる(Triwarden に残す)",
+    "notNow": "今はしない",
+    "save": "保存",
+    "update": "更新",
+    "saved": "Triwarden に保存しました。",
+    "savedTo": "$1 に保存しました。",
+    "toAccount": "保存先: $1",
+    "chooseAccount": "保存先のアカウント",
+    "updated": "パスワードを更新しました。"
   }
 }

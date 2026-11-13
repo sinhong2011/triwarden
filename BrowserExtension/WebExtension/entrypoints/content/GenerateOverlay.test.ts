@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../lib/send', () => ({
   send: vi.fn(async (req: { field?: string; length?: number; uppercase?: boolean }) => {
+    if (req.field === 'email') return { ok: true, value: 'me+k3x9q2ab@example.com', rows: [{ id: 'a', name: 'me@example.com' }] };
     if (req.field === 'passphrase') {
       return {
         ok: true,
@@ -37,29 +38,62 @@ HTMLElement.prototype.getBoundingClientRect = function () {
 };
 const tick = (ms = 0) => new Promise((r) => setTimeout(r, ms));
 let dispose: (() => void) | undefined;
+const SIGN_UP = `<form><input type=email name=e>
+  <input type=password name=p autocomplete=new-password><input type=password name=c autocomplete=new-password>
+  <button type=submit>Sign up</button></form>`;
+const mount = async (html = SIGN_UP) => {
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1000 });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
+  document.body.innerHTML = html;
+  const host = document.createElement('div');
+  document.body.append(host);
+  dispose = render(() => createComponent(GenerateOverlay, {}), host);
+  await tick();
+  return host;
+};
 afterEach(() => {
   dispose?.();
   document.body.innerHTML = '';
   vi.clearAllMocks();
 });
 
-describe('GenerateOverlay', () => {
-  const mount = async () => {
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1000 });
-    Object.defineProperty(window, 'innerHeight', { configurable: true, value: 800 });
-    document.body.innerHTML = `<form><input type=email name=e>
-      <input type=password name=p autocomplete=new-password><input type=password name=c autocomplete=new-password></form>`;
-    const host = document.createElement('div');
-    document.body.append(host);
-    dispose = render(() => createComponent(GenerateOverlay, {}), host);
-    await tick();
-    return host;
-  };
+describe('GenerateOverlay sign-up helpers', () => {
+  it('offers your emails and a private address; one click fills the email and a strong password, then offers to save', async () => {
+    const host = await mount();
+    const [, emailKey] = host.querySelectorAll<HTMLButtonElement>('.key');
+    emailKey!.click();
+    await tick(5);
+    const rows = [...host.querySelectorAll<HTMLElement>('.row')];
+    expect(rows.map((r) => r.querySelector('.name')!.textContent)).toEqual(['me@example.com', 'me+k3x9q2ab@example.com']);
+    expect(host.querySelector('.hint')!.textContent).toBe('Also fills a strong password');
+    // One click, like 1Password: the email, a strong password in the empty password field, and the save offer.
+    rows[0]!.click();
+    await tick(5);
+    expect(document.querySelector<HTMLInputElement>('[name=e]')!.value).toBe('me@example.com');
+    expect(document.querySelector<HTMLInputElement>('[name=p]')!.value).toBe('Gen3rated!Pw');
+    expect(document.querySelector<HTMLInputElement>('[name=c]')!.value).toBe('Gen3rated!Pw');
+    const { send } = await import('../../lib/send');
+    expect(send).toHaveBeenCalledWith({ command: 'save', username: 'me@example.com', password: 'Gen3rated!Pw' });
+  });
 
+  it('↓ and Enter in the email field pick a row, as in the vault fill menu', async () => {
+    const host = await mount();
+    host.querySelectorAll<HTMLButtonElement>('.key')[1]!.click();
+    await tick(5);
+    const field = document.querySelector<HTMLInputElement>('[name=e]')!;
+    const key = (k: string) => field.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true }));
+    key('ArrowDown');
+    key('ArrowDown');
+    key('Enter');
+    expect(field.value).toBe('me+k3x9q2ab@example.com');
+  });
+});
+
+describe('GenerateOverlay', () => {
   it('shows a suggested password as soon as the menu opens, and one click fills both fields', async () => {
     const host = await mount();
     const keys = host.querySelectorAll<HTMLButtonElement>('.key');
-    expect(keys).toHaveLength(1);
+    expect(keys).toHaveLength(2); // the new password, and the sign-up's email field
     // The field rect is 0–300; the icon sits just to its right, not over the value.
     expect(keys[0]!.style.left).toBe('300px');
     keys[0]!.click();
@@ -70,6 +104,9 @@ describe('GenerateOverlay', () => {
     expect(document.querySelector<HTMLInputElement>('[name=p]')!.value).toBe('Gen3rated!Pw');
     expect(document.querySelector<HTMLInputElement>('[name=c]')!.value).toBe('Gen3rated!Pw');
     expect(host.querySelector('.menu')).toBeNull();
+    // No username yet: the submit offers to save instead (no nameless login waiting in the app).
+    const { send } = await import('../../lib/send');
+    expect(send).not.toHaveBeenCalledWith(expect.objectContaining({ command: 'save' }));
   });
 
   it('Return in the field uses the suggestion instead of submitting', async () => {
@@ -197,6 +234,5 @@ describe('GenerateOverlay', () => {
     expect(top).toBeLessThan(80); // moved -Y
     // Release must keep the place (no snap-back to the pre-drag spot).
     expect(left).not.toBe(40);
-    expect(top).not.toBe(80);
   });
 });

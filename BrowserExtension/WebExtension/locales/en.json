@@ -73,6 +73,34 @@
     "usePassword": "Use Password",
     "usePassphrase": "Use Passphrase",
     "decrease": "Decrease $1",
-    "increase": "Increase $1"
+    "increase": "Increase $1",
+    "yourEmails": "Your emails",
+    "suggestUsername": "Suggest a username",
+    "chooseEmailAria": "Choose an email with Triwarden",
+    "suggestUsernameAria": "Suggest a username with Triwarden",
+    "lookingForEmails": "Looking for your emails…",
+    "updateAppForNames": "Update Triwarden to suggest usernames and emails.",
+    "unlockForEmails": "Unlock Triwarden to see your emails.",
+    "privateAddress": "Private address",
+    "newUsername": "New username",
+    "privateAddressDetail": "Mail still reaches your inbox",
+    "newUsernameDetail": "Not linked to your other accounts",
+    "alsoFillsPassword": "Also fills a strong password"
+  },
+
+  "save": {
+    "dialog": "Save login",
+    "saveFor": "Save this login for $1?",
+    "updateFor": "Update the password for “$1”?",
+    "noUsername": "No username",
+    "close": "Close (keep it in Triwarden)",
+    "notNow": "Not Now",
+    "save": "Save",
+    "update": "Update",
+    "saved": "Saved to Triwarden.",
+    "savedTo": "Saved to $1.",
+    "toAccount": "Saves to $1",
+    "chooseAccount": "Save to account",
+    "updated": "Password updated."
   }
 }

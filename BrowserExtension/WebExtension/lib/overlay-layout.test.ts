@@ -67,12 +67,6 @@ describe('overlay placement', () => {
     expect(menuLeft({ left: 700, right: 900 }, 332, true, 800)).toBe('460px');
   });
 
-  it('anchors the menu to the icon trailing edge', () => {
-    // icon at 200, width 280 → LTR left = 200 + 22 - 280 = -58 → clamped to 8
-    expect(menuLeftNearIcon(200, 280, false, 1200)).toBe('8px');
-    expect(menuLeftNearIcon(400, 280, false, 1200)).toBe('142px'); // 400 + 22 - 280
-    expect(menuLeftNearIcon(400, 280, true, 1200)).toBe('400px');
-  });
 
   it('prefers the menu above the field when there is room (system AutoFill owns below)', () => {
     const mid = { top: 400, bottom: 442 };

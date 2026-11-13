@@ -64,7 +64,7 @@ func nativeMessagingLoop(launchedWith arguments: [String]) -> Never {
         guard length > 0, length < 1_048_576, let body = try? input.read(upToCount: length), body.count == length else { break }
         let response: CLIResponse
         if var request = try? JSONDecoder().decode(CLIRequest.self, from: body),
-           [.match, .fill, .save, .copy, .generate].contains(request.command) {
+           [.match, .fill, .save, .copy, .generate, .pending].contains(request.command) {
             request.origin = origin // from how the browser started us, whatever the message said
             request.browser = browser
             response = BridgeClient.send(request, socket: socket)

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from 'vitest';
-import { generatePasswordFields, generateTargets, isGeneratePasswordField, otpTargets } from './dom';
+import { generatePasswordFields, generateTargets, isGeneratePasswordField, otpTargets, wantsEmail } from './dom';
 
 // jsdom has no layout; `visible()` needs a non-zero box.
 HTMLElement.prototype.getBoundingClientRect = () => new DOMRect(0, 0, 200, 40);
@@ -32,6 +32,22 @@ describe('isGeneratePasswordField (Safari icon gate)', () => {
     expect(isGeneratePasswordField(a!)).toBe(true);
     expect(isGeneratePasswordField(b!)).toBe(false);
     expect(generateTargets()).toEqual([{ field: a, confirm: b }]);
+  });
+
+  it('on a sign-up pairs the username field (an email field wants an email); never on change-password', () => {
+    document.body.innerHTML = `<form><input type="email" name="email"><input type="password" autocomplete="new-password">
+      <button type="submit">Sign up</button></form>`;
+    const user = document.querySelector<HTMLInputElement>('input[type=email]')!;
+    expect(generateTargets()[0]?.username).toBe(user);
+    expect(wantsEmail(user)).toBe(true);
+    // A reset form makes a password too, but its text field is not the account's name.
+    document.body.innerHTML = `<form><h2>Reset your password</h2><input name="code">
+      <input type="password" autocomplete="new-password"><input type="password" autocomplete="new-password"></form>`;
+    expect(generateTargets()[0]?.username).toBeUndefined();
+    document.body.innerHTML = `<form><input name="user">
+      <input type="password" autocomplete="current-password"><input type="password" autocomplete="new-password"></form>`;
+    expect(generateTargets()[0]?.username).toBeUndefined();
+    expect(wantsEmail(document.querySelector<HTMLInputElement>('input[name=user]')!)).toBe(false);
   });
 
   it('on a change-password form skips the current password', () => {

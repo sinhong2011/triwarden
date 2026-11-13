@@ -1,6 +1,6 @@
 // Triwarden content script.
-// Safari: generate + save + a bridge-down toast on ordinary login fields (system AutoFill owns vault pick/fill).
-// Chrome / Firefox / Edge: vault suggestions/fill overlay + save.
+// Every browser: generate on sign-up / change-password fields + save.
+// Safari adds a bridge-down toast (system AutoFill owns vault pick/fill); Chrome / Firefox / Edge add the vault fill overlay.
 import { render } from 'solid-js/web';
 import { pinOverlayHost, pinToTopLayer } from '../../lib/overlay-layout';
 import { vaultFillInOverlay } from '../../lib/runtime';
@@ -8,6 +8,7 @@ import { watchForSubmits } from '../../lib/save';
 import BridgeDownBanner from './BridgeDownBanner';
 import GenerateOverlay from './GenerateOverlay';
 import Overlay from './Overlay';
+import SavePrompt from './SavePrompt';
 import './overlay.css';
 
 export default defineContentScript({
@@ -28,15 +29,14 @@ export default defineContentScript({
       mode: 'closed',
       onMount: (container) => {
         const dispose = render(
-          () =>
-            vaultFillInOverlay() ? (
-              <Overlay />
-            ) : (
-              <>
-                <GenerateOverlay />
-                <BridgeDownBanner />
-              </>
-            ),
+          () => (
+            <>
+              {vaultFillInOverlay() ? <Overlay /> : <BridgeDownBanner />}
+              <GenerateOverlay />
+              {/* One save card per tab, in the top frame; the background pings it whichever frame typed the login. */}
+              {window === window.top && <SavePrompt />}
+            </>
+          ),
           container,
         );
         // After WXT's applyPosition: force a viewport-sized host so Safari places absolute menus on

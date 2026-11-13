@@ -11,6 +11,10 @@ public struct CLIRequest: Codable, Sendable, Equatable {
         /// Browser extension: copy one field of a login (`field`: username, password or totp) to the clipboard. The app
         /// does the copying, so the value never reaches the extension.
         case copy
+        /// Browser extension: the logins waiting to be saved for the page's site (rows: id, `name` = the login it
+        /// updates or empty for a new one, `detail` = username), shown in the page. With `query` (a row id) it answers
+        /// that one: `field` "save" saves it, anything else is Not Now.
+        case pending
     }
     public var command: Command
     public var query: String?
@@ -54,6 +58,8 @@ public struct CLIRequest: Codable, Sendable, Equatable {
     /// Added by `tw` the same way: the bundle id of the browser that started it (com.google.Chrome, ...), so the app
     /// can say which browser is connected.
     public var browser: String?
+    /// `pending` with `field: save`: the unlocked account to save a new login to, picked on the page's card.
+    public var account: String?
 
     public init(command: Command, query: String? = nil, field: String? = nil, length: Int? = nil,
                 uppercase: Bool? = nil, lowercase: Bool? = nil, digits: Bool? = nil, symbols: Bool? = nil,
@@ -61,14 +67,14 @@ public struct CLIRequest: Codable, Sendable, Equatable {
                 separator: String? = nil, capitalize: Bool? = nil, includeNumber: Bool? = nil,
                 url: String? = nil, username: String? = nil, password: String? = nil, codes: Bool? = nil,
                 reveal: Bool? = nil, foreground: Bool? = nil, silent: Bool? = nil, copyTotp: Bool? = nil,
-                origin: String? = nil, browser: String? = nil) {
+                origin: String? = nil, browser: String? = nil, account: String? = nil) {
         self.command = command; self.query = query; self.field = field; self.length = length
         self.uppercase = uppercase; self.lowercase = lowercase; self.digits = digits; self.symbols = symbols
         self.avoidAmbiguous = avoidAmbiguous; self.minNumbers = minNumbers; self.minSpecial = minSpecial
         self.separator = separator; self.capitalize = capitalize; self.includeNumber = includeNumber
         self.url = url; self.username = username; self.password = password; self.codes = codes; self.reveal = reveal
         self.foreground = foreground; self.silent = silent; self.copyTotp = copyTotp
-        self.origin = origin; self.browser = browser
+        self.origin = origin; self.browser = browser; self.account = account
     }
 }
 
@@ -89,10 +95,12 @@ public struct CLIResponse: Codable, Sendable, Equatable {
         public var exact: Bool?
         /// `match`: the login also holds a passkey for the site.
         public var passkey: Bool?
+        /// `pending`: the account Save writes to, named only when more than one is unlocked.
+        public var account: String?
         public init(id: String, name: String, detail: String, totpPeriod: Int? = nil, icon: String? = nil,
-                    code: String? = nil, exact: Bool? = nil, passkey: Bool? = nil) {
+                    code: String? = nil, exact: Bool? = nil, passkey: Bool? = nil, account: String? = nil) {
             self.id = id; self.name = name; self.detail = detail; self.totpPeriod = totpPeriod; self.icon = icon
-            self.code = code; self.exact = exact; self.passkey = passkey
+            self.code = code; self.exact = exact; self.passkey = passkey; self.account = account
         }
     }
 
@@ -113,6 +121,8 @@ public struct CLIResponse: Codable, Sendable, Equatable {
     public var code: String?
     /// `match`: whether the Browser setting "Show suggestions when a field is focused" is on. The extension keeps it.
     public var autoShow: Bool?
+    /// `pending`: the unlocked accounts a new login can go to (`id`, `name` = email), only when there is more than one.
+    public var accounts: [Row]?
     /// `generate`: echo of the options that produced `value` (length = characters or passphrase words).
     public var length: Int?
     public var uppercase: Bool?

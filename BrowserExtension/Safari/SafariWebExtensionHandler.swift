@@ -4,7 +4,7 @@ import os
 import SafariServices
 import SSHAgent
 
-/// Safari's native side of the extension: forwards `match` / `fill` / `save` / `generate` to the running app over the
+/// Safari's native side of the extension: forwards `match` / `fill` / `save` / `generate` / `pending` to the running app over the
 /// App Group socket. Holds no keys and stores nothing.
 final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
     private static let log = Logger(subsystem: "io.github.sinhong2011.triwarden", category: "bridge")
@@ -17,7 +17,7 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             if let message, JSONSerialization.isValidJSONObject(message),
                let data = try? JSONSerialization.data(withJSONObject: message),
                let request = try? JSONDecoder().decode(CLIRequest.self, from: data),
-               [.match, .fill, .save, .copy, .generate].contains(request.command) {
+               [.match, .fill, .save, .copy, .generate, .pending].contains(request.command) {
                 response = BridgeClient.send(request)
             } else {
                 response = .failure("Unsupported request.")

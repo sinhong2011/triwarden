@@ -7,6 +7,33 @@ import { COMMANDS, type Reply } from '../lib/protocol';
 
 const HOST = 'io.github.sinhong2011.triwarden';
 
+/**
+ * Tabs with a login waiting to be saved → the address of the frame that typed it. The page's save card asks the app
+ * only in these tabs (not on every page load), and asks for that address, so a login typed in another site's iframe
+ * or before a redirect (login.example.com → example.com) is still found. Session storage outlives the service
+ * worker; a browser without it falls back to memory.
+ */
+const SAVES = 'saveTabs';
+let savesInMemory: Record<string, string> = {};
+async function saveTabs(): Promise<Record<string, string>> {
+  try {
+    return ((await browser.storage.session.get(SAVES))[SAVES] as Record<string, string> | undefined) ?? {};
+  } catch {
+    return savesInMemory;
+  }
+}
+async function setSaveTab(tab: number, url: string | null): Promise<void> {
+  const tabs = { ...(await saveTabs()) };
+  if (url) tabs[tab] = url;
+  else delete tabs[tab];
+  savesInMemory = tabs;
+  try {
+    await browser.storage.session.set({ [SAVES]: tabs });
+  } catch {
+    // Kept in memory only.
+  }
+}
+
 export default defineBackground(() => {
   // Right-click menu, like the password managers': Triwarden > Autofill login / Copy username / Copy password / Copy
   // verification code > one entry per login of the page's site. Chrome has no "menu is about to show" event, so the
@@ -22,13 +49,33 @@ export default defineBackground(() => {
     if (id != null) await browser.tabs.sendMessage(id, { trigger: 'fill' }).catch(() => {});
   });
 
+  browser.tabs.onRemoved.addListener((tab) => void setSaveTab(tab, null));
+
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    if (!message || !COMMANDS.has(message.command) || !sender.tab) return false;
+    const tab = sender.tab?.id;
+    // The save card: is a login waiting in this tab? Answers the address it was typed on, or null.
+    if (message?.ask === 'saves' && tab != null) {
+      void saveTabs().then((tabs) => sendResponse(tabs[tab] ?? null));
+      return true;
+    }
+    if (!message || !COMMANDS.has(message.command) || !sender.tab || tab == null) return false;
     // The page URL comes from the browser, not from the page, so a frame can't claim another site.
-    const url = sender.url ?? sender.tab.url;
-    const request = { ...message, url };
-    Promise.resolve(browser.runtime.sendNativeMessage(HOST, request))
-      .then((reply: Reply | undefined) => sendResponse(reply ?? { ok: false, error: t('noAnswer') }))
+    const own = sender.url ?? sender.tab.url;
+    void (async () => {
+      // The save card asks about the login of this tab, where it was typed (which this browser recorded).
+      const url = message.command === 'pending' ? ((await saveTabs())[tab] ?? own) : own;
+      const reply = (await Promise.resolve(browser.runtime.sendNativeMessage(HOST, { ...message, url }))) as
+        | Reply
+        | undefined;
+      sendResponse(reply ?? { ok: false, error: t('noAnswer') });
+      if (message.command === 'save' && reply?.value === 'pending' && own) {
+        // A login now waits to be saved: the tab's top frame shows the card, whichever frame typed it.
+        await setSaveTab(tab, own);
+        browser.tabs.sendMessage(tab, { trigger: 'saves' }, { frameId: 0 }).catch(() => {});
+      } else if (message.command === 'pending' && !message.query && reply?.ok && !reply.rows?.length) {
+        await setSaveTab(tab, null); // nothing waits any more (answered here or in the app)
+      }
+    })()
       .catch((error: unknown) =>
         sendResponse({ ok: false, error: String((error as Error)?.message ?? error) }),
       );

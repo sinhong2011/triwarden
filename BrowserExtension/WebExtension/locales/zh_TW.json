@@ -73,6 +73,34 @@
     "usePassword": "使用此密碼",
     "usePassphrase": "使用此密語",
     "decrease": "減少$1",
-    "increase": "增加$1"
+    "increase": "增加$1",
+    "yourEmails": "你的電子郵件",
+    "suggestUsername": "建議使用者名稱",
+    "chooseEmailAria": "用 Triwarden 選擇電子郵件",
+    "suggestUsernameAria": "用 Triwarden 建議使用者名稱",
+    "lookingForEmails": "正在尋找你的電子郵件…",
+    "updateAppForNames": "請更新 Triwarden 以建議使用者名稱和電子郵件。",
+    "unlockForEmails": "解鎖 Triwarden 以查看你的電子郵件。",
+    "privateAddress": "私人地址",
+    "newUsername": "新使用者名稱",
+    "privateAddressDetail": "郵件仍會送到你的收件匣",
+    "newUsernameDetail": "與你的其他帳號無關聯",
+    "alsoFillsPassword": "同時填入強密碼"
+  },
+
+  "save": {
+    "dialog": "儲存登入資訊",
+    "saveFor": "儲存 $1 的登入資訊?",
+    "updateFor": "更新「$1」的密碼?",
+    "noUsername": "沒有使用者名稱",
+    "close": "關閉(保留在 Triwarden 中)",
+    "notNow": "稍後再說",
+    "save": "儲存",
+    "update": "更新",
+    "saved": "已儲存到 Triwarden。",
+    "savedTo": "已儲存到 $1。",
+    "toAccount": "儲存到 $1",
+    "chooseAccount": "儲存到帳號",
+    "updated": "密碼已更新。"
   }
 }

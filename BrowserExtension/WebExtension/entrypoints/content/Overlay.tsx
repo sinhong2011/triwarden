@@ -2,7 +2,7 @@ import { createEffect, createSignal, For, onCleanup, onMount, Show } from 'solid
 import { browser } from 'wxt/browser';
 import { shouldRequestTotpCopy } from '../../lib/after-fill';
 import { replyErrorMessage } from '../../lib/bridge-status';
-import { fillOtp, isRTL, otpTargets, passwordFields, setValue, usernameFor, visible } from '../../lib/dom';
+import { fillOtp, generateTargets, isRTL, otpTargets, passwordFields, setValue, usernameFor, visible } from '../../lib/dom';
 import { t } from '../../lib/i18n';
 import { iconPosition, menuLeft, menuVertical } from '../../lib/overlay-layout';
 import type { Row } from '../../lib/protocol';
@@ -138,11 +138,13 @@ export default function Overlay() {
 
   function scan() {
     const found = new Map<HTMLInputElement, Target>();
+    // Sign-up and change-password fields belong to the generate overlay (new password, confirm, username).
+    const generating = new Set(generateTargets().flatMap((t) => [t.field, t.confirm, t.username]));
     for (const pw of passwordFields()) {
-      if (!visible(pw) || /new-password/.test(pw.autocomplete || '')) continue;
+      if (!visible(pw) || /new-password/.test(pw.autocomplete || '') || generating.has(pw)) continue;
       found.set(pw, { field: pw, pw });
       const user = usernameFor(pw);
-      if (user && !found.has(user)) found.set(user, { field: user, pw });
+      if (user && !found.has(user) && !generating.has(user)) found.set(user, { field: user, pw });
     }
     for (const boxes of otpTargets()) {
       const first = boxes[0];

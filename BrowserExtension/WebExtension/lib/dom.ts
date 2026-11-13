@@ -134,12 +134,34 @@ function scopeIntent(scope: ParentNode): 'signup' | 'signin' | 'unknown' {
   return 'unknown';
 }
 
-/** A password field to generate for, and the field that confirms it (filled with the same value). */
-export type GenerateTarget = { field: HTMLInputElement; confirm?: HTMLInputElement };
+/** Words that say a form makes an account, not a new password for one (change, reset). */
+const ACCOUNT_HINT =
+  /\b(sign\s*up|register|registration|join|get\s+started|create\s+(?:an?\s+|your\s+|new\s+)?account|new\s+account)\b/i;
+
+/** Whether the group's buttons or headings (or the page's path) say it creates an account. */
+function makesAccount(scope: ParentNode): boolean {
+  const texts = [...scope.querySelectorAll<HTMLElement>('button, input[type="submit"], [role="button"], h1, h2, h3, legend')]
+    .map((e) => `${e.textContent || ''} ${(e as HTMLInputElement).value || ''}`);
+  return (
+    ACCOUNT_HINT.test(texts.join(' ')) ||
+    (scope === document && /\/(sign-?up|register|join|create-account)\b/i.test(location.pathname))
+  );
+}
 
 /**
- * Where Safari shows the Triwarden generate icon: the new password of a sign-up, change-password or reset form, never
- * an ordinary login (system AutoFill owns pick/fill there), never the old password, never the confirm field (it gets
+ * A password field to generate for, the field that confirms it (filled with the same value), and on a sign-up the
+ * username or email field next to it (offered your emails or a new username).
+ */
+export type GenerateTarget = { field: HTMLInputElement; confirm?: HTMLInputElement; username?: HTMLInputElement };
+
+const EMAIL_HINT = /e-?mail/i;
+/** Whether a username field wants an email address. */
+export const wantsEmail = (input: HTMLInputElement): boolean =>
+  input.type === 'email' || EMAIL_HINT.test(`${input.autocomplete} ${fieldText(input)}`);
+
+/**
+ * Where the Triwarden generate icon goes: the new password of a sign-up, change-password or reset form, never
+ * an ordinary login (vault fill owns those), never the old password, never the confirm field (it gets
  * the same value). Save/Update still runs via `watchForSubmits`, with no icon at all.
  */
 export function generateTargetFor(scope: ParentNode): GenerateTarget | null {
@@ -151,9 +173,14 @@ export function generateTargetFor(scope: ParentNode): GenerateTarget | null {
   if (!fresh.length) return null;
   const marked = fresh.filter((p) => /new-password/.test(p.autocomplete || ''));
   // Anything after the new one that says "confirm", or simply the next fresh field.
+  // A sign-up also gets its username field, when it sits in the same group. Not a change or reset form: a text field
+  // there is rarely the account's name.
+  const user = passwords.length === fresh.length && makesAccount(scope) ? usernameFor(fresh[0]!) : null;
+  const username =
+    user && visible(user) && !user.readOnly && (scope === document || scope.contains(user)) ? user : undefined;
   const pick = (field: HTMLInputElement): GenerateTarget => {
     const rest = fresh.slice(fresh.indexOf(field) + 1);
-    return { field, confirm: rest.find((p) => CONFIRM_HINT.test(fieldText(p))) ?? rest[0] };
+    return { field, confirm: rest.find((p) => CONFIRM_HINT.test(fieldText(p))) ?? rest[0], username };
   };
   const first = fresh.find((p) => !CONFIRM_HINT.test(fieldText(p))) ?? fresh[0]!;
   if (marked.length) return pick(marked.find((p) => !CONFIRM_HINT.test(fieldText(p))) ?? marked[0]!);
@@ -169,13 +196,13 @@ export function isGeneratePasswordField(pw: HTMLInputElement): boolean {
   return generateTargetFor(fieldScope(pw))?.field === pw;
 }
 
-/** Every place on the page to offer generate (Safari): one per form or group. */
+/** Every place on the page to offer generate: one per form or group. */
 export function generateTargets(): GenerateTarget[] {
   const scopes = new Set(passwordFields().filter(visible).map(fieldScope));
   return [...scopes].map(generateTargetFor).filter((t): t is GenerateTarget => !!t);
 }
 
-/** Visible password fields that warrant a generate affordance (Safari). */
+/** Visible password fields that warrant a generate affordance. */
 export function generatePasswordFields(): HTMLInputElement[] {
   return generateTargets().map((t) => t.field);
 }

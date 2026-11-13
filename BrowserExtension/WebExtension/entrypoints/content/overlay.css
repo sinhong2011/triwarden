@@ -33,6 +33,7 @@
   --tile: #fff;
   --seg: #fff; /* the selected segment: lifted above the track, as in macOS */
   --shadow: 0 18px 40px rgba(20, 24, 60, 0.18), 0 2px 8px rgba(20, 24, 60, 0.08);
+  --error: #b33c0c; /* 5.4:1 on the card */
 }
 @media (prefers-color-scheme: dark) {
   :host {
@@ -44,6 +45,7 @@
     --tile: #f5f5f7;
     --seg: rgba(255, 255, 255, 0.2);
     --shadow: 0 18px 44px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.3);
+    --error: #ff8a5c; /* 6.4:1 on the card */
   }
 }
 
@@ -318,7 +320,8 @@ button.note-action:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .menu {
+  .menu,
+  .save-prompt {
     animation: none;
   }
   .key,
@@ -425,7 +428,16 @@ button.note-action:focus-visible {
   }
 }
 
-.menu.gen .icon-btn {
+.who-generated {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.who-generated .row {
+  flex: 1;
+  min-width: 0;
+}
+.menu .icon-btn {
   flex: none;
   width: 30px;
   height: 30px;
@@ -438,14 +450,14 @@ button.note-action:focus-visible {
   cursor: pointer;
   transition: background-color 120ms ease, transform 160ms cubic-bezier(0.2, 1.2, 0.4, 1);
 }
-.menu.gen .icon-btn:hover {
+.menu .icon-btn:hover {
   background: color-mix(in srgb, var(--ink) 12%, transparent);
   color: var(--ink);
 }
-.menu.gen .icon-btn:active {
+.menu .icon-btn:active {
   transform: scale(0.94);
 }
-.menu.gen .icon-btn:disabled {
+.menu .icon-btn:disabled {
   opacity: 0.4;
   cursor: default;
 }
@@ -888,4 +900,115 @@ button.note-action:focus-visible {
 .bridge-banner-dismiss:hover {
   background: var(--wash);
   color: var(--ink);
+}
+
+/* The page's "Save login?" card: top right, above the page, like 1Password and Bitwarden. */
+.save-prompt {
+  position: fixed;
+  pointer-events: auto; /* the overlay host lets clicks through; the card takes its own */
+  top: 16px;
+  right: 16px;
+  z-index: 2147483647;
+  width: min(340px, calc(100vw - 32px));
+  padding: 12px;
+  border-radius: 16px;
+  background: var(--card);
+  color: var(--ink);
+  box-shadow: var(--shadow), 0 0 0 0.5px var(--edge);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  font: 13px/1.35 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  animation: pop 280ms cubic-bezier(0.2, 1.2, 0.4, 1);
+}
+.save-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.save-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: start;
+}
+.save-title {
+  font-weight: 600;
+}
+.save-detail {
+  color: color-mix(in srgb, var(--ink) 60%, transparent);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* With more than one unlocked account the account line opens the email menu's list to send a new login elsewhere. */
+.save-account {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin: 0 -4px;
+  padding: 1px 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.save-account:hover {
+  background: var(--wash);
+}
+.save-account:focus-visible {
+  outline: 2px solid #0f74b3;
+  outline-offset: 1px;
+}
+.save-account-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.save-accounts {
+  top: calc(100% + 6px);
+  right: 0;
+  width: 100%;
+}
+.save-error {
+  margin-top: 4px;
+  color: var(--error);
+}
+.save-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+.save-actions button {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  font: 600 13px/1 -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  cursor: pointer;
+}
+.save-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.save-later {
+  background: var(--chip);
+  color: var(--ink);
+}
+.save-go {
+  background: #0f74b3;
+  color: #fff;
+}
+.save-actions button:not(:disabled):hover {
+  filter: brightness(1.08);
+}
+.save-actions button:focus-visible,
+.save-prompt .bridge-banner-dismiss:focus-visible {
+  outline: 2px solid #0f74b3;
+  outline-offset: 2px;
 }

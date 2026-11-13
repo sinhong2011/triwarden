@@ -42,3 +42,18 @@ enum WebsiteSiteOnly {
     /// `text` trimmed to the site, or unchanged when there is nothing to trim.
     static func apply(_ text: String) -> String { trimmed(text) ?? text }
 }
+
+/// Your emails for a sign-up form (the browser extension's username menu): the accounts' own, then the ones your
+/// logins use most. Lowercased, no duplicates, at most three.
+enum SignUpEmails {
+    static func ranked(accounts: [String], usernames: [String]) -> [String] {
+        var counts: [String: Int] = [:]
+        for raw in usernames {
+            let u = raw.trimmingCharacters(in: .whitespaces).lowercased()
+            if u.wholeMatch(of: #/[^@\s]+@[^@\s]+\.[^@\s]+/#) != nil { counts[u, default: 0] += 1 }
+        }
+        let used = counts.sorted { $0.value != $1.value ? $0.value > $1.value : $0.key < $1.key }.map(\.key)
+        var seen = Set<String>()
+        return Array((accounts.map { $0.lowercased() } + used).filter { !$0.isEmpty && seen.insert($0).inserted }.prefix(3))
+    }
+}
