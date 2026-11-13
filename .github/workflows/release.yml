@@ -3,7 +3,7 @@ name: Release
 # The tag is the release. scripts/tag-release.sh pushes an annotated vX.Y.Z tag on main whose message holds the
 # release notes; this workflow then tests that commit again, signs, notarizes, creates the GitHub release with the
 # DMG, the zip, the Sparkle appcast (what the in-app updater reads) and the Homebrew cask, and pushes the cask to
-# sinhong2011/homebrew-tap (with a deploy key that can write to that repo only).
+# sinhong2011/homebrew-tap (with a deploy key that can write to that repo only), and redeploys the website.
 # The version comes from the tag alone: release.sh stamps it into the app and its Safari extension. Chrome/Firefox
 # store zips are submitted separately for the same tag (Actions › Publish browser extension).
 run-name: ${{ format('Release {0}', github.event_name == 'push' && github.ref_name || inputs.tag) }}
@@ -70,6 +70,7 @@ jobs:
     needs: [source, validation]
     permissions:
       contents: write
+      actions: write # start the Site workflow after publishing
     # validation is skipped when push CI already passed on the tagged commit.
     if: >-
       always() && needs.source.result == 'success' &&
@@ -161,6 +162,11 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -m "triwarden $VERSION"
           git push origin HEAD:main
+
+      # The release is published with Triwarden.dmg attached, so the site can bake in the new version now. Events
+      # from GITHUB_TOKEN start no workflows except workflow_dispatch, hence the explicit run.
+      - name: Rebuild the website
+        run: gh workflow run site.yml --repo "$GITHUB_REPOSITORY" --ref main
 
       - name: Clean up keys
         if: always()
