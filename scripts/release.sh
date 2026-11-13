@@ -26,6 +26,13 @@ for arg in "$@"; do
   case $arg in --publish) PUBLISH=1 ;; --skip-notarize) NOTARIZE=0 ;; *) echo "unknown option $arg"; exit 64 ;; esac
 done
 [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version must look like 1.2.3"; exit 64; }
+# Safari shows the bundled manifest.json version, which WXT takes from package.json (not MARKETING_VERSION).
+# release-please keeps them in lockstep; refuse to ship an app whose Safari extension reports another version (#225).
+EXT_VERSION=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' BrowserExtension/WebExtension/package.json)
+[[ $EXT_VERSION == "$VERSION" ]] || {
+  echo "BrowserExtension/WebExtension/package.json is $EXT_VERSION, expected $VERSION (Safari would report $EXT_VERSION)"
+  exit 65
+}
 PROFILE=${NOTARY_PROFILE:-triwarden-notary}
 # App Store Connect API key (CI, Admin access): fetches Developer ID profiles and lets notarytool submit, without an Apple ID.
 AUTH=(); NOTARY=(--keychain-profile "$PROFILE")
