@@ -19,7 +19,7 @@ DEV_CA  := $(CURDIR)/DevServer/data/root.crt
 SNAP_DIR := $(HOME)/Library/Group Containers/FX3VR69P5K.io.github.sinhong2011.triwarden/snapshots
 
 .DEFAULT_GOAL := help
-.PHONY: help project build run site extension test bench screenshots license license-keys test-dev selftest selftest-compatibility selftest-secrets selftest-secrets-online selftest-secrets-interactive selftest-secrets-presentation selftest-cloud snapshots dev-up dev-seed dev-status dev-logs release clean
+.PHONY: help project build run site extension test bench screenshots license license-keys test-dev selftest selftest-compatibility selftest-secrets selftest-secrets-online selftest-secrets-interactive selftest-secrets-presentation selftest-cloud snapshots dev-up dev-seed dev-status dev-logs tag release clean
 
 help: ## Show this list
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[1m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -145,7 +145,11 @@ dev-status: ## Dev server containers
 dev-logs: ## Dev server logs (SERVICE=vaultwarden|vaultwarden-sso|dex|…)
 	@TRIWARDEN_DEV_HOST=$(DEV_HOST) TRIWARDEN_DEV_IP=$(DEV_IP) DevServer/dev.sh logs $(SERVICE)
 
-release: ## Signed, notarized release: make release VERSION=0.3.0 [ARGS=--publish]
+tag: ## Start a release: tag main as vX.Y.Z and push it (make tag VERSION=0.11.0 [ARGS=--dry-run])
+	@test -n "$(VERSION)" || { echo "usage: make tag VERSION=0.11.0 [ARGS=--dry-run]"; exit 64; }
+	@scripts/tag-release.sh $(VERSION) $(ARGS)
+
+release: ## Build a release by hand (fallback): make release VERSION=0.11.0 [ARGS=--publish]
 	@test -n "$(VERSION)" || { echo "usage: make release VERSION=0.3.0 [ARGS=--publish]"; exit 64; }
 	@scripts/release.sh $(VERSION) $(ARGS)
 

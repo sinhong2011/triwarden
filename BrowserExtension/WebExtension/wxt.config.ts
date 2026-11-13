@@ -1,12 +1,19 @@
 import { defineConfig } from 'wxt';
 
 // One source, three targets: Chrome/Edge/Brave (MV3 service worker), Firefox (MV3 event page) and Safari
-// (bundled into TriwardenSafari.appex by Xcode). The version comes from package.json.
+// (bundled into TriwardenSafari.appex by Xcode). The version is the release tag's, passed in as TRIWARDEN_VERSION
+// (scripts/build-safari-extension.sh, Publish browser extension); without it, package.json's 0.0.0 marks a local build.
 // Locales: `locales/*.json` → `_locales/*/messages.json` via `@wxt-dev/i18n` (browser UI language; en source of truth).
 export default defineConfig({
   modules: ['@wxt-dev/module-solid', '@wxt-dev/i18n/module'],
   manifestVersion: 3,
+  // Name the zips after the manifest version (the release tag's), not package.json's placeholder.
+  zip: {
+    artifactTemplate: '{{name}}-{{version}}-{{browser}}{{modeSuffix}}.zip',
+    sourcesTemplate: '{{name}}-{{version}}-sources{{modeSuffix}}.zip',
+  },
   manifest: ({ browser }) => ({
+    ...(process.env.TRIWARDEN_VERSION && { version: process.env.TRIWARDEN_VERSION }),
     default_locale: 'en',
     name: '__MSG_extName__',
     description: '__MSG_extDescription__',

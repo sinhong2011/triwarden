@@ -1,15 +1,66 @@
 #!/usr/bin/env python3
-"""Turns one version's section of CHANGELOG.md (as release-please writes it) into the HTML Sparkle shows in its
-update window. No DOCTYPE or <body>, so generate_appcast embeds it in the appcast item.
+"""Release notes: written once from the pull requests merged since the last release, kept in the annotated tag.
 
-    scripts/release-notes.py 0.2.0 [CHANGELOG.md] > Triwarden-0.2.0.html
+    scripts/release-notes.py markdown v0.10.0 origin/main > notes.md   # the notes scripts/tag-release.sh puts in the tag
+    scripts/release-notes.py html notes.md > Triwarden-0.11.0.html    # what Sparkle's update window shows
+    scripts/release-notes.py --self-test
 
-Commit links are dropped (readers want what changed, not hashes); with no section for the version, a short
-pointer to the GitHub release is written instead.
+Squash merges put each pull request's title on main as one first-parent commit, so the notes are those titles,
+grouped by their Conventional Commits type. docs/chore/test/ci/refactor/build/revert stay out, as do subjects that
+aren't conventional. `type!:` or a `BREAKING CHANGE:` footer lists the change under Breaking changes.
 """
+from __future__ import annotations
+
 import html
 import re
+import subprocess
 import sys
+
+# Shown types, in order. Anything else is left out of the notes.
+SECTIONS = [
+    ("feat", "Features"),
+    ("fix", "Fixes"),
+    ("perf", "Performance"),
+    ("security", "Security"),
+    ("ui", "UI"),
+]
+SUBJECT = re.compile(r"^(?P<type>[a-z]+)(?:\((?P<scope>[^)]+)\))?(?P<bang>!)?:\s*(?P<text>.+)$")
+EMPTY = "Maintenance release: no user-facing changes."
+
+
+def entries(messages: list[str]) -> str:
+    """Markdown notes for full commit messages (subject + body), newest first as git log prints them."""
+    groups: dict[str, list[str]] = {title: [] for _, title in SECTIONS}
+    breaking: list[str] = []
+    titles = dict(SECTIONS)
+    for message in messages:
+        subject, _, body = message.strip().partition("\n")
+        m = SUBJECT.match(subject.strip())
+        if not m:
+            continue
+        scope = f"**{m['scope']}:** " if m["scope"] else ""
+        line = f"* {scope}{m['text'].strip()}"
+        if m["bang"] or re.search(r"^BREAKING[ -]CHANGE:", body, re.M):
+            breaking.append(line)
+        elif m["type"] in titles:
+            groups[titles[m["type"]]].append(line)
+    parts = []
+    if breaking:
+        parts.append("### Breaking changes\n\n" + "\n".join(breaking))
+    for title, lines in groups.items():
+        if lines:
+            parts.append(f"### {title}\n\n" + "\n".join(lines))
+    return "\n\n".join(parts) if parts else EMPTY
+
+
+def markdown(since: str, until: str) -> str:
+    out = subprocess.check_output(
+        ["git", "log", "--first-parent", "--format=%B%x00", f"{since}..{until}"], text=True
+    )
+    return entries([m for m in out.split("\0") if m.strip()])
+
+
+# --- HTML for Sparkle ------------------------------------------------------------------------------------------------
 
 STYLE = """<meta charset="utf-8">
 <style>
@@ -25,21 +76,6 @@ STYLE = """<meta charset="utf-8">
 </style>"""
 
 
-def section(changelog: str, version: str) -> list[str]:
-    """The lines under `## [version]` (or `## version`), up to the next version heading."""
-    lines, inside = [], False
-    heading = re.compile(r"^##\s+\[?v?" + re.escape(version) + r"\]?(\s|\(|$)")
-    for line in changelog.splitlines():
-        if line.startswith("## "):
-            if inside:
-                break
-            inside = bool(heading.match(line))
-            continue
-        if inside:
-            lines.append(line)
-    return lines
-
-
 def inline(text: str) -> str:
     """Escapes, then keeps `code` and **bold**, drops commit links like ([abc1234](…)) and plain issue links."""
     text = re.sub(r"\s*\(\[[0-9a-f]{7,40}\]\([^)]*\)\)", "", text)  # (commit hash link)
@@ -51,9 +87,9 @@ def inline(text: str) -> str:
     return out
 
 
-def render(lines: list[str]) -> str:
-    parts, in_list, breaking = [], False, False
-    for raw in lines:
+def render(notes: str) -> str:
+    parts, in_list = [], False
+    for raw in notes.splitlines():
         line = raw.rstrip()
         if not line.strip():
             continue
@@ -62,9 +98,7 @@ def render(lines: list[str]) -> str:
                 parts.append("</ul>")
                 in_list = False
             title = line[4:].strip()
-            breaking = "BREAKING" in title.upper()
-            title = "Breaking changes" if breaking else title
-            attr = ' class="breaking"' if breaking else ""
+            attr = ' class="breaking"' if "BREAKING" in title.upper() else ""
             parts.append(f"<h3{attr}>{html.escape(title)}</h3>")
         elif re.match(r"^\s*[*-]\s+", line):
             if not in_list:
@@ -83,20 +117,71 @@ def render(lines: list[str]) -> str:
     return "\n".join(parts)
 
 
+def page(notes: str) -> str:
+    """No DOCTYPE or <body>, so generate_appcast embeds it in the appcast item."""
+    return STYLE + "\n<div>\n" + (render(notes) or f"<p>{html.escape(EMPTY)}</p>") + "\n</div>"
+
+
+# --- self-test -------------------------------------------------------------------------------------------------------
+
+def self_test() -> None:
+    notes = entries([
+        "fix(extension): place overlay icons outside the field (#223)",
+        "docs: explain releases (#230)",
+        "feat(browser): add Zen to the native-messaging browser list (#195)",
+        "Merge branch 'main' into something",
+        "feat!: drop macOS 15 (#240)",
+        "fix: tidy the vault list (#241)\n\nBREAKING CHANGE: the old export format is gone",
+        "chore(extension): release 0.5.0 (#200)",
+        "security: lock the vault after sleep (#242)",
+    ])
+    expected = """### Breaking changes
+
+* drop macOS 15 (#240)
+* tidy the vault list (#241)
+
+### Features
+
+* **browser:** add Zen to the native-messaging browser list (#195)
+
+### Fixes
+
+* **extension:** place overlay icons outside the field (#223)
+
+### Security
+
+* lock the vault after sleep (#242)"""
+    assert notes == expected, f"notes:\n{notes}"
+    print("PASS: notes group shown types, list breaking changes first, and drop the rest")
+
+    assert entries(["docs: x (#1)", "chore: y (#2)"]) == EMPTY
+    print("PASS: a release with nothing user-facing says so")
+
+    out = page(notes)
+    assert '<h3 class="breaking">Breaking changes</h3>' in out, out
+    assert "<li><b>browser:</b> add Zen" in out, out
+    assert "<li>Drop macOS 15 (#240)</li>" in out, out
+    assert "<li>Lock the vault after sleep (#242)</li>" in out, out
+    print("PASS: HTML capitalises entries and keeps scopes bold")
+
+    assert "<script>" not in page("* fix <script>alert(1)</script>")
+    print("PASS: HTML escapes subjects")
+
+    assert EMPTY in page("")
+    print("PASS: empty notes still render a line")
+
+
 def main() -> None:
-    if len(sys.argv) < 2:
-        sys.exit("usage: release-notes.py VERSION [CHANGELOG.md]")
-    version = sys.argv[1].lstrip("v")
-    path = sys.argv[2] if len(sys.argv) > 2 else "CHANGELOG.md"
-    try:
-        changelog = open(path, encoding="utf-8").read()
-    except FileNotFoundError:
-        changelog = ""
-    body = render(section(changelog, version))
-    if not body:
-        url = f"https://github.com/sinhong2011/triwarden/releases/tag/v{version}"
-        body = f'<p>What\'s new in {html.escape(version)}: <a href="{url}">see the release on GitHub</a>.</p>'
-    print(STYLE + "\n<div>\n" + body + "\n</div>")
+    args = sys.argv[1:]
+    if args == ["--self-test"]:
+        self_test()
+    elif len(args) == 3 and args[0] == "markdown":
+        print(markdown(args[1], args[2]))
+    elif len(args) == 2 and args[0] == "html":
+        with open(args[1], encoding="utf-8") as fh:
+            print(page(fh.read()))
+    else:
+        sys.exit("usage: release-notes.py markdown <since> <until> | html <notes.md> | --self-test")
 
 
 if __name__ == "__main__":

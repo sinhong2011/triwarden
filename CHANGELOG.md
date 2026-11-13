@@ -1,5 +1,8 @@
 # Changelog
 
+From 0.11.0 the release notes are on [GitHub Releases](https://github.com/sinhong2011/triwarden/releases)
+(and in each `vX.Y.Z` tag message). This file is the history up to 0.10.0.
+
 ## [0.10.0](https://github.com/sinhong2011/triwarden/compare/v0.9.1...v0.10.0) (2026-11-10)
 
 

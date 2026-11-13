@@ -17,6 +17,9 @@ if ! command -v node >/dev/null || ! command -v pnpm >/dev/null; then
   exit 1
 fi
 
+# Xcode exports build settings to this phase: the Safari extension carries the app's version (release.sh sets
+# MARKETING_VERSION from the tag and checks the result), so Safari never shows a different one (#225).
+[[ -n ${MARKETING_VERSION:-} ]] && export TRIWARDEN_VERSION="$MARKETING_VERSION"
 # No terminal here: never stop to ask whether to rebuild node_modules.
 export CI=true
 pnpm install --frozen-lockfile --silent

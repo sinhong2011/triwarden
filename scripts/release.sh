@@ -6,8 +6,9 @@
 #   scripts/release.sh 0.3.0 --publish  # …and create the GitHub release (draft) with the artifacts
 #   scripts/release.sh 0.3.0 --skip-notarize   # local dry run
 #
-# Normally CI runs this when a release-please PR is merged (.github/workflows/release.yml); it uploads to the
-# release that release-please created. Run it by hand only as a fallback.
+# Normally CI runs this when a vX.Y.Z tag is pushed (scripts/tag-release.sh, .github/workflows/release.yml). The
+# version comes from that argument alone: it is stamped into the app and, through MARKETING_VERSION, the bundled
+# Safari extension. The release notes are the tag's message. Run it by hand only as a fallback.
 #
 # Signing in to Apple, either:
 #   local: your Xcode account + `xcrun notarytool store-credentials triwarden-notary --apple-id … --team-id FX3VR69P5K`
@@ -103,6 +104,13 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath "$OUT/export" \
   -exportOptionsPlist "$OUT/ExportOptions.plist" -allowProvisioningUpdates "${AUTH[@]}" | grep -E "error:|EXPORT (SUCCEEDED|FAILED)"
 APP=$OUT/export/Triwarden.app
 
+# Safari shows the bundled manifest.json version. scripts/build-safari-extension.sh passes MARKETING_VERSION to WXT;
+# refuse to ship an app whose Safari extension reports anything else (#225).
+EXT_MANIFEST=$(find "$APP/Contents/PlugIns" -path '*.appex/Contents/Resources/manifest.json' | head -1)
+[[ -n $EXT_MANIFEST ]] || { echo "no Safari extension manifest.json in $APP"; exit 1; }
+EXT_VERSION=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "$EXT_MANIFEST")
+[[ $EXT_VERSION == "$VERSION" ]] || { echo "the Safari extension reports $EXT_VERSION, expected $VERSION"; exit 65; }
+
 KEY=$(/usr/libexec/PlistBuddy -c "Print :SUPublicEDKey" "$APP/Contents/Info.plist" 2>/dev/null || true)
 [[ -n $KEY ]] || { echo "SUPublicEDKey is empty: run 'make sparkle-keys' once and commit project.yml"; exit 1; }
 
@@ -164,9 +172,17 @@ echo "== Sparkle appcast"
 SPARKLE_BIN=${SPARKLE_BIN:-$(find build/SourcePackages/artifacts ~/Library/Developer/Xcode/DerivedData -path "*sparkle/Sparkle/bin" -type d 2>/dev/null | head -1)}
 [[ -x $SPARKLE_BIN/generate_appcast ]] || { echo "Sparkle tools not found; build once (make build) or set SPARKLE_BIN"; exit 1; }
 FEED=$OUT/feed && mkdir -p "$FEED" && cp "$ZIP" "$FEED/"
-# What's new, shown in the update window: this version's CHANGELOG section as HTML, named like the zip so
-# generate_appcast embeds it in the appcast item.
-python3 scripts/release-notes.py "$VERSION" CHANGELOG.md > "$FEED/Triwarden-$VERSION.html"
+# What's new: the annotated tag's message (scripts/tag-release.sh), less its "Triwarden X.Y.Z" first line. Without
+# one (a local try, or a release before v0.11.0) the notes are written from the log since the previous tag.
+NOTES=$OUT/notes.md
+if [[ $(git cat-file -t "refs/tags/v$VERSION" 2>/dev/null) == tag ]]; then
+  git for-each-ref --format='%(contents:body)' "refs/tags/v$VERSION" > "$NOTES"
+else
+  PREV=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "HEAD^" 2>/dev/null || true)
+  if [[ -n $PREV ]]; then python3 scripts/release-notes.py markdown "$PREV" HEAD > "$NOTES"; else : > "$NOTES"; fi
+fi
+# The update window's copy, as HTML named like the zip so generate_appcast embeds it in the appcast item.
+python3 scripts/release-notes.py html "$NOTES" > "$FEED/Triwarden-$VERSION.html"
 KEY_ARGS=(); [[ -n ${SPARKLE_KEY_FILE:-} ]] && KEY_ARGS=(--ed-key-file "$SPARKLE_KEY_FILE")
 "$SPARKLE_BIN/generate_appcast" "${KEY_ARGS[@]}" --maximum-deltas 0 \
   --download-url-prefix "https://github.com/sinhong2011/triwarden/releases/download/v$VERSION/" \
@@ -177,13 +193,15 @@ grep -q 'sparkle:edSignature' "$OUT/appcast.xml" || { echo "appcast is not signe
 
 if [[ $PUBLISH == 1 ]]; then
   [[ $NOTARIZE == 1 ]] || { echo "refusing to publish an un-notarized build"; exit 1; }
+  ASSETS=("$DMG" "$LATEST_DMG" "$ZIP" "$OUT/appcast.xml" "$OUT/triwarden.rb")
   if gh release view "v$VERSION" >/dev/null 2>&1; then
-    echo "== Upload to release v$VERSION"   # created by release-please
+    echo "== Upload to release v$VERSION"   # a rebuild of a published release
+    gh release upload "v$VERSION" "${ASSETS[@]}" --clobber
   else
+    # Created with its files in one step, so /releases/latest never points at a release without the DMG or appcast.
     echo "== GitHub release v$VERSION"
-    gh release create "v$VERSION" --title "Triwarden $VERSION" --generate-notes
+    gh release create "v$VERSION" "${ASSETS[@]}" --verify-tag --title "Triwarden $VERSION" --notes-file "$NOTES"
   fi
-  gh release upload "v$VERSION" "$DMG" "$LATEST_DMG" "$ZIP" "$OUT/appcast.xml" "$OUT/triwarden.rb" --clobber
 fi
 
 echo

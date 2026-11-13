@@ -79,8 +79,8 @@ jobs:
         working-directory: site
     steps:
       - uses: actions/checkout@v4
-      # release-please publishes the GitHub release before scripts/release.sh uploads Triwarden.dmg.
-      # Building before that asset exists makes latestRelease() return null and drops the version line.
+      # scripts/release.sh creates the release with Triwarden.dmg attached; a rebuild re-uploads it. Wait for
+      # the asset anyway: building without it makes latestRelease() return null and drops the version line.
       - name: Wait for the release DMG
         if: github.event_name == 'release'
         env:

@@ -1,6 +1,7 @@
 # Changelog
 
-New Chrome/Firefox notes live in the [root changelog](../../CHANGELOG.md).
+The extension ships with the app and shares its version; new notes are in the app's
+[GitHub Releases](https://github.com/sinhong2011/triwarden/releases).
 This file is the history of `extension-v*` GitHub releases, which are no longer published.
 
 ## [0.5.0](https://github.com/sinhong2011/triwarden/compare/extension-v0.4.3...extension-v0.5.0) (2026-11-10)

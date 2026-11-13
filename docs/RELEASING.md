@@ -1,33 +1,46 @@
 # Releasing
 
-Releases are automatic once the one-time setup is done:
+A release is an annotated `vX.Y.Z` tag on `main`. The tag is the only place the version lives: nothing in the
+repository is bumped, so the app, its Safari extension and the Chrome/Firefox zips can't disagree.
 
-1. Commits on `main` use [Conventional Commits](https://www.conventionalcommits.org): `feat: …`, `fix: …`,
-   `perf: …`, `security: …`, `ui: …` show up in the changelog; `docs:`, `chore:`, `test:` don't. `feat!:` or a
-   `BREAKING CHANGE:` footer marks a breaking change (before 1.0 that bumps the minor version).
-   CI checks every PR title (`.github/workflows/pr-title.yml`). Use the same prefixes when you squash-merge
-   so the merge commit on `main` is what release-please reads.
-2. [release-please](https://github.com/googleapis/release-please) keeps a **release PR** open with the next version
-   (in `project.yml` and `BrowserExtension/WebExtension/package.json`) and `CHANGELOG.md`. With
-   `include-commit-authors` in `release-please-config.json`, each entry ends with `(@username)` when GitHub
-   knows the author (otherwise the author name). Chrome/Firefox zip changes land on feature PRs without a
-   store version bump; the release PR raises `package.json` to the new app version. Submit those zips by hand
-   with **Actions › Publish browser extension** only when the extension itself changed. Safari ships inside
-   the app. There is one GitHub release (`vX.Y.Z`); do not create `extension-v*` releases (they have no
-   `appcast.xml` and would take `/releases/latest`).
-3. Merging the release PR tags `vX.Y.Z` and creates the GitHub release. The `build` job in
-   `.github/workflows/release.yml` then runs `scripts/release.sh X.Y.Z --publish`:
-   - archive a Release build (build number = commit count);
+1. Pull request titles use [Conventional Commits](https://www.conventionalcommits.org): `feat: …`, `fix: …`,
+   `perf: …`, `security: …`, `ui: …` show up in the release notes; `docs:`, `chore:`, `test:`, `ci:`,
+   `refactor:`, `build:` don't. `feat!:` or a `BREAKING CHANGE:` footer lists a change under Breaking changes.
+   CI checks every PR title (the `Conventional title` job in `.github/workflows/ci.yml`). Squash-merge, so the
+   title is the commit on `main` the notes are written from. Write it for someone reading the release notes.
+2. When `main` is ready and its CI has passed, start the release:
+
+   ```bash
+   make tag VERSION=0.11.0              # or scripts/tag-release.sh 0.11.0 [--edit] [--dry-run]
+   ```
+
+   `scripts/tag-release.sh` checks the version is newer than the last tag and that CI passed on `main`'s newest
+   commit, writes the notes from the PR titles merged since the last tag (`scripts/release-notes.py`), shows
+   them (`--edit` opens them in `$EDITOR`), and after you confirm pushes an annotated tag on `origin/main` whose
+   message is those notes.
+3. The tag starts `.github/workflows/release.yml`. It checks the tag is annotated and on `main`, runs the whole
+   CI on that commit again unless its push CI already passed, then runs `scripts/release.sh X.Y.Z --publish`:
+   - archive a Release build with `MARKETING_VERSION` = the tag and build number = commit count. The Safari
+     extension is built with the same version (`scripts/build-safari-extension.sh`), and the build stops if its
+     `manifest.json` reports any other;
    - Developer ID export, signature check, notarize and staple the app and the DMG (built with
      [dmgbuild](https://github.com/dmgbuild/dmgbuild) from `scripts/dmg-settings.py`; the window background comes
      from `python3 Design/DMG/generate.py`; by hand you need `pipx install dmgbuild`);
-   - sign the zip for Sparkle and write `appcast.xml`, with this version's `CHANGELOG.md` section embedded as the
-     release notes the update window shows (`scripts/release-notes.py`);
-   - upload the DMG, the zip, `appcast.xml` and the Homebrew cask (`triwarden.rb`) to the release;
+   - sign the zip for Sparkle and write `appcast.xml`, with the tag's notes embedded as the release notes the
+     update window shows;
+   - create the GitHub release with the tag's notes and, in the same step, the DMG, the zip, `appcast.xml` and
+     the Homebrew cask (`triwarden.rb`), so `/releases/latest` never lacks them;
    - push the cask to `Casks/triwarden.rb` in `sinhong2011/homebrew-tap`.
 4. Installed copies with automatic checks on find the update through
    `https://github.com/sinhong2011/triwarden/releases/latest/download/appcast.xml`. They verify the EdDSA
    signature and the notarization, install, and relaunch. Everyone else gets it from **Check for Updates…**.
+5. Only when the extension itself changed, submit it to the Chrome Web Store and Firefox Add-ons:
+   **Actions › Publish browser extension**, with the release tag (e.g. `v0.11.0`). The zips are built from that
+   tag with its version. Each store reviews every upload, so skip this for app-only releases; the store version
+   then jumps to the next submitted app version, which both stores accept.
+
+Local builds report version `0.0.0` (`project.yml`, `package.json`): only a release sets the real one.
+`CHANGELOG.md` is the history up to 0.10.0; later notes are on GitHub Releases.
 
 ## One-time setup (maintainer)
 
@@ -98,11 +111,13 @@ On your Mac, with an Xcode account for team `FX3VR69P5K` and notary credentials 
 
 ```bash
 xcrun notarytool store-credentials triwarden-notary --apple-id <you@example.com> --team-id FX3VR69P5K
+git checkout v0.3.0
 scripts/release.sh 0.3.0 --publish
 ```
 
-This uploads to the release `v0.3.0` if release-please made it, and creates the release otherwise. To try a local
-build without notarizing or publishing: `ALLOW_DIRTY=1 scripts/release.sh 0.3.0 --skip-notarize`.
+Check out the tag first, so the build and its notes match it. This uploads to the release `v0.3.0` if it exists, and
+creates it otherwise. To try a local build without notarizing or publishing:
+`ALLOW_DIRTY=1 scripts/release.sh 0.3.0 --skip-notarize`.
 
 ## Homebrew
 
@@ -123,16 +138,10 @@ The server source revisions and Rust toolchains are pinned in `.github/workflows
 explicitly when adding a new compatibility baseline. UI smoke tests cover demo launch/lock and edit/cancel;
 they do not replace the broader manual UI, browser interoperability or physical Touch ID checks.
 
-Release automation starts only after successful **push CI on main**. A stale success from an older main
-commit is ignored. Manually rerunning a version tag first validates that the tag belongs to main, then runs
-the same CI against its exact commit before the release environment can be used. Historical tags predating
-the compatibility entry point skip that check; UI smoke tests must exist for the tag to be re-released with
-this workflow (backport them or use the documented local fallback for historical releases).
+Release automation starts from a pushed `vX.Y.Z` tag. The workflow refuses a tag that is not on `main`. When the
+tagged commit has no passing push CI (a tag pushed by hand, or a rebuild through **Actions › Release › Run
+workflow**), it runs the same CI against that exact commit before the release environment can be used. Releases
+before v0.11.0 have lightweight tags; rebuilding one writes its notes from the log.
 
 The Main ruleset requires a pull request and successful `VaultCore tests` and `Build app` checks with an
 up-to-date branch, and prevents branch deletion and force pushes. Site deployment has its own build dependency.
-
-GitHub requires a maintainer to approve workflow runs on release PRs created or updated using `GITHUB_TOKEN`.
-An `action_required` run with no jobs is this approval gate, not a failed build. Review the release PR and use
-**Approve workflows to run** before merging it. This repository retains that approval instead of weakening
-workflow security or introducing a long-lived personal token.

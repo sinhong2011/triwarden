@@ -1,22 +1,21 @@
 name: Release
 
-# Conventional commits on main → release-please keeps a release PR up to date (version + CHANGELOG).
-# Merging that PR tags vX.Y.Z and creates the GitHub release; the build job then signs, notarizes and
-# uploads the DMG, the zip, the Sparkle appcast (what the in-app updater reads) and the Homebrew cask, then pushes
-# the cask to sinhong2011/homebrew-tap (with a deploy key that can write to that repo only).
-# Chrome/Firefox store zips use the same version in BrowserExtension/WebExtension/package.json. They are
-# submitted separately (Actions › Publish browser extension) and do not get their own GitHub release.
+# The tag is the release. scripts/tag-release.sh pushes an annotated vX.Y.Z tag on main whose message holds the
+# release notes; this workflow then tests that commit again, signs, notarizes, creates the GitHub release with the
+# DMG, the zip, the Sparkle appcast (what the in-app updater reads) and the Homebrew cask, and pushes the cask to
+# sinhong2011/homebrew-tap (with a deploy key that can write to that repo only).
+# The version comes from the tag alone: release.sh stamps it into the app and its Safari extension. Chrome/Firefox
+# store zips are submitted separately for the same tag (Actions › Publish browser extension).
+run-name: ${{ format('Release {0}', github.event_name == 'push' && github.ref_name || inputs.tag) }}
 
 on:
-  workflow_run:
-    workflows: [CI]
-    types: [completed]
-    branches: [main]
+  push:
+    tags: ["v*"]
   # Builds and uploads an existing tag again (e.g. after a failed build): Actions › Release › Run workflow.
   workflow_dispatch:
     inputs:
       tag:
-        description: Tag to build, e.g. v0.1.0
+        description: Tag to build, e.g. v0.11.0
         required: true
 
 permissions:
@@ -28,45 +27,38 @@ concurrency:
 
 jobs:
   source:
-    name: Verify release source
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    name: Verify release tag
     runs-on: ubuntu-latest
     outputs:
-      current: ${{ steps.source.outputs.current }}
+      tag: ${{ steps.source.outputs.tag }}
       sha: ${{ steps.source.outputs.sha }}
+      tested: ${{ steps.source.outputs.tested }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
           fetch-depth: 0
           persist-credentials: false
-      - name: Verify tested main commit or manual tag
+      - name: The tag is vX.Y.Z on main
         id: source
         env:
-          EVENT: ${{ github.event_name }}
-          TESTED_SHA: ${{ github.event.workflow_run.head_sha }}
-          TAG: ${{ inputs.tag }}
+          TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          if [[ $EVENT == workflow_dispatch ]]; then
-            [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid version tag"; exit 1; }
-            sha=$(git rev-parse --verify "refs/tags/$TAG^{commit}")
-            git merge-base --is-ancestor "$sha" origin/main
-            echo "sha=$sha" >> "$GITHUB_OUTPUT"
-            echo 'current=true' >> "$GITHUB_OUTPUT"
-          elif [[ $TESTED_SHA == "$(git rev-parse origin/main)" ]]; then
-            echo "sha=$TESTED_SHA" >> "$GITHUB_OUTPUT"
-            echo 'current=true' >> "$GITHUB_OUTPUT"
-          else
-            echo 'A newer main commit exists; its successful CI will handle the release.'
-            echo 'current=false' >> "$GITHUB_OUTPUT"
-          fi
+          git fetch --force --tags origin
+          scripts/tag-release.sh --check-tag "$TAG"
+          sha=$(git rev-parse --verify "refs/tags/$TAG^{commit}")
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          # tag-release.sh only tags a main commit whose push CI passed; when that run is there, don't repeat it.
+          passed=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow CI --event push --commit "$sha" \
+            --status success --limit 1 --json databaseId --jq 'length')
+          echo "tested=$([[ $passed == 1 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
 
-  manual-validation:
-    name: Validate manual release tag
+  # A tag pushed by hand, or a rebuild, whose commit has no passing push CI: run the whole CI on it first.
+  validation:
+    name: Validate the tagged commit
     needs: source
-    if: github.event_name == 'workflow_dispatch' && needs.source.outputs.current == 'true'
+    if: needs.source.outputs.tested != 'true'
     permissions:
       contents: read
       pull-requests: read
@@ -74,38 +66,18 @@ jobs:
     with:
       ref: ${{ needs.source.outputs.sha }}
 
-  release-please:
-    needs: source
-    if: github.event_name == 'workflow_run' && needs.source.outputs.current == 'true'
-    permissions:
-      contents: write
-      pull-requests: write
-    runs-on: ubuntu-latest
-    outputs:
-      created: ${{ steps.rp.outputs.release_created }}
-      tag: ${{ steps.rp.outputs.tag_name }}
-      version: ${{ steps.rp.outputs.version }}
-    steps:
-      - uses: googleapis/release-please-action@v4
-        id: rp
-        with:
-          config-file: release-please-config.json
-          manifest-file: .release-please-manifest.json
-          target-branch: main
-
   build:
-    needs: [source, release-please, manual-validation]
+    needs: [source, validation]
     permissions:
       contents: write
-    # A release-please release, or a tag asked for by hand (release-please is skipped then).
+    # validation is skipped when push CI already passed on the tagged commit.
     if: >-
       always() && needs.source.result == 'success' &&
-      (needs.release-please.outputs.created == 'true' ||
-      (github.event_name == 'workflow_dispatch' && needs.manual-validation.result == 'success'))
+      (needs.validation.result == 'success' || needs.validation.result == 'skipped')
     runs-on: macos-26
     environment: release # secrets live here, so only this job can read them
     env:
-      TAG: ${{ inputs.tag || needs.release-please.outputs.tag }}
+      TAG: ${{ needs.source.outputs.tag }}
       GH_TOKEN: ${{ github.token }}
     steps:
       - name: Version
@@ -117,6 +89,10 @@ jobs:
         with:
           ref: ${{ env.TAG }}
           fetch-depth: 0 # build number = commit count
+
+      # checkout can leave the tag lightweight; fetch it again so its message (the release notes) is there.
+      - name: Fetch the annotated tag
+        run: git fetch --force --tags origin
 
       - name: Require the validated commit
         env:
