@@ -29,6 +29,7 @@ done
 [[ $VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "version must look like 1.2.3"; exit 64; }
 PROFILE=${NOTARY_PROFILE:-triwarden-notary}
 # App Store Connect API key (CI, Admin access): fetches Developer ID profiles and lets notarytool submit, without an Apple ID.
+# Empty arrays expand as ${A[@]+"${A[@]}"}: macOS bash 3.2 treats "${A[@]}" of an empty array as unbound under set -u.
 AUTH=(); NOTARY=(--keychain-profile "$PROFILE")
 if [[ -n ${ASC_KEY_PATH:-} ]]; then
   AUTH=(-authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID")
@@ -96,12 +97,12 @@ fi
 
 echo "== Archive $VERSION ($BUILD)"
 xcodebuild -project Triwarden.xcodeproj -scheme Triwarden -configuration Release \
-  -archivePath "$ARCHIVE" -allowProvisioningUpdates "${AUTH[@]}" \
+  -archivePath "$ARCHIVE" -allowProvisioningUpdates ${AUTH[@]+"${AUTH[@]}"} \
   MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" archive | grep -E "error:|ARCHIVE (SUCCEEDED|FAILED)"
 
 echo "== Export with Developer ID"
 xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath "$OUT/export" \
-  -exportOptionsPlist "$OUT/ExportOptions.plist" -allowProvisioningUpdates "${AUTH[@]}" | grep -E "error:|EXPORT (SUCCEEDED|FAILED)"
+  -exportOptionsPlist "$OUT/ExportOptions.plist" -allowProvisioningUpdates ${AUTH[@]+"${AUTH[@]}"} | grep -E "error:|EXPORT (SUCCEEDED|FAILED)"
 APP=$OUT/export/Triwarden.app
 
 # Safari shows the bundled manifest.json version. scripts/build-safari-extension.sh passes MARKETING_VERSION to WXT;
@@ -184,7 +185,7 @@ fi
 # The update window's copy, as HTML named like the zip so generate_appcast embeds it in the appcast item.
 python3 scripts/release-notes.py html "$NOTES" > "$FEED/Triwarden-$VERSION.html"
 KEY_ARGS=(); [[ -n ${SPARKLE_KEY_FILE:-} ]] && KEY_ARGS=(--ed-key-file "$SPARKLE_KEY_FILE")
-"$SPARKLE_BIN/generate_appcast" "${KEY_ARGS[@]}" --maximum-deltas 0 \
+"$SPARKLE_BIN/generate_appcast" ${KEY_ARGS[@]+"${KEY_ARGS[@]}"} --maximum-deltas 0 \
   --download-url-prefix "https://github.com/sinhong2011/triwarden/releases/download/v$VERSION/" \
   --full-release-notes-url "https://github.com/sinhong2011/triwarden/releases/tag/v$VERSION" \
   --link "https://github.com/sinhong2011/triwarden" "$FEED"
