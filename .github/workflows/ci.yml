@@ -205,22 +205,16 @@ jobs:
           path: build/ci-integration/*.log
 
   app:
-    name: Build app
-    # Final gate for code PRs (includes server tests). Docs/config PRs report success without macOS.
-    needs: [changes, vaultcore, integration]
-    if: always() && needs.changes.result == 'success' && needs.vaultcore.result == 'success' && (needs.integration.result == 'success' || needs.integration.result == 'skipped')
+    name: App build and UI tests
+    # Starts with the VaultCore and server tests instead of after them; the "Build app" job below is the gate
+    # that requires all of them. Docs/config PRs report success without macOS.
+    needs: changes
     runs-on: ${{ needs.changes.outputs.code == 'true' && 'macos-26' || 'ubuntu-latest' }}
     timeout-minutes: 25
     steps:
       - name: Docs / config only
         if: needs.changes.outputs.code != 'true'
         run: echo 'No app/code paths in this PR; skipping Build app.'
-      - name: Require successful tests
-        if: needs.changes.outputs.code == 'true'
-        env:
-          CORE_RESULT: ${{ needs.vaultcore.result }}
-          SERVER_RESULT: ${{ needs.integration.result }}
-        run: test "$CORE_RESULT" = success && test "$SERVER_RESULT" = success
       - if: needs.changes.outputs.code == 'true'
         uses: actions/checkout@v4
         with:
@@ -229,8 +223,10 @@ jobs:
         if: needs.changes.outputs.code == 'true'
         id: sdk
         run: echo "version=$(xcodebuild -version | tr '\n' '-')" >> "$GITHUB_OUTPUT"
+      # Pull requests restore the newest main build and never save: each save is ~270 MB, and PR caches (usable
+      # only by that PR) pushed main's out of the 10 GB limit. Main pushes save after the build below.
       - if: needs.changes.outputs.code == 'true'
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         id: app-cache
         with:
           path: |
@@ -296,7 +292,7 @@ jobs:
           test "$(plutil -extract ASCredentialProviderExtensionCapabilities.ProvidesPasskeys raw -o - "$app_plist")" = true
           test "$(plutil -extract NSExtension.NSExtensionAttributes.ASCredentialProviderExtensionCapabilities.ProvidesPasskeys raw -o - "$extension_plist")" = true
       - name: Save compiled app before UI tests
-        if: needs.changes.outputs.code == 'true' && steps.app-cache.outputs.cache-hit != 'true'
+        if: needs.changes.outputs.code == 'true' && github.event_name == 'push' && steps.app-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
           path: |
@@ -354,3 +350,22 @@ jobs:
         with:
           name: app-ci-evidence
           path: build/ci/
+
+  # The required "Build app" check: green only when the app build and UI tests, VaultCore tests and the server
+  # tests all passed (server tests are skipped on docs/config PRs).
+  build-gate:
+    name: Build app
+    needs: [changes, vaultcore, integration, app]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every app check
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          CORE: ${{ needs.vaultcore.result }}
+          SERVER: ${{ needs.integration.result }}
+          APP: ${{ needs.app.result }}
+        run: |
+          echo "changes=$CHANGES vaultcore=$CORE integration=$SERVER app=$APP"
+          [[ $CHANGES == success && $CORE == success && $APP == success ]]
+          [[ $SERVER == success || $SERVER == skipped ]]
