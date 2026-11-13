@@ -201,7 +201,9 @@ if [[ $PUBLISH == 1 ]]; then
   else
     # Created with its files in one step, so /releases/latest never points at a release without the DMG or appcast.
     echo "== GitHub release v$VERSION"
-    gh release create "v$VERSION" "${ASSETS[@]}" --verify-tag --title "Triwarden $VERSION" --notes-file "$NOTES"
+    # The page: the tag's notes, GitHub's list of pull requests, and how to install (scripts/release-page.sh).
+    scripts/release-page.sh "$VERSION" "$NOTES" > "$OUT/release.md"
+    gh release create "v$VERSION" "${ASSETS[@]}" --verify-tag --title "Triwarden $VERSION" --notes-file "$OUT/release.md"
   fi
 fi
 

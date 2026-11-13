@@ -11,13 +11,18 @@ repository is bumped, so the app, its Safari extension and the Chrome/Firefox zi
 2. When `main` is ready and its CI has passed, start the release:
 
    ```bash
-   make tag VERSION=0.11.0              # or scripts/tag-release.sh 0.11.0 [--edit] [--dry-run]
+   make tag VERSION=0.11.0 ARGS=--edit  # or scripts/tag-release.sh 0.11.0 [--edit] [--dry-run]
    ```
 
    `scripts/tag-release.sh` checks the version is newer than the last tag and that CI passed on `main`'s newest
    commit, writes the notes from the PR titles merged since the last tag (`scripts/release-notes.py`), shows
-   them (`--edit` opens them in `$EDITOR`), and after you confirm pushes an annotated tag on `origin/main` whose
-   message is those notes.
+   them, and after you confirm pushes an annotated tag on `origin/main` whose message is those notes.
+
+   Use `--edit` for any release with something to tell users. It opens the PR titles in `$EDITOR` under a short
+   guide (removed before tagging): rewrite them as **Highlights** and **Fixes** in plain sentences, saying what
+   someone can now do or will notice, most important first, with the opening words of each point in bold. Leave
+   out release, CI and test changes. These notes are what the update window shows, and they head the release
+   page.
 3. The tag starts `.github/workflows/release.yml`. It checks the tag is annotated and on `main`, runs the whole
    CI on that commit again unless its push CI already passed, then runs `scripts/release.sh X.Y.Z --publish`:
    - archive a Release build with `MARKETING_VERSION` = the tag and build number = commit count. The Safari
@@ -28,8 +33,10 @@ repository is bumped, so the app, its Safari extension and the Chrome/Firefox zi
      from `python3 Design/DMG/generate.py`; by hand you need `pipx install dmgbuild`);
    - sign the zip for Sparkle and write `appcast.xml`, with the tag's notes embedded as the release notes the
      update window shows;
-   - create the GitHub release with the tag's notes and, in the same step, the DMG, the zip, `appcast.xml` and
-     the Homebrew cask (`triwarden.rb`), so `/releases/latest` never lacks them;
+   - create the GitHub release with, in the same step, the DMG, the zip, `appcast.xml` and the Homebrew cask
+     (`triwarden.rb`), so `/releases/latest` never lacks them. The page (`scripts/release-page.sh`) is the tag's
+     notes, then GitHub's list of every pull request since the last release with authors and a Full Changelog
+     link, then how to install or update. Preview it with `scripts/release-page.sh X.Y.Z notes.md`;
    - push the cask to `Casks/triwarden.rb` in `sinhong2011/homebrew-tap`.
    - start the **Site** workflow on `main`, so the website's version, size and download line show the new
      release (a release created by the workflow's token can't trigger it any other way). To redeploy the site
