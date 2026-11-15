@@ -99,11 +99,16 @@ func installHost(_ family: NativeHost.Browser.Family, chromeExtensionID: String?
         fail("couldn't work out where tw is installed; run it by its full path", code: 70)
     }
     var written: [String] = []
+    var seen = Set<String>()
     for browser in NativeHost.browsers where browser.family == family && NativeHost.isInstalled(browser) {
         guard let data = try? NativeHost.manifest(for: browser, tool: me, chromeExtensionID: chromeExtensionID) else { continue }
-        let file = NativeHost.manifestURL(browser)
-        try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if (try? data.write(to: file)) != nil { written.append(file.path) }
+        for folder in NativeHost.hostFoldersForInstall(browser) {
+            let file = NativeHost.applicationSupport.appending(path: folder).appending(path: "\(NativeHost.name).json")
+            let key = file.standardizedFileURL.path
+            guard seen.insert(key).inserted else { continue }
+            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if (try? data.write(to: file)) != nil { written.append(file.path) }
+        }
     }
     return written
 }

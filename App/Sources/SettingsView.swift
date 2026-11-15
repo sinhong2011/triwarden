@@ -709,7 +709,10 @@ private struct BrowserSettings: View {
         }
         let folder = NativeHost.hostFolderURL(browser)
         let panel = NSOpenPanel()
-        panel.message = String(localized: "Allow Triwarden to add its file to \(browser.title)'s native-messaging folder.")
+        // Brave on Mac reads Chrome's native-messaging folder, so Connect asks for that path.
+        panel.message = browser.id == "brave"
+            ? String(localized: "Brave on Mac looks for Triwarden in Chrome’s native-messaging folder. Allow Triwarden to add its file there.")
+            : String(localized: "Allow Triwarden to add its file to \(browser.title)'s native-messaging folder.")
         panel.prompt = String(localized: "Allow")
         panel.canChooseFiles = false
         panel.canChooseDirectories = true

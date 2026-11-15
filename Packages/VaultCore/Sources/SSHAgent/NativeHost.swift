@@ -45,11 +45,26 @@ public enum NativeHost {
         .init(id: "chrome-for-testing", title: "Chrome for Testing", bundleID: "com.google.chrome.for.testing", family: .chromium, dataFolder: "Google/Chrome for Testing", hostFolder: "Google/Chrome for Testing/NativeMessagingHosts"),
         .init(id: "chromium", title: "Chromium", bundleID: "org.chromium.Chromium", family: .chromium, dataFolder: "Chromium", hostFolder: "Chromium/NativeMessagingHosts"),
         .init(id: "edge", title: "Microsoft Edge", bundleID: "com.microsoft.edgemac", family: .chromium, dataFolder: "Microsoft Edge", hostFolder: "Microsoft Edge/NativeMessagingHosts"),
-        .init(id: "brave", title: "Brave", bundleID: "com.brave.Browser", family: .chromium, dataFolder: "BraveSoftware/Brave-Browser", hostFolder: "BraveSoftware/Brave-Browser/NativeMessagingHosts"),
+        // Brave on macOS resolves native-messaging hosts from Chrome's folder, not BraveSoftware
+        // (Brave framework ships `/Library/Google/Chrome/NativeMessagingHosts`; KeePassXC #13429).
+        // dataFolder stays Brave's own profile so we still detect that Brave is installed.
+        .init(id: "brave", title: "Brave", bundleID: "com.brave.Browser", family: .chromium, dataFolder: "BraveSoftware/Brave-Browser", hostFolder: "Google/Chrome/NativeMessagingHosts"),
         .init(id: "arc", title: "Arc", bundleID: "company.thebrowser.Browser", family: .chromium, dataFolder: "Arc/User Data", hostFolder: "Arc/User Data/NativeMessagingHosts"),
         .init(id: "zen", title: "Zen", bundleID: "app.zen-browser.zen", family: .firefox, dataFolder: "zen", hostFolder: "zen/NativeMessagingHosts"),
         .init(id: "firefox", title: "Firefox", bundleID: "org.mozilla.firefox", family: .firefox, dataFolder: "Firefox", hostFolder: "Mozilla/NativeMessagingHosts"),
     ]
+
+    /// Folders under Application Support that should receive the host manifest for `browser`.
+    /// Brave also keeps a copy under BraveSoftware in case a future Brave build starts reading it.
+    public static func hostFoldersForInstall(_ browser: Browser) -> [String] {
+        if browser.id == "brave" {
+            return [
+                "Google/Chrome/NativeMessagingHosts",
+                "BraveSoftware/Brave-Browser/NativeMessagingHosts",
+            ]
+        }
+        return [browser.hostFolder]
+    }
 
     /// `~/Library/Application Support`. `TW_SUPPORT_DIR` overrides it, for tests: they must never write into the real
     /// browsers' folders. A sandboxed app's own home is its container, so otherwise this asks the system for the

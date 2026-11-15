@@ -75,8 +75,17 @@ struct NativeHostTests {
 
     @Test func everyBrowserHasABundleIDAndItsOwnHostFolder() {
         #expect(Set(NativeHost.browsers.map(\.bundleID)).count == NativeHost.browsers.count)
-        #expect(Set(NativeHost.browsers.map(\.hostFolder)).count == NativeHost.browsers.count)
         #expect(NativeHost.browsers.allSatisfy { $0.hostFolder.hasSuffix("NativeMessagingHosts") })
+        // Brave shares Chrome's host folder on macOS (Brave reads Chrome's NativeMessagingHosts).
+        let brave = NativeHost.browsers.first { $0.id == "brave" }!
+        #expect(brave.hostFolder == chrome.hostFolder)
+        #expect(brave.dataFolder == "BraveSoftware/Brave-Browser")
+        #expect(NativeHost.hostFoldersForInstall(brave) == [
+            "Google/Chrome/NativeMessagingHosts",
+            "BraveSoftware/Brave-Browser/NativeMessagingHosts",
+        ])
+        let others = NativeHost.browsers.filter { $0.id != "brave" }
+        #expect(Set(others.map(\.hostFolder)).count == others.count)
     }
 
     @Test func eachBrowserInstallsFromItsOwnStore() {
