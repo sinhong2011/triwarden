@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/vault-light.jpg" width="820" alt="Le coffre de Triwarden">
+  <img src="promo/public/shots/vault-dark.png" width="820" alt="Le coffre de Triwarden en thème sombre">
 </p>
 
 > Cette traduction a été synchronisée avec le [README anglais](README.md) le 6 novembre 2026. La version anglaise conserve la liste complète des fonctions et détails techniques.

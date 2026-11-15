@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/vault-light.jpg" width="820" alt="Triwarden の保管庫画面">
+  <img src="promo/public/shots/vault-dark.png" width="820" alt="Triwarden のダークテーマ保管庫画面">
 </p>
 
 > この翻訳は 2026年11月6日に[英語版 README](README.md)と同期しました。機能と技術情報の完全な一覧は英語版をご覧ください。

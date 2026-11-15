@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/vault-light.jpg" width="820" alt="La bóveda de Triwarden">
+  <img src="promo/public/shots/vault-dark.png" width="820" alt="La bóveda de Triwarden en tema oscuro">
 </p>
 
 > Esta traducción se sincronizó con el [README en inglés](README.md) el 6 de noviembre de 2026. La versión inglesa mantiene la lista completa de funciones y detalles técnicos.

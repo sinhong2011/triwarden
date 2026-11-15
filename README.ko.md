@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/vault-light.jpg" width="820" alt="Triwarden 볼트 화면">
+  <img src="promo/public/shots/vault-dark.png" width="820" alt="Triwarden 다크 테마 볼트 화면">
 </p>
 
 > 이 번역은 2026년 11월 6일에 [영문 README](README.md)와 동기화했습니다. 전체 기능 및 기술 정보는 영문판을 확인하세요.

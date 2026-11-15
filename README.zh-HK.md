@@ -28,7 +28,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/vault-light.jpg" width="820" alt="Triwarden 密碼庫畫面">
+  <img src="promo/public/shots/vault-dark.png" width="820" alt="Triwarden 深色主題密碼庫畫面">
 </p>
 
 > 呢個翻譯已經喺 2026 年 11 月 6 日同[英文 README](README.md)同步；完整功能同技術細節以英文版為準。

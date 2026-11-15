@@ -32,7 +32,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/vault-light.jpg" width="820" alt="The vault: sidebar, item list, and a login with its password, live one-time code and details">
+  <img src="promo/public/shots/vault-dark.png" width="820" alt="The vault in dark theme: sidebar, item list, and a login with its password, live one-time code and details">
 </p>
 
 > **Status:** early releases (0.x). It works with real Vaultwarden and Bitwarden accounts and is tested against both,
