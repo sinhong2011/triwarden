@@ -1,14 +1,17 @@
 import TriCrypto
 import SwiftUI
 
-/// Passwords, passphrases and usernames. The full page (Sidebar › Generator) shows every option in cards;
-/// the compact form is the popover next to a password field.
+/// Passwords, passphrases, usernames, PINs and SSH keys. The full page (Sidebar › Generator) shows every option in
+/// cards; the compact form is the popover next to a password field (no SSH keys: a key pair is not a field value).
 struct GeneratorView: View {
     enum Mode: String, CaseIterable, Identifiable {
-        case password, passphrase, username
+        case password, passphrase, username, pin, ssh
         var id: Self { self }
         var title: LocalizedStringKey {
-            switch self { case .password: "Password"; case .passphrase: "Passphrase"; case .username: "Username" }
+            switch self {
+            case .password: "Password"; case .passphrase: "Passphrase"; case .username: "Username"
+            case .pin: "PIN"; case .ssh: "SSH Key"
+            }
         }
     }
 
@@ -22,16 +25,27 @@ struct GeneratorView: View {
     @AppStorage("generator") private var storedPassword = Data()
     @AppStorage("passphraseGenerator") private var storedPassphrase = Data()
     @AppStorage("usernameGenerator") private var storedUsername = Data()
+    @AppStorage("pinGenerator") private var storedPIN = Data()
     @State private var password = PasswordGenerator()
     @State private var passphrase = PassphraseGenerator()
     @State private var username = UsernameGenerator()
+    @State private var pin = PINGenerator()
+    /// The SSH key on screen. Memory only, never saved in settings or history: it is dropped when the page changes
+    /// mode or closes, unless it was saved to the vault or copied first.
+    @State private var sshSeed: Data?
+    @State private var sshComment = ""
+    @State private var sshPair: SSHKeyPair?
+    @State private var copiedPart: String?
     @State private var value = ""
     @State private var loaded = false
     @State private var copied = false
 
+    /// The popover never offers SSH keys.
+    private var available: [Mode] { compact ? modes.filter { $0 != .ssh } : modes }
+
     private var mode: Mode {
         let m = Mode(rawValue: storedMode) ?? .password
-        return modes.contains(m) ? m : modes[0]
+        return available.contains(m) ? m : available[0]
     }
 
     @State private var pageWidth: CGFloat = 1000
@@ -42,12 +56,15 @@ struct GeneratorView: View {
             .onChange(of: password) { save(); regenerate() }
             .onChange(of: passphrase) { save(); regenerate() }
             .onChange(of: username) { save(); regenerate() }
-            .onChange(of: storedMode) { regenerate() }
+            .onChange(of: pin) { save(); regenerate() }
+            .onChange(of: sshComment) { rebuildSSH() }
+            .onChange(of: storedMode) { if mode != .ssh { forgetSSH() }; regenerate() }
+            .onDisappear(perform: forgetSSH)
             .onChange(of: model.generatorRequest) { regenerate() }
     }
 
     private var modePicker: some View {
-        AppSegmented(options: modes.map { ($0, $0.title) },
+        AppSegmented(options: available.map { ($0, $0.title) },
                      selection: Binding(get: { mode }, set: { storedMode = $0.rawValue }))
             .accessibilityLabel(Text("Type"))
     }
@@ -57,6 +74,8 @@ struct GeneratorView: View {
         case .password: passwordOptions
         case .passphrase: passphraseOptions
         case .username: usernameOptions
+        case .pin: pinOptions
+        case .ssh: sshOptions
         }
     }
 
@@ -70,10 +89,10 @@ struct GeneratorView: View {
             HStack(spacing: 16) {
                 Text("Generator").font(.system(size: 22, weight: .bold)).tracking(-0.3)
                 Spacer(minLength: 16)
-                modePicker.frame(maxWidth: 380)
+                modePicker.frame(maxWidth: 520)
             }
             .padding(.bottom, -8) // 10 pt to the result, like the vault page's search row to its list
-            hero
+            if mode == .ssh { sshHero } else { hero }
             (wide ? AnyLayout(HStackLayout(alignment: .top, spacing: 16)) : AnyLayout(VStackLayout(spacing: 16))) {
                 VStack(alignment: .leading, spacing: 16) {
                     Text("Options").font(.system(size: 13, weight: .semibold))
@@ -106,7 +125,9 @@ struct GeneratorView: View {
                 .accessibilityLabel(Text(verbatim: value))
                 .accessibilityIdentifier("generatedValue")
             HStack(spacing: 12) {
-                if mode != .username {
+                if mode == .pin {
+                    pinStats.font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                } else if mode != .username {
                     let bits = mode == .password ? password.entropyBits : passphrase.entropyBits
                     StrengthMeter(bits: bits).fixedSize()
                     statsText(bits: bits)
@@ -129,6 +150,71 @@ struct GeneratorView: View {
         }
         .padding(24)
         .modifier(PanelCard())
+    }
+
+    /// A PIN is only as safe as the lock in front of it, so say that rather than show a "weak" meter.
+    private var pinStats: Text {
+        Text("\(value.count) digits") + Text(verbatim: " · ") + Text("Best where wrong guesses lock you out")
+    }
+
+    /// The key pair: the public half and its fingerprint in full, the private half kept off screen. Saving opens a new
+    /// SSH key item with all three filled in.
+    private var sshHero: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            if let pair = sshPair {
+                VStack(alignment: .leading, spacing: 6) {
+                    OptionLabel("Public key")
+                    Text(verbatim: pair.publicKey)
+                        .font(.system(size: 14, weight: .medium, design: .monospaced))
+                        .textSelection(.enabled)
+                        .lineLimit(4)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("generatedPublicKey")
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    OptionLabel("Fingerprint")
+                    Text(verbatim: pair.fingerprint)
+                        .font(.system(size: 13, design: .monospaced)).foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                        .lineLimit(1).truncationMode(.middle)
+                }
+                HStack(spacing: 6) {
+                    Image(systemName: "lock").font(.system(size: 11)).accessibilityHidden(true)
+                    Text("The private key stays hidden. It is forgotten when you leave this page unless you save it to your vault.")
+                }
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 12) { sshButtons(spaced: true) }
+                VStack(alignment: .leading, spacing: 10) { sshButtons(spaced: false) }
+            }
+        }
+        .padding(24)
+        .modifier(PanelCard())
+    }
+
+    @ViewBuilder private func sshButtons(spaced: Bool) -> some View {
+        Button { regenerate() } label: { Label("New Key", systemImage: "arrow.clockwise") }
+            .buttonStyle(.appSecondary)
+            .keyboardShortcut("r", modifiers: .command)
+        if spaced { Spacer(minLength: 12) }
+        Button { copySSH(\.privateKey, part: "private", label: String(localized: "Private key")) } label: {
+            Label(copiedPart == "private" ? "Copied" : "Copy Private Key", systemImage: copiedPart == "private" ? "checkmark" : "key")
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.appSecondary)
+        .disabled(sshPair == nil)
+        Button { copySSH(\.publicKey, part: "public", label: String(localized: "Public key")) } label: {
+            Label(copiedPart == "public" ? "Copied" : "Copy Public Key", systemImage: copiedPart == "public" ? "checkmark" : "doc.on.doc")
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .buttonStyle(.appSecondary)
+        .keyboardShortcut("c", modifiers: [.command, .shift])
+        .disabled(sshPair == nil)
+        Button { saveSSHKey() } label: { Label("Save as SSH Key…", systemImage: "tray.and.arrow.down") }
+            .buttonStyle(.appPrimary)
+            .disabled(sshPair == nil || !model.isUnlocked)
+            .accessibilityIdentifier("saveGeneratedSSHKey")
     }
 
     /// "20 characters · centuries to crack" — offline guessing at 10 billion tries a second.
@@ -159,12 +245,14 @@ struct GeneratorView: View {
         case .password: "Use Password"
         case .passphrase: "Use Passphrase"
         case .username: "Use Username"
+        case .pin: "Use PIN"
+        case .ssh: "Save as SSH Key…"
         }
     }
 
     private var compactBody: some View {
         VStack(alignment: .leading, spacing: 12) {
-            if modes.count > 1 { modePicker }
+            if available.count > 1 { modePicker }
             output
             options
 
@@ -194,7 +282,9 @@ struct GeneratorView: View {
                 .contentTransition(.opacity)
                 .accessibilityLabel(Text(verbatim: value))
             HStack(spacing: 6) {
-                if mode != .username {
+                if mode == .pin {
+                    Text("\(value.count) digits").font(.caption).foregroundStyle(.secondary)
+                } else if mode != .username {
                     StrengthMeter(bits: mode == .password ? password.entropyBits : passphrase.entropyBits)
                 } else if value.isEmpty {
                     Text(username.kind == .plusAddressed ? "Enter your email address below." : "Enter your catch-all domain below.")
@@ -304,6 +394,38 @@ struct GeneratorView: View {
         }
     }
 
+    @ViewBuilder private var pinOptions: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            NumberRow(label: "Length", value: $pin.length, range: PINGenerator.lengthRange,
+                      hint: "Value must be between 4 and 16. Most cards and phones use 4 to 6 digits.", slider: true)
+            Divider().opacity(0.4)
+            SwitchRow("Avoid easy patterns", isOn: $pin.avoidPatterns)
+            Text("Skips runs people try first, such as 123, 987 or 777.").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder private var sshOptions: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 8) {
+                OptionLabel("Key type")
+                Text(verbatim: "Ed25519")
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .padding(.horizontal, 12).frame(height: 28)
+                    .background(Color.primary.opacity(0.05), in: .capsule)
+                    .overlay(Capsule().strokeBorder(Color.primary.opacity(0.10)))
+                Text("Short, fast and accepted by GitHub, GitLab and OpenSSH servers.").font(.caption).foregroundStyle(.secondary)
+            }
+            Divider().opacity(0.4)
+            VStack(alignment: .leading, spacing: 8) {
+                OptionLabel("Comment")
+                TextField("Comment", text: $sshComment, prompt: Text(verbatim: "you@laptop")).textFieldStyle(SoftFieldStyle())
+                    .accessibilityIdentifier("sshKeyComment")
+                Text("Added to the end of the public key so you can tell your keys apart. Changing it keeps the same key.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+        }
+    }
+
     // MARK: State
 
     private func load() {
@@ -311,6 +433,7 @@ struct GeneratorView: View {
         if let p = try? JSONDecoder().decode(PasswordGenerator.self, from: storedPassword) { password = p }
         if let p = try? JSONDecoder().decode(PassphraseGenerator.self, from: storedPassphrase) { passphrase = p }
         if let u = try? JSONDecoder().decode(UsernameGenerator.self, from: storedUsername) { username = u }
+        if let p = try? JSONDecoder().decode(PINGenerator.self, from: storedPIN) { pin = p }
         if username.email.isEmpty { username.email = model.sessions.first?.account.email ?? "" }
         loaded = true
         regenerate()
@@ -320,6 +443,7 @@ struct GeneratorView: View {
         storedPassword = (try? JSONEncoder().encode(password)) ?? storedPassword
         storedPassphrase = (try? JSONEncoder().encode(passphrase)) ?? storedPassphrase
         storedUsername = (try? JSONEncoder().encode(username)) ?? storedUsername
+        storedPIN = (try? JSONEncoder().encode(pin)) ?? storedPIN
     }
 
     /// What stays still while a new value rolls in: spaces, and a passphrase's separators (so the words keep their shape).
@@ -331,13 +455,49 @@ struct GeneratorView: View {
             case .password: value = password.generate()
             case .passphrase: value = passphrase.generate()
             case .username: value = username.generate() ?? ""
+            case .pin: value = pin.generate()
+            case .ssh:
+                sshSeed = SSHKeyPair.newEd25519Seed()
+                rebuildSSH()
             }
         }
     }
 
+    /// The same key with the current comment.
+    private func rebuildSSH() {
+        guard let sshSeed else { return }
+        sshPair = try? SSHKeyPair.ed25519(seed: sshSeed, comment: sshComment.trimmingCharacters(in: .whitespacesAndNewlines))
+        value = sshPair?.publicKey ?? ""
+    }
+
+    private func forgetSSH() {
+        sshSeed = nil
+        sshPair = nil
+        if mode == .ssh { value = "" }
+    }
+
+    private func copySSH(_ part: KeyPath<SSHKeyPair, String>, part name: String, label: String) {
+        guard let pair = sshPair else { return }
+        model.copy(pair[keyPath: part], label: label)
+        withAnimation(.snappy) { copiedPart = name }
+        Task {
+            try? await Task.sleep(for: .seconds(1.2))
+            withAnimation(.snappy) { if copiedPart == name { copiedPart = nil } }
+        }
+    }
+
+    /// Opens a new SSH key item with this key filled in; leaving the page then drops the copy held here.
+    private func saveSSHKey() {
+        guard let pair = sshPair else { return }
+        let comment = sshComment.trimmingCharacters(in: .whitespacesAndNewlines)
+        model.beginEditing(EditRequest(mode: .create(.sshKey), prefill: EditItemSheet.Prefill(
+            name: comment.isEmpty ? String(localized: "SSH Key") : comment,
+            properties: ["privateKey": pair.privateKey, "publicKey": pair.publicKey, "keyFingerprint": pair.fingerprint])))
+    }
+
     private func copy() {
         guard !value.isEmpty else { return }
-        model.copy(value, label: mode == .username ? String(localized: "Username") : String(localized: "Password"))
+        model.copy(value, label: Self.copyLabel(kind: mode.rawValue))
         remember()
         withAnimation(.snappy) { copied = true }
         Task {
@@ -346,7 +506,17 @@ struct GeneratorView: View {
         }
     }
 
-    private func remember() { model.rememberGenerated(value, kind: mode.rawValue) }
+    /// SSH keys are never kept in the history.
+    private func remember() { if mode != .ssh { model.rememberGenerated(value, kind: mode.rawValue) } }
+
+    static func copyLabel(kind: String) -> String {
+        switch kind {
+        case Mode.username.rawValue: String(localized: "Username")
+        case Mode.passphrase.rawValue: String(localized: "Passphrase")
+        case Mode.pin.rawValue: String(localized: "PIN")
+        default: String(localized: "Password")
+        }
+    }
 }
 
 /// Digits in brand blue, symbols (and passphrase separators) in coral, letters in the text colour.
@@ -504,7 +674,8 @@ private struct HistoryRow: View {
 
     var body: some View {
         HStack(spacing: 10) {
-            Image(systemName: entry.kind == "username" ? "person" : entry.kind == "passphrase" ? "text.quote" : "key")
+            Image(systemName: entry.kind == "username" ? "person" : entry.kind == "passphrase" ? "text.quote"
+                  : entry.kind == "pin" ? "number" : "key")
                 .font(.system(size: 12)).foregroundStyle(.secondary).frame(width: 18)
             VStack(alignment: .leading, spacing: 2) {
                 Text(verbatim: entry.value).font(.system(size: 13, design: .monospaced)).lineLimit(1).truncationMode(.middle)
@@ -519,7 +690,7 @@ private struct HistoryRow: View {
             }
             Spacer(minLength: 4)
             Button {
-                model.copy(entry.value, label: entry.kind == "username" ? String(localized: "Username") : String(localized: "Password"))
+                model.copy(entry.value, label: GeneratorView.copyLabel(kind: entry.kind))
             } label: {
                 Image(systemName: "doc.on.doc").font(.system(size: 12)).frame(width: 26, height: 26).contentShape(.rect)
             }

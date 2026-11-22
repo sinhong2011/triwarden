@@ -165,6 +165,7 @@ extension AppModel {
                 action(title, "dice") { UserDefaults.standard.set(mode.rawValue, forKey: "generatorMode"); self.generatorRequest = UUID(); self.requestedSection = .generator }
             }
             return [generate(.password, String(localized: "Generate Password")), generate(.passphrase, String(localized: "Generate Passphrase")),
+                    generate(.pin, String(localized: "Generate PIN")), generate(.ssh, String(localized: "Generate SSH Key")),
                     action(String(localized: "Generator Settings…"), "slider.horizontal.3") { self.requestedSection = .generator }]
         case .watchtower:
             func issue(_ value: WatchtowerReport.Issue, _ title: String) -> SidebarContextAction {

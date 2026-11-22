@@ -427,6 +427,13 @@ enum Snapshot {
             renderWindow(VaultView().environment(vault).tint(.brand), size: CGSize(width: 1180, height: 760),
                          appearance: appearance, to: dir.appending(path: "window-new-item-\(name).png"))
             vault.closeNewItemForm()
+            // The Generator's "Save as SSH Key…": the new item opens with the key filled in.
+            let generated = SSHKeyPair.generateEd25519(comment: "you@laptop")
+            vault.beginEditing(EditRequest(mode: .create(.sshKey), prefill: EditItemSheet.Prefill(name: "you@laptop", properties: [
+                "privateKey": generated.privateKey, "publicKey": generated.publicKey, "keyFingerprint": generated.fingerprint])))
+            renderWindow(VaultView().environment(vault).tint(.brand), size: CGSize(width: 1180, height: 760),
+                         appearance: appearance, to: dir.appending(path: "window-new-ssh-from-generator-\(name).png"))
+            vault.closeNewItemForm()
             vault.selectedID = selected
             for (page, slug) in [(SidebarSelection.codes, "codes"), (.generator, "generator"), (.watchtower, "watchtower")] {
                 renderWindow(VaultView(initialSection: page).environment(vault).tint(.brand), size: CGSize(width: 1180, height: 760),
@@ -720,6 +727,17 @@ enum Snapshot {
                        size: size, appearance: appearance,
                        to: dir.appending(path: "generator\(label)-\(name).png"))
             }
+            // PIN and SSH key modes (the mode is the saved choice the page reads).
+            let savedMode = UserDefaults.standard.string(forKey: "generatorMode")
+            for mode in [GeneratorView.Mode.pin, .ssh] {
+                UserDefaults.standard.set(mode.rawValue, forKey: "generatorMode")
+                render(desktop(GeometryReader { geo in
+                    ScrollView { GeneratorView().padding(28).frame(maxWidth: .infinity, minHeight: geo.size.height, alignment: .top) }
+                }.environment(vault).tint(.brand), dark: name == "dark"),
+                       size: CGSize(width: 1120, height: 760), appearance: appearance,
+                       to: dir.appending(path: "generator-\(mode.rawValue)-\(name).png"))
+            }
+            UserDefaults.standard.set(savedMode, forKey: "generatorMode")
         }
         vault.sends = [
             SendItem(id: "s1", accountId: "", accessId: "a1", kind: .text, name: "Wi-Fi for guests", notes: nil,

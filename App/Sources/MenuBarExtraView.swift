@@ -637,23 +637,33 @@ private struct QuickActions: View {
     }
 }
 
-/// A fresh password or passphrase: switch the kind, regenerate, copy. Works while the vault is locked (nothing here
-/// touches the vault). The dice opens the same generator popover as a password field, with every option; both share
-/// the saved settings and the Password / Passphrase choice, so what you tune there is what this card makes.
+/// A fresh password, passphrase or PIN: switch the kind, regenerate, copy. Works while the vault is locked (nothing
+/// here touches the vault). The dice opens the same generator popover as a password field, with every option; both
+/// share the saved settings and the kind, so what you tune there is what this card makes. SSH keys stay on the
+/// Generator page, where there is room to show the public key and save the pair.
 private struct GeneratorCard: View {
     @Environment(AppModel.self) private var model
     @AppStorage("generatorMode") private var storedMode = GeneratorView.Mode.password.rawValue
     @AppStorage("generator") private var storedPassword = Data()
     @AppStorage("passphraseGenerator") private var storedPassphrase = Data()
+    @AppStorage("pinGenerator") private var storedPIN = Data()
     @State private var value = ""
     @State private var showGenerator = false
 
-    private var passphrase: Bool { storedMode == GeneratorView.Mode.passphrase.rawValue }
+    private static let kinds: [GeneratorView.Mode] = [.password, .passphrase, .pin]
+    /// Username and SSH key (chosen on the page) show as Password here.
+    private var kind: GeneratorView.Mode {
+        let mode = GeneratorView.Mode(rawValue: storedMode) ?? .password
+        return Self.kinds.contains(mode) ? mode : .password
+    }
     private var password: PasswordGenerator {
         (try? JSONDecoder().decode(PasswordGenerator.self, from: storedPassword)) ?? PasswordGenerator()
     }
     private var phrase: PassphraseGenerator {
         (try? JSONDecoder().decode(PassphraseGenerator.self, from: storedPassphrase)) ?? PassphraseGenerator()
+    }
+    private var pin: PINGenerator {
+        (try? JSONDecoder().decode(PINGenerator.self, from: storedPIN)) ?? PINGenerator()
     }
 
     var body: some View {
@@ -662,12 +672,6 @@ private struct GeneratorCard: View {
                 HStack(spacing: 8) {
                     Text("Generator").font(.system(size: 12, weight: .semibold)).foregroundStyle(.secondary)
                     Spacer()
-                    AppSegmented(options: [(false, LocalizedStringKey("Password")), (true, "Passphrase")],
-                                 selection: Binding(get: { passphrase },
-                                                    set: { storedMode = ($0 ? GeneratorView.Mode.passphrase : .password).rawValue }))
-                        .accessibilityLabel(Text("Generator"))
-                        .frame(width: 190)
-                        .controlSize(.small)
                     Button { showGenerator = true } label: {
                         Image(systemName: "dice").font(.system(size: 12, weight: .medium))
                             .foregroundStyle(showGenerator ? Color.primary : .secondary)
@@ -678,24 +682,33 @@ private struct GeneratorCard: View {
                     .help(Text("Generator options: length, characters and more"))
                     .accessibilityLabel(Text("Generator options"))
                     .popover(isPresented: $showGenerator, arrowEdge: .trailing) {
-                        GeneratorView(modes: [.password, .passphrase], compact: true) { generated in
+                        GeneratorView(modes: Self.kinds, compact: true) { generated in
                             withAnimation(.snappy) { value = generated }
                             showGenerator = false
                         }
                     }
                 }
-                ColoredSecret(value: value, separator: passphrase ? phrase.separator : nil)
+                // Its own row: three kinds side by side need the card's full width (and longer words in other languages).
+                AppSegmented(options: Self.kinds.map { ($0, $0.title) },
+                             selection: Binding(get: { kind }, set: { storedMode = $0.rawValue }))
+                    .accessibilityLabel(Text("Generator"))
+                    .controlSize(.small)
+                ColoredSecret(value: value, separator: kind == .passphrase ? phrase.separator : nil)
                     .font(.system(size: 13, design: .monospaced))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     // Name first: VoiceOver on macOS reads a value before the name.
-                    .accessibilityLabel((passphrase ? Text("Generated passphrase") : Text("Generated password")) + Text(verbatim: ", \(value)"))
+                    .accessibilityLabel(generatedName + Text(verbatim: ", \(value)"))
                     .accessibilityAddTraits(.isStaticText)
                 HStack(spacing: 6) {
-                    StrengthMeter(bits: passphrase ? phrase.entropyBits : password.entropyBits)
+                    if kind == .pin {
+                        Text("\(value.count) digits").font(.system(size: 11)).foregroundStyle(.secondary)
+                    } else {
+                        StrengthMeter(bits: kind == .passphrase ? phrase.entropyBits : password.entropyBits)
+                    }
                     Spacer(minLength: 8)
-                    CopyIcon(symbol: "arrow.clockwise", help: "Regenerate password") { regenerate() }
-                    CopyIcon(symbol: "doc.on.doc", help: passphrase ? "Copy generated passphrase" : "Copy generated password") {
-                        model.copy(value, label: passphrase ? String(localized: "Passphrase") : String(localized: "Password"))
+                    CopyIcon(symbol: "arrow.clockwise", help: regenerateHelp) { regenerate() }
+                    CopyIcon(symbol: "doc.on.doc", help: copyHelp) {
+                        model.copy(value, label: GeneratorView.copyLabel(kind: kind.rawValue))
                     }
                 }
             }
@@ -703,12 +716,41 @@ private struct GeneratorCard: View {
         .onAppear(perform: regenerate)
         .onChange(of: storedMode) { regenerate() }
         // Options changed in the popover (or the Generator page): follow them.
-        .onChange(of: storedPassword) { if !passphrase { regenerate() } }
-        .onChange(of: storedPassphrase) { if passphrase { regenerate() } }
+        .onChange(of: storedPassword) { if kind == .password { regenerate() } }
+        .onChange(of: storedPassphrase) { if kind == .passphrase { regenerate() } }
+        .onChange(of: storedPIN) { if kind == .pin { regenerate() } }
+    }
+
+    private var generatedName: Text {
+        switch kind {
+        case .passphrase: Text("Generated passphrase")
+        case .pin: Text("Generated PIN")
+        default: Text("Generated password")
+        }
+    }
+    private var regenerateHelp: LocalizedStringKey {
+        switch kind {
+        case .passphrase: "Regenerate passphrase"
+        case .pin: "Regenerate PIN"
+        default: "Regenerate password"
+        }
+    }
+    private var copyHelp: LocalizedStringKey {
+        switch kind {
+        case .passphrase: "Copy generated passphrase"
+        case .pin: "Copy generated PIN"
+        default: "Copy generated password"
+        }
     }
 
     private func regenerate() {
-        withAnimation(.snappy) { value = passphrase ? phrase.generate() : password.generate() }
+        withAnimation(.snappy) {
+            switch kind {
+            case .passphrase: value = phrase.generate()
+            case .pin: value = pin.generate()
+            default: value = password.generate()
+            }
+        }
     }
 }
 

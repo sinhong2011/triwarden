@@ -61,4 +61,36 @@ import Testing
         u.domain = "localhost"
         #expect(u.generate() == nil)
     }
+
+    @Test func pinIsDigitsOfTheChosenLength() {
+        var g = PINGenerator()
+        #expect(g.length == 6 && g.avoidPatterns)
+        for length in [4, 6, 8, 16] {
+            g.length = length
+            let pin = g.generate()
+            #expect(pin.count == length && pin.allSatisfy { $0.isASCII && $0.isNumber })
+        }
+        g.length = 2
+        #expect(g.generate().count == 4) // clamped
+        g.length = 40
+        #expect(g.generate().count == 16)
+    }
+
+    @Test func pinAvoidsEasyPatterns() {
+        #expect(PINGenerator.hasPattern([1, 2, 3, 9]))
+        #expect(PINGenerator.hasPattern([5, 9, 8, 7]))
+        #expect(PINGenerator.hasPattern([0, 4, 4, 4]))
+        #expect(!PINGenerator.hasPattern([1, 3, 5, 7]))
+        #expect(!PINGenerator.hasPattern([9, 0, 1, 5])) // no wrap-around
+        var g = PINGenerator()
+        g.length = 8
+        for _ in 0..<500 {
+            #expect(!PINGenerator.hasPattern(g.generate().compactMap { $0.wholeNumberValue }))
+        }
+    }
+
+    @Test func pinSettingsDecodeFromOlderOrPartialJSON() throws {
+        let g = try JSONDecoder().decode(PINGenerator.self, from: Data(#"{"length":8}"#.utf8))
+        #expect(g.length == 8 && g.avoidPatterns)
+    }
 }

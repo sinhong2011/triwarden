@@ -8,7 +8,18 @@ public struct SSHKeyPair: Sendable, Equatable {
     public let fingerprint: String
 
     public static func generateEd25519(comment: String = "") -> SSHKeyPair {
-        let key = Curve25519.Signing.PrivateKey()
+        ed25519(key: Curve25519.Signing.PrivateKey(), comment: comment)
+    }
+
+    /// The same key with a different comment (the comment is stored in both halves).
+    public static func ed25519(seed: Data, comment: String = "") throws -> SSHKeyPair {
+        try ed25519(key: Curve25519.Signing.PrivateKey(rawRepresentation: seed), comment: comment)
+    }
+
+    /// A fresh 32-byte Ed25519 seed, to hold while a comment is still being typed.
+    public static func newEd25519Seed() -> Data { Curve25519.Signing.PrivateKey().rawRepresentation }
+
+    static func ed25519(key: Curve25519.Signing.PrivateKey, comment: String) -> SSHKeyPair {
         let pub = key.publicKey.rawRepresentation
         let pubBlob = sshString("ssh-ed25519") + sshString(pub)
 
