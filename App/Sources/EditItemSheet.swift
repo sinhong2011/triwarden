@@ -983,51 +983,104 @@ struct EditItemSheet: View {
     }
 
     @ViewBuilder private var sshSection: some View {
+        let hasKey = !(props["privateKey"] ?? "").isEmpty
         FormCard(title: "Key") {
             FormField(label: "Private key") {
-                if showSecrets || (props["privateKey"] ?? "").isEmpty {
-                    SoftEditor(text: binding("privateKey"), minHeight: 150, monospaced: true,
-                               prompt: "-----BEGIN OPENSSH PRIVATE KEY-----\nPaste a key, or generate one below.")
-                } else {
-                    Text(verbatim: "•••••••• OpenSSH private key ••••••••")
-                        .font(.system(size: 12, design: .monospaced)).foregroundStyle(.secondary)
-                        .padding(.horizontal, 12).frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
-                        .background(Color.formInputFill, in: .rect(cornerRadius: 9, style: .continuous))
-                        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
-                }
-                Button("Import SSH Key…", systemImage: "square.and.arrow.down") { choosingSSHKey = true }
-                    .buttonStyle(.appSecondary)
+                VStack(alignment: .leading, spacing: 10) {
+                    if !hasKey || showSecrets {
+                        SoftEditor(text: binding("privateKey"), minHeight: hasKey ? 150 : 110, monospaced: true,
+                                   prompt: "-----BEGIN OPENSSH PRIVATE KEY-----\nPaste a key, or generate one below.")
+                    } else {
+                        hiddenPrivateKey
+                    }
+                    // One row of tools under the field. With a key in place they fold into a Replace menu, so the key
+                    // that is there can't be swapped out by a stray click.
+                    HStack(spacing: 8) {
+                        if hasKey {
+                            Menu {
+                                Button("Generate Ed25519 Key", systemImage: "wand.and.stars", action: generateSSHKey)
+                                Button("Import SSH Key…", systemImage: "square.and.arrow.down") { choosingSSHKey = true }
+                            } label: {
+                                Label("Replace Key", systemImage: "arrow.triangle.2.circlepath")
+                            }
+                            .menuStyle(.button)
+                            .buttonStyle(.appSecondarySmall)
+                            .menuIndicator(.hidden)
+                            .fixedSize()
+                        } else {
+                            Button("Generate Ed25519 Key", systemImage: "wand.and.stars", action: generateSSHKey)
+                                .buttonStyle(.appSecondarySmall)
+                            Button("Import SSH Key…", systemImage: "square.and.arrow.down") { choosingSSHKey = true }
+                                .buttonStyle(.appSecondarySmall)
+                        }
+                        Spacer(minLength: 0)
+                    }
                     .fileImporter(isPresented: $choosingSSHKey, allowedContentTypes: [.item]) { result in
                         guard case .success(let url) = result else { return }
-                        let access = url.startAccessingSecurityScopedResource()
-                        defer { if access { url.stopAccessingSecurityScopedResource() } }
-                        do {
-                            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-                            guard size <= 1_048_576 else { throw SSHPrivateKey.Failure.malformed }
-                            let data = try Data(contentsOf: url)
-                            guard data.count <= 1_048_576, let pem = String(data: data, encoding: .utf8) else {
-                                throw SSHPrivateKey.Failure.malformed
-                            }
-                            let key = try SSHPrivateKey(pem: pem)
-                            props["privateKey"] = pem
-                            props["publicKey"] = "\(key.type) \(key.publicBlob.base64EncodedString()) \(key.comment)"
-                            props["keyFingerprint"] = key.fingerprint
-                            sshImportError = nil
-                        } catch { sshImportError = String(localized: "Choose a UTF-8, unencrypted private key smaller than 1 MB.") }
+                        importSSHKey(from: url)
                     }
-                if let sshImportError { Text(sshImportError).font(.caption).foregroundStyle(.red) }
-                Button("Generate Ed25519 Key", systemImage: "wand.and.stars") {
-                    let pair = SSHKeyPair.generateEd25519(comment: name.isEmpty ? "" : name)
-                    props["privateKey"] = pair.privateKey
-                    props["publicKey"] = pair.publicKey
-                    props["keyFingerprint"] = pair.fingerprint
+                    if let sshImportError { Text(sshImportError).font(.caption).foregroundStyle(.red) }
                 }
-                .buttonStyle(.appSecondary)
-                .padding(.top, 2)
             }
             prop("Public key", "publicKey", monospaced: true)
             prop("Fingerprint", "keyFingerprint", monospaced: true)
         }
+    }
+
+    /// The private key while it's hidden: what kind of key it is, in the same 38 pt field as the rest of the form.
+    private var hiddenPrivateKey: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "key.horizontal").font(.system(size: 12)).foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            Text("\(sshKeyKind) private key").foregroundStyle(.primary)
+            Text(verbatim: "·").foregroundStyle(.tertiary)
+            Text("Hidden").foregroundStyle(.secondary)
+            Spacer(minLength: 0)
+        }
+        .font(.system(size: 13))
+        .lineLimit(1)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, minHeight: 38, alignment: .leading)
+        .background(Color.formInputFill, in: .rect(cornerRadius: 9, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(Color(nsColor: .separatorColor)))
+        .accessibilityElement(children: .combine)
+    }
+
+    /// "Ed25519", "RSA", "ECDSA" from the public key's type, or "OpenSSH" when it isn't known.
+    private var sshKeyKind: String {
+        let type = (props["publicKey"] ?? "").split(separator: " ").first.map(String.init) ?? ""
+        switch type {
+        case "ssh-ed25519": return "Ed25519"
+        case "ssh-rsa": return "RSA"
+        case _ where type.hasPrefix("ecdsa-"): return "ECDSA"
+        default: return "OpenSSH"
+        }
+    }
+
+    private func generateSSHKey() {
+        let pair = SSHKeyPair.generateEd25519(comment: name.isEmpty ? "" : name)
+        props["privateKey"] = pair.privateKey
+        props["publicKey"] = pair.publicKey
+        props["keyFingerprint"] = pair.fingerprint
+        sshImportError = nil
+    }
+
+    private func importSSHKey(from url: URL) {
+        let access = url.startAccessingSecurityScopedResource()
+        defer { if access { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
+            guard size <= 1_048_576 else { throw SSHPrivateKey.Failure.malformed }
+            let data = try Data(contentsOf: url)
+            guard data.count <= 1_048_576, let pem = String(data: data, encoding: .utf8) else {
+                throw SSHPrivateKey.Failure.malformed
+            }
+            let key = try SSHPrivateKey(pem: pem)
+            props["privateKey"] = pem
+            props["publicKey"] = "\(key.type) \(key.publicBlob.base64EncodedString()) \(key.comment)"
+            props["keyFingerprint"] = key.fingerprint
+            sshImportError = nil
+        } catch { sshImportError = String(localized: "Choose a UTF-8, unencrypted private key smaller than 1 MB.") }
     }
 
     @ViewBuilder private var customFieldsSection: some View {
