@@ -31,7 +31,7 @@
   <img src="promo/public/shots/vault-dark.png" width="820" alt="La bóveda de Triwarden en tema oscuro">
 </p>
 
-> Esta traducción se sincronizó con el [README en inglés](README.md) el 6 de noviembre de 2026. La versión inglesa mantiene la lista completa de funciones y detalles técnicos.
+> Esta traducción se sincronizó con el [README en inglés](README.md) el 22 de noviembre de 2026. La versión inglesa mantiene la lista completa de funciones y detalles técnicos.
 
 > **Estado:** Triwarden aún está en sus primeras versiones (0.x). Funciona con cuentas reales de Vaultwarden y Bitwarden
 > y se prueba con ambos servicios, pero recomendamos mantener tu cliente habitual hasta la versión 1.0. Las capturas usan la bóveda de demostración incluida.
@@ -55,7 +55,7 @@ El botón superior descarga directamente el DMG más reciente, firmado y notariz
 
 **Sin conexión:** puedes desbloquear y consultar la bóveda cifrada guardada en este Mac. Crear, editar, importar y eliminar elementos requiere conexión con el servidor; los cambios no quedan en espera para enviarse después.
 
-**Compilaciones oficiales y licencia de pago:** todas las funciones siguen siendo gratuitas y sin límite de tiempo para uso personal. Usar una compilación oficial con cuentas de trabajo requiere una licencia de pago único por persona, válida en todos sus Mac. Consulta las [condiciones de la licencia de pago](docs/LICENSE-TERMS.md).
+**Compilaciones oficiales y licencia de pago:** para uso personal, todas las funciones siguen disponibles sin licencia de pago y sin límite de tiempo. Pasados unos 30 días, una compilación oficial sin registrar puede mostrar al abrirse un recordatorio de compra, como mucho una vez por semana; una licencia de pago único lo elimina y es válida para una persona en todos sus Mac. Usar una compilación oficial con cuentas de trabajo requiere una licencia de pago por persona. Consulta las [condiciones de la licencia de pago](docs/LICENSE-TERMS.md).
 
 ## Funciones
 
@@ -70,15 +70,15 @@ El botón superior descarga directamente el DMG más reciente, firmado y notariz
 
 - Usa la paleta de comandos desde cualquier aplicación para buscar un elemento, copiarlo o escribir automáticamente el nombre de usuario y la contraseña.
 - Configura atajos globales y usa la barra de menús para acceder a inicios de sesión relacionados, códigos de un solo uso y el generador.
-- Las extensiones de Safari, Chrome, Edge, Brave y Firefox rellenan y guardan inicios de sesión después de aprobarlos en la aplicación. Las llaves de acceso usan el autorrelleno del sistema de macOS; la extensión del navegador aún no gestiona el inicio con llaves de acceso.
+- La extensión del navegador rellena y guarda inicios de sesión después de aprobarlos en la aplicación: Safari, Chrome, Edge, Brave, Arc y Firefox, además de Vivaldi, Opera, Helium, Zen, LibreWolf y la mayoría de los navegadores basados en Chromium o Firefox (se conectan desde Ajustes). En los formularios de registro sugiere una contraseña segura y tu correo o una dirección privada `tu+etiqueta@`, y luego pregunta «¿Guardar este inicio de sesión?» en la propia página. Las llaves de acceso usan el autorrelleno del sistema de macOS; la extensión del navegador aún no gestiona el inicio con llaves de acceso.
 
 **Integración con macOS y herramientas de seguridad**
 
 - El autorrelleno del sistema admite contraseñas, llaves de acceso y códigos de un solo uso. Desbloquea con Touch ID o PIN.
 - Los secretos copiados se borran automáticamente del portapapeles. El agente SSH puede firmar commits de Git con las claves SSH de la bóveda.
 - Triwarden puede ocultarse de capturas, grabaciones y pantalla compartida. Los servidores autohospedados pueden usar una CA privada y encabezados adicionales como los de Cloudflare Access.
-- Watchtower detecta contraseñas débiles, reutilizadas, filtradas o inseguras, y sitios donde aún no has activado la verificación en dos pasos.
-- Verificación en dos pasos, gestión de dispositivos, acceso de emergencia, Send, generadores de contraseñas y nombres de usuario, y numerosos formatos de importación y exportación.
+- Watchtower detecta contraseñas débiles, reutilizadas, filtradas o inseguras, y sitios donde aún no has activado la verificación en dos pasos. Las contraseñas reutilizadas se resuelven con una limpieza guiada: eliges el inicio de sesión que conservas y cambias o eliminas los demás.
+- Verificación en dos pasos, gestión de dispositivos, acceso de emergencia, Send, generadores de contraseñas y nombres de usuario, y numerosos formatos de importación y exportación, incluida una base de datos KeePass (.kdbx) protegida con contraseña que se abre en KeePassXC, KeePassium y Strongbox.
 
 Consulta el [README en inglés](README.md) y la [hoja de ruta](docs/ROADMAP.md) para ver todas las funciones y limitaciones.
 
