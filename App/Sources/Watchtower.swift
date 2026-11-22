@@ -129,7 +129,8 @@ struct WatchtowerReport {
     }
 
     /// Groups the logins that share a password within one account (as the sync counts reuse), biggest group first,
-    /// each in name order. One pass over the logins; the passwords are only dictionary keys here.
+    /// each in name order. A group that is only copies of one login is left to Duplicate logins. One pass over the
+    /// logins; the passwords are only dictionary keys here.
     static func reuseGroups(_ logins: [VaultItem]) -> [ReuseGroup] {
         var byPassword: [String: [VaultItem]] = [:]
         for item in logins {
@@ -138,6 +139,8 @@ struct WatchtowerReport {
         }
         return byPassword.values.compactMap { group -> ReuseGroup? in
             guard group.count > 1 else { return nil }
+            // One login saved more than once isn't reuse to fix here: Duplicate logins keeps one and trashes the rest.
+            if let key = duplicateKey(group[0]), group.allSatisfy({ duplicateKey($0) == key }) { return nil }
             let sorted = group.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
             return ReuseGroup(id: group.map(\.id).min()!, items: sorted)
         }
@@ -153,16 +156,19 @@ struct WatchtowerReport {
 
     /// Logins saved more than once: the same site and username in the same vault, newest first in each group.
     static func duplicateGroups(_ logins: [VaultItem]) -> [[VaultItem]] {
-        let keyed = Dictionary(grouping: logins.filter { !$0.isArchived }) { item -> String? in
-            guard let host = item.host?.lowercased(), let user = item.username?.lowercased(), !user.isEmpty else { return nil }
-            let site = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-            return [item.organizationId ?? item.accountId, site, user].joined(separator: "\u{1F}")
-        }
+        let keyed = Dictionary(grouping: logins.filter { !$0.isArchived }, by: duplicateKey)
         return keyed.compactMap { key, group in
             key == nil || group.count < 2 ? nil
                 : group.sorted { ($0.revised ?? .distantPast) > ($1.revised ?? .distantPast) }
         }
         .sorted { $0[0].name.localizedStandardCompare($1[0].name) == .orderedAscending }
+    }
+
+    /// The same login, in the same vault: its site (without www.) and username. Nil without both.
+    static func duplicateKey(_ item: VaultItem) -> String? {
+        guard let host = item.host?.lowercased(), let user = item.username?.lowercased(), !user.isEmpty else { return nil }
+        let site = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        return [item.organizationId ?? item.accountId, site, user].joined(separator: "\u{1F}")
     }
 
     var problemCount: Int { Set(issues.filter { !$0.key.isAdvisory }.values.flatMap { $0.map(\.id) }).count }
@@ -172,12 +178,16 @@ struct WatchtowerReport {
     /// advisory (breached, reused, weak, insecure), counted once per item.
     static func countProblems(in items: [VaultItem], breaches: [String: Int]?) -> Int {
         var ids = Set<String>()
+        var sharing: [VaultItem] = []
         for item in items where !item.isDeleted && item.kind == .login {
             guard let pw = item.password else { continue }
-            if (breaches?[item.id] ?? 0) > 0 || item.reuseCount > 0 || Self.isWeak(pw) || item.websites.contains(where: Self.isInsecure) {
+            if (breaches?[item.id] ?? 0) > 0 || Self.isWeak(pw) || item.websites.contains(where: Self.isInsecure) {
                 ids.insert(item.id)
             }
+            if item.reuseCount > 0 { sharing.append(item) } // all of them: a weak one's partner still counts
         }
+        // Reuse as the report groups it (copies of one login don't count), over only the logins that share a password.
+        for group in reuseGroups(sharing) { ids.formUnion(group.items.map(\.id)) }
         return ids.count
     }
 
@@ -286,8 +296,9 @@ struct WatchtowerView: View {
         .onChange(of: model.watchtowerFocus, initial: true) { _, id in
             guard let id, let item = model.items.first(where: { $0.id == id }) else { return }
             model.watchtowerFocus = nil
-            let issue = item.passwordIssue(breaches: model.breachCounts)
-                ?? WatchtowerReport.Issue.allCases.first { report.issues[$0]?.contains(where: { $0.id == id }) == true }
+            let listed = { (issue: WatchtowerReport.Issue) in report.issues[issue]?.contains(where: { $0.id == id }) == true }
+            let issue = item.passwordIssue(breaches: model.breachCounts).flatMap { listed($0) ? $0 : nil }
+                ?? WatchtowerReport.Issue.allCases.first(where: listed)
             guard let issue else { return }
             if issue == .reused { showAllReuse = true } // its group may be past the first few
             Task { @MainActor in
