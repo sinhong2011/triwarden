@@ -691,8 +691,9 @@ private struct BrowserSettings: View {
     /// What the row says about the connection: a green check and "Connected" once the browser's extension has reached
     /// Triwarden (with when), a note when it was connected but the app has moved, otherwise nothing.
     @ViewBuilder private func status(_ state: NativeHost.State, seen: CLIBridge.Seen?, openedStore: Bool) -> some View {
+        // Not installed: nothing here, the "Not installed" section header already says so.
         if state == .notInstalled {
-            Text("Not installed").font(.caption).foregroundStyle(.tertiary)
+            EmptyView()
         } else if let seen, state != .notConnected, !{ if case .movedApp = state { true } else { false } }() {
             Label {
                 Text("Connected · last used \(seen.date.formatted(.relative(presentation: .named)))")
