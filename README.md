@@ -104,14 +104,18 @@ accounts requires one paid key per person. See [paid license terms](docs/LICENSE
   prefer.
 - Copied secrets clear themselves from the clipboard, with a countdown in the window's footer.
 - An SSH agent backed by your vault's SSH keys (sign git commits too).
-- A browser extension for Safari, Chrome, Edge, Brave and Firefox that fills and saves logins with approval in the app.
+- A browser extension that fills and saves logins with approval in the app: Safari, Chrome, Edge, Brave, Arc and
+  Firefox, plus Vivaldi, Opera, Helium, Zen, LibreWolf and most other Chromium- or Firefox-based browsers
+  (connect them in Settings). On sign-up forms it suggests a strong password and your email or a private
+  `you+tag@` address, then asks "Save this login?" in the page.
   Passkey sign-in uses macOS System AutoFill; it is not yet handled by the browser extension.
 - App Intents and Shortcuts; a `tw` command-line tool; and an option to hide Triwarden from screenshots, recordings and screen sharing.
 
 **Security tools**
 - Watchtower: weak, reused, breached and unsecured (http://) passwords, and sites that offer two-step login you
   haven't set up (k-anonymity for breaches; nothing leaves in the clear). The list marks each item's issue, and
-  "Change on Site" opens the site's own change-password page.
+  "Change on Site" opens the site's own change-password page. Reused passwords become a guided cleanup: pick the
+  login to keep, then change or remove the rest.
 - Account security: fingerprint phrase, two-step login (authenticator app, email, recovery code), change the master
   password or KDF, devices, sign out everywhere, and approve sign-ins from your other devices.
 - Emergency access: trusted contacts who can view or take over your vault after a wait you choose.
@@ -119,7 +123,8 @@ accounts requires one paid key per person. See [paid license terms](docs/LICENSE
 - Send: share text or files with an encrypted link; edit it later and keep the same link.
 - Self-hosted-server support for private certificate authorities and extra request headers such as Cloudflare Access tokens.
 - Import from Bitwarden, 1Password, LastPass, KeePass, Proton Pass, Dashlane, Apple Passwords, Chrome and Firefox;
-  export in Bitwarden's formats, including password-protected JSON.
+  export in Bitwarden's formats, including password-protected JSON, or as a password-protected KeePass (.kdbx)
+  database that opens in KeePassXC, KeePassium and Strongbox.
 
 <p align="center">
   <img src="docs/images/search.jpg" width="820" alt="One search over My vault and the Northwind shared vault at once, with filter chips, and Northwind's shared folders nested in the sidebar">
