@@ -520,6 +520,18 @@ private struct BrowserSettings: View {
     @State private var problem: String?
     /// Offer Open at login once when Browser is turned on and it is not already registered.
     @State private var askOpenAtLogin = false
+    @State private var showUninstalled = false
+
+    /// Installed browsers, listed or found, in alphabetical order.
+    private var installedBrowsers: [NativeHost.Browser] {
+        (NativeHost.browsers.filter { states[$0.id].map { $0 != .notInstalled } ?? false } + discovered + customBrowsers)
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    /// Listed browsers that aren't on this Mac.
+    private var uninstalledBrowsers: [NativeHost.Browser] {
+        NativeHost.browsers.filter { (states[$0.id] ?? .notInstalled) == .notInstalled }
+    }
 
     private var tool: String { CLIBridge.toolPath }
 
@@ -565,24 +577,23 @@ private struct BrowserSettings: View {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Safari-Extensions-Settings")!)
                     }
                 }
-                ForEach(NativeHost.browsers) { browser in
-                    row(browser)
-                }
-                ForEach(discovered) { browser in
-                    row(browser)
-                }
-                ForEach(customBrowsers) { browser in
-                    row(browser)
-                        .contextMenu {
-                            Button("Remove from List") { removeCustom(browser) }
-                        }
+                // The browsers on this Mac first, by name, whether Triwarden lists them or found them.
+                ForEach(installedBrowsers) { browser in
+                    if customBrowsers.contains(browser) {
+                        row(browser)
+                            .contextMenu {
+                                Button("Remove from List") { removeCustom(browser) }
+                            }
+                    } else {
+                        row(browser)
+                    }
                 }
                 LabeledContent {
                     Button("Choose Folder…") { connectByProfileFolder(nil) }
                         .disabled(!browserEnabled)
                 } label: {
-                    Text("Another Chromium browser")
-                    Text("Not listed above? Pick its folder in Application Support.")
+                    Text("Browser not listed?")
+                    Text("For a Chromium-based browser, pick its folder in Application Support.")
                 }
                 if let problem {
                     Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(.caption)
@@ -592,6 +603,17 @@ private struct BrowserSettings: View {
             } footer: {
                 Text("Install the extension from the browser’s store, then press Connect: Triwarden asks you to confirm the browser’s folder and adds one small file there. Safari needs no setup beyond turning Triwarden on in Safari. Other browsers, like Vivaldi, Helium or LibreWolf, show up here when they're installed. A browser shows Connected once its extension has reached Triwarden. Press Connect again if you move Triwarden.")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+
+            // Supported browsers that aren't on this Mac, folded away so they don't push the real ones down.
+            if !uninstalledBrowsers.isEmpty {
+                Section(isExpanded: $showUninstalled) {
+                    ForEach(uninstalledBrowsers) { browser in
+                        row(browser)
+                    }
+                } header: {
+                    Text("Not installed (\(uninstalledBrowsers.count))")
+                }
             }
         }
         .formStyle(.grouped)
