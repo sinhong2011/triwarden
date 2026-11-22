@@ -89,6 +89,16 @@ struct WatchtowerReport {
 
     let logins: [VaultItem]
     let issues: [Issue: [VaultItem]]
+    /// Logins that share a password, grouped; `issues[.reused]` lists the same items in this order.
+    let reuseGroups: [ReuseGroup]
+
+    /// Logins in one vault account with the same password. The password itself stays out of it: the group is known
+    /// by an opaque, stable ID (its lowest item ID), and nothing here is shown or kept beyond the report.
+    struct ReuseGroup: Identifiable, Equatable {
+        let id: String
+        let items: [VaultItem]
+        static func == (a: Self, b: Self) -> Bool { a.id == b.id && a.items.map(\.id) == b.items.map(\.id) }
+    }
 
     /// `twoFactor`: sites that offer one-time codes (2fa.directory), by domain, with their setup guide.
     init(items: [VaultItem], breaches: [String: Int]?, twoFactor: [String: URL] = [:]) {
@@ -97,7 +107,6 @@ struct WatchtowerReport {
         for item in logins {
             guard let pw = item.password else { continue }
             if let n = breaches?[item.id], n > 0 { issues[.breached, default: []].append(item) }
-            if item.reuseCount > 0 { issues[.reused, default: []].append(item) }
             if Self.isWeak(pw) { issues[.weak, default: []].append(item) }
             if item.websites.contains(where: Self.isInsecure) { issues[.insecure, default: []].append(item) }
             if item.totp == nil, !item.hasPasskey, let host = item.host, Self.guide(for: host, in: twoFactor) != nil {
@@ -113,7 +122,32 @@ struct WatchtowerReport {
         if !old.isEmpty { issues[.oldPassword] = old }
         let duplicates = Self.duplicateGroups(logins).flatMap { $0 }
         if !duplicates.isEmpty { issues[.duplicate] = duplicates }
+        reuseGroups = Self.reuseGroups(logins)
+        let reused = reuseGroups.flatMap(\.items)
+        if !reused.isEmpty { issues[.reused] = reused }
         self.issues = issues
+    }
+
+    /// Groups the logins that share a password within one account (as the sync counts reuse), biggest group first,
+    /// each in name order. A group that is only copies of one login is left to Duplicate logins. One pass over the
+    /// logins; the passwords are only dictionary keys here.
+    static func reuseGroups(_ logins: [VaultItem]) -> [ReuseGroup] {
+        var byPassword: [String: [VaultItem]] = [:]
+        for item in logins {
+            guard let pw = item.password, !pw.isEmpty else { continue }
+            byPassword[item.accountId + "\u{1F}" + pw, default: []].append(item)
+        }
+        return byPassword.values.compactMap { group -> ReuseGroup? in
+            guard group.count > 1 else { return nil }
+            // One login saved more than once isn't reuse to fix here: Duplicate logins keeps one and trashes the rest.
+            if let key = duplicateKey(group[0]), group.allSatisfy({ duplicateKey($0) == key }) { return nil }
+            let sorted = group.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            return ReuseGroup(id: group.map(\.id).min()!, items: sorted)
+        }
+        .sorted { a, b in
+            a.items.count != b.items.count ? a.items.count > b.items.count
+                : a.items[0].name.localizedStandardCompare(b.items[0].name) == .orderedAscending
+        }
     }
 
     /// Cards that expire before this are worth a word.
@@ -122,16 +156,19 @@ struct WatchtowerReport {
 
     /// Logins saved more than once: the same site and username in the same vault, newest first in each group.
     static func duplicateGroups(_ logins: [VaultItem]) -> [[VaultItem]] {
-        let keyed = Dictionary(grouping: logins.filter { !$0.isArchived }) { item -> String? in
-            guard let host = item.host?.lowercased(), let user = item.username?.lowercased(), !user.isEmpty else { return nil }
-            let site = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
-            return [item.organizationId ?? item.accountId, site, user].joined(separator: "\u{1F}")
-        }
+        let keyed = Dictionary(grouping: logins.filter { !$0.isArchived }, by: duplicateKey)
         return keyed.compactMap { key, group in
             key == nil || group.count < 2 ? nil
                 : group.sorted { ($0.revised ?? .distantPast) > ($1.revised ?? .distantPast) }
         }
         .sorted { $0[0].name.localizedStandardCompare($1[0].name) == .orderedAscending }
+    }
+
+    /// The same login, in the same vault: its site (without www.) and username. Nil without both.
+    static func duplicateKey(_ item: VaultItem) -> String? {
+        guard let host = item.host?.lowercased(), let user = item.username?.lowercased(), !user.isEmpty else { return nil }
+        let site = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        return [item.organizationId ?? item.accountId, site, user].joined(separator: "\u{1F}")
     }
 
     var problemCount: Int { Set(issues.filter { !$0.key.isAdvisory }.values.flatMap { $0.map(\.id) }).count }
@@ -141,12 +178,16 @@ struct WatchtowerReport {
     /// advisory (breached, reused, weak, insecure), counted once per item.
     static func countProblems(in items: [VaultItem], breaches: [String: Int]?) -> Int {
         var ids = Set<String>()
+        var sharing: [VaultItem] = []
         for item in items where !item.isDeleted && item.kind == .login {
             guard let pw = item.password else { continue }
-            if (breaches?[item.id] ?? 0) > 0 || item.reuseCount > 0 || Self.isWeak(pw) || item.websites.contains(where: Self.isInsecure) {
+            if (breaches?[item.id] ?? 0) > 0 || Self.isWeak(pw) || item.websites.contains(where: Self.isInsecure) {
                 ids.insert(item.id)
             }
+            if item.reuseCount > 0 { sharing.append(item) } // all of them: a weak one's partner still counts
         }
+        // Reuse as the report groups it (copies of one login don't count), over only the logins that share a password.
+        for group in reuseGroups(sharing) { ids.formUnion(group.items.map(\.id)) }
         return ids.count
     }
 
@@ -195,6 +236,8 @@ struct WatchtowerView: View {
     @State private var allClear = 0
     /// The row pointed out by an item's "Show in Watchtower".
     @State private var highlighted: String?
+    /// Every reused-password group, not just the first few.
+    @State private var showAllReuse = false
 
     var body: some View {
         let report = WatchtowerReport(items: model.vaultItems, breaches: model.breachCounts, twoFactor: directory)
@@ -203,7 +246,9 @@ struct WatchtowerView: View {
             VStack(alignment: .leading, spacing: 20) {
                 header(report)
                 ForEach(WatchtowerReport.Issue.allCases.filter { model.watchtowerIssueFilter == nil || $0 == model.watchtowerIssueFilter }, id: \.self) { issue in
-                    if let items = report.issues[issue], !items.isEmpty {
+                    if issue == .reused, !report.reuseGroups.isEmpty || !model.reuseFollowUps.isEmpty {
+                        ReusedCard(groups: report.reuseGroups, showAll: $showAllReuse, highlighted: highlighted, onOpen: onOpen)
+                    } else if let items = report.issues[issue], !items.isEmpty {
                         IssueCard(issue: issue, items: items, directory: directory, highlighted: highlighted, onOpen: onOpen)
                     }
                 }
@@ -214,7 +259,8 @@ struct WatchtowerView: View {
                         Button("Show All") { model.watchtowerIssueFilter = nil }
                     }
                     if report.issues[filter, default: []].isEmpty {
-                        Text(filter == .breached && model.breachCounts == nil ? "Run Checks to check for breached passwords." : "No issues found.")
+                        Text(filter == .breached && model.breachCounts == nil ? "Run Checks to check for breached passwords."
+                             : filter == .reused ? "No reused passwords. Every login has its own." : "No issues found.")
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -250,9 +296,11 @@ struct WatchtowerView: View {
         .onChange(of: model.watchtowerFocus, initial: true) { _, id in
             guard let id, let item = model.items.first(where: { $0.id == id }) else { return }
             model.watchtowerFocus = nil
-            let issue = item.passwordIssue(breaches: model.breachCounts)
-                ?? WatchtowerReport.Issue.allCases.first { report.issues[$0]?.contains(where: { $0.id == id }) == true }
+            let listed = { (issue: WatchtowerReport.Issue) in report.issues[issue]?.contains(where: { $0.id == id }) == true }
+            let issue = item.passwordIssue(breaches: model.breachCounts).flatMap { listed($0) ? $0 : nil }
+                ?? WatchtowerReport.Issue.allCases.first(where: listed)
             guard let issue else { return }
+            if issue == .reused { showAllReuse = true } // its group may be past the first few
             Task { @MainActor in
                 try? await Task.sleep(for: .milliseconds(250)) // after the page has laid out
                 withAnimation(.smooth(duration: 0.45)) { proxy.scrollTo(IssueCard.rowID(issue, id), anchor: .center) }
@@ -401,6 +449,205 @@ private struct IssueCard: View {
             [item.host, item.passwordSince.map { String(localized: "set \($0.formatted(.relative(presentation: .named)))") }]
                 .compactMap { $0 }.joined(separator: " · ")
         }
+    }
+}
+
+/// Reused passwords as a guided cleanup. Each group is the logins sharing one password: pick the one that keeps it,
+/// then give the others new passwords (here, then on their sites). The shared password is never shown, and nothing
+/// changes a password without its editor: the only bulk action is moving picked logins to Trash, after asking.
+private struct ReusedCard: View {
+    @Environment(AppModel.self) private var model
+    let groups: [WatchtowerReport.ReuseGroup]
+    @Binding var showAll: Bool
+    var highlighted: String?
+    var onOpen: (VaultItem) -> Void
+    /// The group picking logins to move to Trash, and what's picked in it.
+    @State private var selectingGroup: String?
+    @State private var selection: Set<String> = []
+
+    /// Groups shown before "Show All"; a large vault can have dozens.
+    static let firstGroups = 8
+
+    var body: some View {
+        let shown = showAll ? groups : Array(groups.prefix(Self.firstGroups))
+        let count = groups.reduce(0) { $0 + $1.items.count }
+        let pending = followUps
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: WatchtowerReport.Issue.reused.symbol).foregroundStyle(WatchtowerReport.Issue.reused.tint)
+                    .font(.system(size: 15, weight: .semibold))
+                Text(WatchtowerReport.Issue.reused.title).font(.system(size: 15, weight: .semibold))
+                if count > 0 {
+                    Text(verbatim: "\(count)").font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                        .padding(.horizontal, 7).padding(.vertical, 2)
+                        .background(WatchtowerReport.Issue.reused.tint.opacity(0.15), in: .capsule)
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 16).padding(.top, 14)
+            Text(groups.isEmpty ? "No reused passwords left. Put the new ones on each site below."
+                 : "One leak exposes every site that shares a password. In each group, keep one and give the others new passwords.")
+                .font(.system(size: 12)).foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 10)
+            if !pending.isEmpty { followUpSection(pending) }
+            ForEach(shown) { group in groupSection(group) }
+            if groups.count > shown.count {
+                Divider()
+                Button("Show All \(groups.count) Groups") { withAnimation(.snappy(duration: 0.3)) { showAll = true } }
+                    .buttonStyle(.borderless).font(.system(size: 12, weight: .medium))
+                    .padding(.horizontal, 16).frame(minHeight: 40)
+            }
+        }
+        .background(Color.panelStrong, in: .rect(cornerRadius: 16, style: .continuous))
+        .clipShape(.rect(cornerRadius: 16, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Color.panelEdge))
+        .animation(.snappy(duration: 0.3), value: groups)
+        .animation(.snappy(duration: 0.3), value: model.reuseKeepers)
+    }
+
+    /// Logins given a new password from here that have since left their group: their site still has the old one.
+    private var followUps: [VaultItem] {
+        let reused = Set(groups.flatMap { $0.items.map(\.id) })
+        return model.reuseFollowUps.compactMap { id in model.items.first { $0.id == id && !$0.isDeleted } }
+            .filter { !reused.contains($0.id) }
+    }
+
+    private func followUpSection(_ items: [VaultItem]) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Divider()
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Finish on each site").font(.system(size: 12, weight: .semibold))
+                Text("Saved here with a new password. Change it on the site too, then mark it done.")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 6)
+            ForEach(items) { item in
+                HStack(spacing: 12) {
+                    ItemIcon(item: item, size: 28)
+                    itemText(item)
+                    Spacer(minLength: 8)
+                    if let host = item.host, !host.isEmpty { ChangeOnSiteButton(host: host) }
+                    Button("Done") { withAnimation(.snappy(duration: 0.3)) { model.reuseFollowUps.removeAll { $0 == item.id } } }
+                        .buttonStyle(.appSecondarySmall)
+                        .help(Text("The site has the new password"))
+                }
+                .padding(.horizontal, 16).frame(minHeight: 48)
+            }
+        }
+    }
+
+    private func groupSection(_ group: WatchtowerReport.ReuseGroup) -> some View {
+        let keeper = group.items.first { model.reuseKeepers.contains($0.id) }
+        let selecting = selectingGroup == group.id
+        return VStack(alignment: .leading, spacing: 0) {
+            Divider()
+            HStack(spacing: 6) {
+                Text("\(group.items.count) logins share a password").font(.system(size: 12, weight: .semibold))
+                Text(keeper == nil ? "Pick the one to keep" : "Change the other \(group.items.count - 1)")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                if selecting {
+                    Button("Cancel") { selectingGroup = nil; selection = [] }
+                        .buttonStyle(.borderless).font(.system(size: 12))
+                    Button("Move \(selection.count) to Trash…") {
+                        model.confirmBulk(.trash, Array(selection)) { selectingGroup = nil; selection = [] }
+                    }
+                    .buttonStyle(.appSecondarySmall)
+                    .disabled(selection.isEmpty)
+                } else {
+                    Button("Select") { selectingGroup = group.id; selection = [] }
+                        .buttonStyle(.borderless).font(.system(size: 12)).foregroundStyle(.secondary)
+                        .help(Text("Pick logins in this group you no longer need, to move to Trash"))
+                }
+            }
+            .padding(.horizontal, 16).padding(.top, 12).padding(.bottom, 6)
+            ForEach(group.items) { item in
+                row(item, group: group, keeper: keeper, selecting: selecting)
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("reuseGroup")
+    }
+
+    private func row(_ item: VaultItem, group: WatchtowerReport.ReuseGroup, keeper: VaultItem?, selecting: Bool) -> some View {
+        let isKeeper = item.id == keeper?.id
+        return HStack(spacing: 12) {
+            if selecting {
+                Toggle(isOn: Binding(get: { selection.contains(item.id) },
+                                     set: { on in if on { selection.insert(item.id) } else { selection.remove(item.id) } })) {
+                    Text(item.name)
+                }
+                .toggleStyle(.checkbox).labelsHidden()
+                .disabled(isKeeper)
+                .help(isKeeper ? Text("You're keeping this one") : Text(verbatim: ""))
+            }
+            ItemIcon(item: item, size: 28)
+            itemText(item)
+            Spacer(minLength: 8)
+            if !selecting {
+                if isKeeper {
+                    keepingBadge
+                } else if keeper == nil {
+                    Button("Keep This One") { model.keepReused(item, group: group.items) }
+                        .buttonStyle(.appSecondarySmall)
+                        .help(Text("This login keeps the password; the others get new ones"))
+                } else {
+                    if let host = item.host, !host.isEmpty { ChangeOnSiteButton(host: host) }
+                    Button("New Password") { model.newPasswordForReused(item) }
+                        .buttonStyle(.appSecondarySmall)
+                        .help(Text("Make a new password with the generator and save it here"))
+                }
+                ActionMenu(entries: menu(item, group: group, isKeeper: isKeeper)) {
+                    Image(systemName: "ellipsis").font(.system(size: 12, weight: .semibold))
+                        .frame(width: 24, height: 24).contentShape(.rect)
+                        .foregroundStyle(.secondary)
+                }
+                .accessibilityLabel(Text("More"))
+            }
+        }
+        .padding(.horizontal, 16).frame(minHeight: 48)
+        .background(Color.primary.opacity(highlighted == IssueCard.rowID(.reused, item.id) ? 0.07 : 0))
+        .id(IssueCard.rowID(.reused, item.id))
+    }
+
+    /// Who this login is: its name, then its username and site. Never the password.
+    private func itemText(_ item: VaultItem) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(item.name).font(.system(size: 13, weight: .semibold)).lineLimit(1)
+            Text(verbatim: [item.username, item.host, item.isArchived ? String(localized: "Archived") : nil]
+                .compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · "))
+                .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+        }
+    }
+
+    /// The kept login's quiet mark: a monochrome outlined badge, like Access history's outcomes.
+    private var keepingBadge: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            Image(systemName: "checkmark").font(.system(size: 9, weight: .semibold)).accessibilityHidden(true)
+            Text("Keeping").font(.system(size: 10, weight: .medium)).lineLimit(1)
+        }
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .overlay { Capsule(style: .continuous).strokeBorder(.primary.opacity(0.12), lineWidth: 1) }
+        .fixedSize()
+    }
+
+    private func menu(_ item: VaultItem, group: WatchtowerReport.ReuseGroup, isKeeper: Bool) -> [ActionMenuEntry] {
+        var entries = [ActionMenuEntry(title: String(localized: "Show item"), symbol: "arrow.right.circle") { onOpen(item) }]
+        if let username = item.username, !username.isEmpty {
+            entries.append(ActionMenuEntry(title: String(localized: "Copy Username"), symbol: "person") { model.copyPlain(username) })
+        }
+        if !isKeeper {
+            entries.append(ActionMenuEntry(title: String(localized: "Keep This One"), symbol: "checkmark", separatorBefore: true) {
+                model.keepReused(item, group: group.items)
+            })
+            entries.append(ActionMenuEntry(title: String(localized: "New Password"), symbol: "dice") { model.newPasswordForReused(item) })
+        }
+        entries.append(ActionMenuEntry(title: String(localized: "Move to Trash…"), symbol: "trash", destructive: true, separatorBefore: true) {
+            model.confirmTrash(item)
+        })
+        return entries
     }
 }
 

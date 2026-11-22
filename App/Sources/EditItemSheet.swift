@@ -36,6 +36,8 @@ struct EditItemSheet: View {
         var organizationId: String? = nil
         var collectionIds: [String] = []
         var focusTOTP = false
+        /// Editing a login: open the password generator straight away (Watchtower's "New Password").
+        var openGenerator = false
         var importSSH = false
         var apiKey = false
         var practiceAPIKey = false
@@ -1219,6 +1221,8 @@ struct EditItemSheet: View {
             DispatchQueue.main.async { original = draft }
         }
         focus = prefill?.focusTOTP == true ? .totp : .name
+        // After the sheet has appeared, so the popover has its button to point at.
+        if prefill?.openGenerator == true { DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { showGenerator = true } }
         if let ids = prefill?.accountIDs {
             accountId = ids.count == 1 ? ids.first : nil
         } else { accountId = model.defaultAccountId }

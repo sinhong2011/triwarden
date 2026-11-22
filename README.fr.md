@@ -31,7 +31,7 @@
   <img src="promo/public/shots/vault-dark.png" width="820" alt="Le coffre de Triwarden en thème sombre">
 </p>
 
-> Cette traduction a été synchronisée avec le [README anglais](README.md) le 6 novembre 2026. La version anglaise conserve la liste complète des fonctions et détails techniques.
+> Cette traduction a été synchronisée avec le [README anglais](README.md) le 22 novembre 2026. La version anglaise conserve la liste complète des fonctions et détails techniques.
 
 > **État :** Triwarden est encore en version préliminaire (0.x). Il fonctionne avec de vrais comptes Vaultwarden et Bitwarden
 > et est testé avec les deux, mais nous vous conseillons de conserver votre client habituel jusqu’à la version 1.0. Les captures d’écran utilisent le coffre de démonstration intégré.
@@ -55,7 +55,7 @@ Le bouton ci-dessus télécharge directement le dernier DMG signé et notarié. 
 
 **Hors ligne :** vous pouvez déverrouiller et consulter le coffre chiffré enregistré sur ce Mac. La création, la modification, l’importation et la suppression d’éléments nécessitent une connexion au serveur ; les changements ne sont pas mis en attente.
 
-**Versions officielles et licence payante :** toutes les fonctions restent gratuites et sans limite de durée pour un usage personnel. L’utilisation d’une version officielle avec des comptes professionnels nécessite une licence définitive par personne, valable sur tous ses Mac. Consultez les [conditions de licence payante](docs/LICENSE-TERMS.md).
+**Versions officielles et licence payante :** pour un usage personnel, toutes les fonctions restent disponibles sans licence payante et sans limite de durée. Après environ 30 jours, une version officielle non enregistrée peut afficher un rappel d’achat au lancement, au plus une fois par semaine ; une licence définitive le supprime et couvre une personne sur tous ses Mac. L’utilisation d’une version officielle avec des comptes professionnels nécessite une licence payante par personne. Consultez les [conditions de licence payante](docs/LICENSE-TERMS.md).
 
 ## Fonctionnalités
 
@@ -70,15 +70,15 @@ Le bouton ci-dessus télécharge directement le dernier DMG signé et notarié. 
 
 - Depuis n’importe quelle app, utilisez la palette de commandes pour trouver un élément, le copier ou saisir automatiquement le nom d’utilisateur et le mot de passe.
 - Configurez des raccourcis globaux et utilisez la barre des menus pour retrouver les identifiants associés, codes à usage unique et générateur.
-- Les extensions Safari, Chrome, Edge, Brave et Firefox remplissent et enregistrent les identifiants après approbation dans l’app. Les clés d’accès utilisent le remplissage automatique de macOS ; l’extension de navigateur ne gère pas encore leur connexion.
+- L’extension de navigateur remplit et enregistre les identifiants après approbation dans l’app : Safari, Chrome, Edge, Brave, Arc et Firefox, ainsi que Vivaldi, Opera, Helium, Zen, LibreWolf et la plupart des autres navigateurs basés sur Chromium ou Firefox (à connecter dans les réglages). Sur les formulaires d’inscription, elle propose un mot de passe robuste et votre e-mail ou une adresse privée `vous+tag@`, puis demande « Enregistrer cet identifiant ? » directement dans la page. Les clés d’accès utilisent le remplissage automatique de macOS ; l’extension de navigateur ne gère pas encore leur connexion.
 
 **Intégration macOS et outils de sécurité**
 
 - Le remplissage automatique du système prend en charge les mots de passe, clés d’accès et codes à usage unique. Déverrouillez avec Touch ID ou un code PIN.
 - Les secrets copiés sont automatiquement effacés du presse-papiers. L’agent SSH peut signer des commits Git avec les clés SSH du coffre.
 - Triwarden peut être masqué des captures, enregistrements et partages d’écran. Les serveurs auto-hébergés peuvent utiliser une autorité de certification privée et des en-têtes supplémentaires tels que Cloudflare Access.
-- Watchtower détecte les mots de passe faibles, réutilisés, compromis ou non sécurisés, ainsi que les sites où la double authentification n’est pas activée.
-- Double authentification, gestion des appareils, accès d’urgence, Send, générateurs de mots de passe et de noms d’utilisateur, et nombreux formats d’importation et d’exportation.
+- Watchtower détecte les mots de passe faibles, réutilisés, compromis ou non sécurisés, ainsi que les sites où la double authentification n’est pas activée. Les mots de passe réutilisés font l’objet d’un nettoyage guidé : choisissez l’identifiant à conserver, puis modifiez ou supprimez les autres.
+- Double authentification, gestion des appareils, accès d’urgence, Send, générateurs de mots de passe et de noms d’utilisateur, et nombreux formats d’importation et d’exportation, dont une base KeePass (.kdbx) protégée par mot de passe, qui s’ouvre dans KeePassXC, KeePassium et Strongbox.
 
 Consultez le [README anglais](README.md) et la [feuille de route](docs/ROADMAP.md) pour la liste exhaustive et les limitations.
 
