@@ -23,7 +23,7 @@ case "${1:-status}" in
     echo "== SSO :18881"; python3 seed.py "http://$IP:18881" ;;
   test)
     cd ../Packages/VaultCore
-    TRIWARDEN_DEV_HOST=$HOST TRIWARDEN_DEV_CA="$OLDPWD/data/root.crt" swift test ;;
+    TRIWARDEN_DEV_HOST=$HOST TRIWARDEN_DEV_CA="$OLDPWD/data/root.crt" TRIWARDEN_DEV_TOTP_DIR="$OLDPWD/data/totp" swift test ;;
   logs)  remote "docker compose logs --tail 100 ${2:-}" ;;
   reset) remote "docker compose down && rm -rf data/latest data/legacy && docker compose up -d" ;;
   status) remote "docker compose ps --format 'table {{.Service}}\t{{.Image}}\t{{.Status}}'" ;;

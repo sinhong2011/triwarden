@@ -138,9 +138,10 @@ jobs:
       matrix:
         include:
           # Native servers avoid unsupported Docker/nested virtualization on macOS runners.
-          - version: 1.35.0
-            revision: a4907f35390acfd8079ab798a9f6eb785eb17c35
-            rust: 1.92.0
+          # Revision is the commit the tag points to; rust matches the tag's rust-toolchain.toml channel.
+          - version: 1.37.5
+            revision: 6ed6921cc2b0e03b4d74189574d2a5e71c512e97
+            rust: 1.99.1
             port: 18843
           - version: 1.30.5
             revision: d0c22b9fc90ae52aedbbccdafe9915bd0bdb0d84

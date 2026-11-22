@@ -512,9 +512,26 @@ private struct BrowserSettings: View {
     @AppStorage("browserHosts") private var recordedHosts = Data()
     /// Browsers whose store page was opened from here, so the row moves on to Connect (the app cannot see what is installed in a browser).
     @AppStorage("browserInstallOpened") private var installOpened = Data()
+    /// Browsers on this Mac that `NativeHost.browsers` doesn't list, Chromium-based (Vivaldi, Helium, Opera…) and
+    /// Firefox-based (LibreWolf, Waterfox, Floorp…), found from the apps that open web pages.
+    @State private var discovered: [NativeHost.Browser] = []
+    /// Profile folders the person picked with "Choose Folder…" for a browser Triwarden didn't find by itself.
+    @AppStorage("browserCustomFolders") private var customFoldersData = Data()
     @State private var problem: String?
     /// Offer Open at login once when Browser is turned on and it is not already registered.
     @State private var askOpenAtLogin = false
+    @State private var showUninstalled = false
+
+    /// Installed browsers, listed or found, in alphabetical order.
+    private var installedBrowsers: [NativeHost.Browser] {
+        (NativeHost.browsers.filter { states[$0.id].map { $0 != .notInstalled } ?? false } + discovered + customBrowsers)
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    /// Listed browsers that aren't on this Mac.
+    private var uninstalledBrowsers: [NativeHost.Browser] {
+        NativeHost.browsers.filter { (states[$0.id] ?? .notInstalled) == .notInstalled }
+    }
 
     private var tool: String { CLIBridge.toolPath }
 
@@ -560,8 +577,23 @@ private struct BrowserSettings: View {
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Safari-Extensions-Settings")!)
                     }
                 }
-                ForEach(NativeHost.browsers) { browser in
-                    row(browser)
+                // The browsers on this Mac first, by name, whether Triwarden lists them or found them.
+                ForEach(installedBrowsers) { browser in
+                    if customBrowsers.contains(browser) {
+                        row(browser)
+                            .contextMenu {
+                                Button("Remove from List") { removeCustom(browser) }
+                            }
+                    } else {
+                        row(browser)
+                    }
+                }
+                LabeledContent {
+                    Button("Choose Folder…") { connectByProfileFolder(nil) }
+                        .disabled(!browserEnabled)
+                } label: {
+                    Text("Browser not listed?")
+                    Text("For a Chromium-based browser, pick its folder in Application Support.")
                 }
                 if let problem {
                     Label(problem, systemImage: "exclamationmark.triangle").foregroundStyle(.orange).font(.caption)
@@ -569,8 +601,19 @@ private struct BrowserSettings: View {
             } header: {
                 Text("Connect a browser")
             } footer: {
-                Text("Install the extension from the browser’s store, then press Connect: Triwarden asks you to confirm the browser’s folder and adds one small file there. Safari needs no setup beyond turning Triwarden on in Safari. Press Connect again if you move Triwarden.")
+                Text("Install the extension from the browser’s store, then press Connect: Triwarden asks you to confirm the browser’s folder and adds one small file there. Safari needs no setup beyond turning Triwarden on in Safari. Other browsers, like Vivaldi, Helium or LibreWolf, show up here when they're installed. A browser shows Connected once its extension has reached Triwarden. Press Connect again if you move Triwarden.")
                     .font(.caption).foregroundStyle(.secondary)
+            }
+
+            // Supported browsers that aren't on this Mac, folded away so they don't push the real ones down.
+            if !uninstalledBrowsers.isEmpty {
+                Section(isExpanded: $showUninstalled) {
+                    ForEach(uninstalledBrowsers) { browser in
+                        row(browser)
+                    }
+                } header: {
+                    Text("Not installed (\(uninstalledBrowsers.count))")
+                }
             }
         }
         .formStyle(.grouped)
@@ -648,8 +691,9 @@ private struct BrowserSettings: View {
     /// What the row says about the connection: a green check and "Connected" once the browser's extension has reached
     /// Triwarden (with when), a note when it was connected but the app has moved, otherwise nothing.
     @ViewBuilder private func status(_ state: NativeHost.State, seen: CLIBridge.Seen?, openedStore: Bool) -> some View {
+        // Not installed: nothing here, the "Not installed" section header already says so.
         if state == .notInstalled {
-            Text("Not installed").font(.caption).foregroundStyle(.tertiary)
+            EmptyView()
         } else if let seen, state != .notConnected, !{ if case .movedApp = state { true } else { false } }() {
             Label {
                 Text("Connected · last used \(seen.date.formatted(.relative(presentation: .named)))")
@@ -676,7 +720,8 @@ private struct BrowserSettings: View {
         }
     }
 
-    private struct Record: Codable { var tool: String; var extensionID: String? }
+    /// `folder`: for a browser connected through its profile folder, that folder under Application Support.
+    private struct Record: Codable { var tool: String; var extensionID: String?; var folder: String? }
     private var records: [String: Record] {
         get { (try? JSONDecoder().decode([String: Record].self, from: recordedHosts)) ?? [:] }
         nonmutating set { recordedHosts = (try? JSONEncoder().encode(newValue)) ?? Data() }
@@ -689,17 +734,87 @@ private struct BrowserSettings: View {
     private func refresh() {
         let notes = records
         let heard = model.cli.seenBrowsers
-        states = Dictionary(uniqueKeysWithValues: NativeHost.browsers.map { browser in
-            guard installed(browser) else { return (browser.id, .notInstalled) }
+        discovered = NativeHost.discoverBrowsers(
+            apps: NSWorkspace.shared.urlsForApplications(toOpen: URL(string: "https://example.com")!))
+        let all = NativeHost.browsers + discovered + customBrowsers
+        states = Dictionary(all.map { browser in
+            guard browser.bundleID.isEmpty || installed(browser) else { return (browser.id, .notInstalled) }
             // Heard from it: connected, whoever wrote the file. Otherwise go by what this app wrote.
             if heard[browser.bundleID] != nil, notes[browser.id] == nil { return (browser.id, .connected) }
             return (browser.id, NativeHost.state(recordedTool: notes[browser.id]?.tool, tool: tool))
-        })
+        }, uniquingKeysWith: { first, _ in first })
+    }
+
+    private var customFolders: [String] {
+        get { (try? JSONDecoder().decode([String].self, from: customFoldersData)) ?? [] }
+        nonmutating set { customFoldersData = (try? JSONEncoder().encode(newValue)) ?? Data() }
+    }
+
+    private var customBrowsers: [NativeHost.Browser] {
+        customFolders.map { NativeHost.chromiumBrowser(id: "folder:\($0)", title: NativeHost.title(forDataFolder: $0), dataFolder: $0) }
+    }
+
+    /// Forget a browser added with "Choose Folder…". The file it wrote stays; the sandbox can't remove it unasked.
+    private func removeCustom(_ browser: NativeHost.Browser) {
+        customFolders.removeAll { "folder:\($0)" == browser.id }
+        var notes = records
+        notes[browser.id] = nil
+        records = notes
+        refresh()
+    }
+
+    /// Connect a Chromium browser that isn't in `NativeHost.browsers`: the person picks its profile folder (the folder
+    /// with "Local State"), which is checked before the file goes into its NativeMessagingHosts folder. `browser` is
+    /// nil for "Choose Folder…", which adds the folder to the list.
+    private func connectByProfileFolder(_ browser: NativeHost.Browser?) {
+        problem = nil
+        let support = NativeHost.applicationSupport
+        let start = browser.flatMap { records[$0.id]?.folder } ?? browser?.dataFolder ?? ""
+        let panel = NSOpenPanel()
+        panel.message = browser.map {
+            String(localized: "Choose \($0.title)’s profile folder — the one that contains a file named “Local State”. Triwarden adds one small file inside it.")
+        } ?? String(localized: "Choose the browser’s profile folder in Application Support — the one that contains a file named “Local State”, such as “Vivaldi”.")
+        panel.prompt = String(localized: "Allow")
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = false
+        panel.directoryURL = start.isEmpty ? support : support.appending(path: start, directoryHint: .isDirectory)
+        guard panel.runModal() == .OK, let chosen = panel.url else { return }
+        let scoped = chosen.startAccessingSecurityScopedResource()
+        defer { if scoped { chosen.stopAccessingSecurityScopedResource() } }
+        guard let folder = NativeHost.relativeSupportPath(chosen, support: support), NativeHost.isChromiumDataFolder(chosen) else {
+            problem = String(localized: "That isn’t a browser profile folder. Pick the folder that contains “Local State”, usually in ~/Library/Application Support (for example “Vivaldi”).")
+            return
+        }
+        if browser == nil, let listed = NativeHost.browsers.first(where: { $0.dataFolder == folder }) {
+            problem = String(localized: "That’s \(listed.title)’s folder. Use Connect next to \(listed.title) above.")
+            return
+        }
+        // Picked through "Choose Folder…" for a browser that was found already: connect that row.
+        let base = browser ?? discovered.first { $0.dataFolder == folder }
+        let target = base.map { NativeHost.chromiumBrowser(id: $0.id, title: $0.title, bundleID: $0.bundleID, dataFolder: folder) }
+            ?? NativeHost.chromiumBrowser(id: "folder:\(folder)", title: NativeHost.title(forDataFolder: folder), dataFolder: folder)
+        let chromeID = records[target.id]?.extensionID ?? NativeHost.chromeExtensionID
+        do {
+            let data = try NativeHost.manifest(for: target, tool: tool, chromeExtensionID: chromeID)
+            let hosts = chosen.appending(path: "NativeMessagingHosts", directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: hosts, withIntermediateDirectories: true)
+            try data.write(to: hosts.appending(path: "\(NativeHost.name).json"), options: .atomic)
+        } catch {
+            problem = String(localized: "Couldn't write the file: \(error.localizedDescription)"); return
+        }
+        var notes = records
+        notes[target.id] = Record(tool: tool, extensionID: chromeID, folder: folder)
+        records = notes
+        if base == nil, !customFolders.contains(folder) { customFolders.append(folder) }
+        refresh()
     }
 
     /// The app is sandboxed and cannot write into another app's folder by itself: the person confirms the folder in an
     /// open panel, which grants access to exactly that folder for this write.
     private func connect(_ browser: NativeHost.Browser) {
+        let listed = NativeHost.browsers.contains(browser)
+        if browser.family == .chromium, !listed { return connectByProfileFolder(browser) }
         problem = nil
         let known = records[browser.id]?.extensionID
         let chromeID = browser.family == .chromium ? (known ?? NativeHost.chromeExtensionID) : nil
@@ -707,33 +822,65 @@ private struct BrowserSettings: View {
         do { data = try NativeHost.manifest(for: browser, tool: tool, chromeExtensionID: chromeID) } catch {
             problem = String(localized: "Couldn't prepare the file for \(browser.title)."); return
         }
-        let folder = NativeHost.hostFolderURL(browser)
-        let panel = NSOpenPanel()
-        // Brave on Mac reads Chrome's native-messaging folder, so Connect asks for that path.
-        panel.message = browser.id == "brave"
-            ? String(localized: "Brave on Mac looks for Triwarden in Chrome’s native-messaging folder. Allow Triwarden to add its file there.")
-            : String(localized: "Allow Triwarden to add its file to \(browser.title)'s native-messaging folder.")
-        panel.prompt = String(localized: "Allow")
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.canCreateDirectories = true
-        panel.directoryURL = FileManager.default.fileExists(atPath: folder.path) ? folder : folder.deletingLastPathComponent()
-        guard panel.runModal() == .OK, let chosen = panel.url else { return }
-        guard chosen.standardizedFileURL.path == folder.standardizedFileURL.path else {
-            problem = String(localized: "Pick the folder the panel opens in: \(folder.path)"); return
+        // Firefox-based browsers mostly share Mozilla's folder: once one of them is connected to this copy of
+        // Triwarden, the file there already serves the others, so don't ask for that folder again.
+        let sharedReady = browser.family == .firefox && browser.hostFolder == NativeHost.mozillaHostFolder
+            && (NativeHost.browsers + discovered).contains { other in
+                other.family == .firefox && other.hostFolder == NativeHost.mozillaHostFolder && records[other.id]?.tool == tool
+            }
+        if !sharedReady {
+            // Brave on Mac reads Chrome's native-messaging folder, so Connect asks for that path.
+            let message = browser.id == "brave"
+                ? String(localized: "Brave on Mac looks for Triwarden in Chrome’s native-messaging folder. Allow Triwarden to add its file there.")
+                : browser.hostFolder == NativeHost.mozillaHostFolder
+                    ? String(localized: "\(browser.title) looks for Triwarden in Firefox’s shared native-messaging folder. Allow Triwarden to add its file there.")
+                    : String(localized: "Allow Triwarden to add its file to \(browser.title)'s native-messaging folder.")
+            guard write(data, into: browser.hostFolder, message: message) else { return }
         }
-        let scoped = chosen.startAccessingSecurityScopedResource()
-        defer { if scoped { chosen.stopAccessingSecurityScopedResource() } }
-        do {
-            try FileManager.default.createDirectory(at: chosen, withIntermediateDirectories: true)
-            try data.write(to: chosen.appending(path: "\(NativeHost.name).json"), options: .atomic)
-        } catch {
-            problem = String(localized: "Couldn't write the file: \(error.localizedDescription)"); return
+        // Some Firefox-based browsers (Zen, for one) read their own folder instead: offer a copy there. Cancel skips it.
+        if let own = NativeHost.ownHostFolder(browser) {
+            _ = write(data, into: own, message: String(localized: "Some Firefox-based browsers look in their own folder instead. Allow Triwarden to add a copy in \(browser.title)’s folder too, or press Cancel to skip this."), optional: true)
         }
         var notes = records
         notes[browser.id] = Record(tool: tool, extensionID: chromeID)
         records = notes
         refresh()
+    }
+
+    /// Ask for `relative` (a NativeMessagingHosts folder under Application Support) in an open panel, which grants the
+    /// sandboxed app access to exactly that folder, and write the manifest there. Picking its parent works too: the
+    /// folder is created inside it. False when the person cancels or the file can't be written.
+    @discardableResult
+    private func write(_ data: Data, into relative: String, message: String, optional: Bool = false) -> Bool {
+        let folder = NativeHost.applicationSupport.appending(path: relative, directoryHint: .isDirectory)
+        let panel = NSOpenPanel()
+        panel.message = message
+        panel.prompt = String(localized: "Allow")
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.directoryURL = FileManager.default.fileExists(atPath: folder.path) ? folder : folder.deletingLastPathComponent()
+        guard panel.runModal() == .OK, let chosen = panel.url else { return false }
+        let picked = chosen.standardizedFileURL.path
+        let target: URL
+        if picked == folder.standardizedFileURL.path {
+            target = chosen
+        } else if picked == folder.deletingLastPathComponent().standardizedFileURL.path {
+            target = chosen.appending(path: folder.lastPathComponent, directoryHint: .isDirectory)
+        } else {
+            if !optional { problem = String(localized: "Pick the folder the panel opens in: \(folder.path)") }
+            return false
+        }
+        let scoped = chosen.startAccessingSecurityScopedResource()
+        defer { if scoped { chosen.stopAccessingSecurityScopedResource() } }
+        do {
+            try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
+            try data.write(to: target.appending(path: "\(NativeHost.name).json"), options: .atomic)
+        } catch {
+            problem = String(localized: "Couldn't write the file: \(error.localizedDescription)")
+            return false
+        }
+        return true
     }
 }
 

@@ -26,6 +26,11 @@ public enum NativeHost {
         public let dataFolder: String
         /// Where it reads native-messaging hosts from, under `~/Library/Application Support`.
         public let hostFolder: String
+
+        public init(id: String, title: String, bundleID: String, family: Family, dataFolder: String, hostFolder: String) {
+            self.id = id; self.title = title; self.bundleID = bundleID; self.family = family
+            self.dataFolder = dataFolder; self.hostFolder = hostFolder
+        }
     }
 
     /// The extension's page on Firefox Add-ons (AMO). No language in the address: AMO picks the visitor's.
@@ -54,6 +59,168 @@ public enum NativeHost {
         .init(id: "firefox", title: "Firefox", bundleID: "org.mozilla.firefox", family: .firefox, dataFolder: "Firefox", hostFolder: "Mozilla/NativeMessagingHosts"),
     ]
 
+    // MARK: Other Chromium browsers
+
+    /// Where some Chromium browsers that aren't in `browsers` usually keep their profiles. Only a starting point for the
+    /// folder picker: the folder the person picks is checked with `isChromiumDataFolder` before anything is written.
+    static let likelyChromiumDataFolders: [String: String] = [
+        "com.google.Chrome.canary": "Google/Chrome Canary",
+        "com.vivaldi.Vivaldi": "Vivaldi",
+        "com.operasoftware.Opera": "com.operasoftware.Opera",
+        "net.imput.helium": "net.imput.helium",
+    ]
+
+    /// A Chromium browser that isn't in `browsers`. Its folder is empty until the person picks its profile folder.
+    public static func chromiumBrowser(id: String, title: String, bundleID: String = "", dataFolder: String = "") -> Browser {
+        .init(id: id, title: title, bundleID: bundleID, family: .chromium, dataFolder: dataFolder,
+              hostFolder: dataFolder.isEmpty ? "" : dataFolder + "/NativeMessagingHosts")
+    }
+
+    /// Whether the app at `app` is built on Chromium: it ships a `<Name> Framework.framework`, which every Chromium
+    /// browser does. Electron apps ship one too, always named `Electron Framework`, so that one doesn't count.
+    public static func isChromiumApp(at app: URL) -> Bool {
+        let frameworks = (try? FileManager.default.contentsOfDirectory(atPath: app.appending(path: "Contents/Frameworks").path)) ?? []
+        return frameworks.contains { $0.hasSuffix(" Framework.framework") && $0 != "Electron Framework.framework" }
+    }
+
+    /// Whether `folder` is a Chromium browser's profile folder (its user data directory): it has `Local State` and a
+    /// `Default` or `Profile N` profile. Electron apps have `Local State` but no profile folders.
+    public static func isChromiumDataFolder(_ folder: URL) -> Bool {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: folder.appending(path: "Local State").path) else { return false }
+        let entries = (try? fm.contentsOfDirectory(atPath: folder.path)) ?? []
+        return entries.contains { $0 == "Default" || $0.hasPrefix("Profile ") }
+    }
+
+    /// The Chromium browsers among `apps` (the apps that open web pages) that `browsers` doesn't already list.
+    public static func discoverChromiumBrowsers(apps: [URL]) -> [Browser] {
+        let listed = Set(browsers.map(\.bundleID))
+        var seen = Set<String>()
+        return apps.compactMap { app -> Browser? in
+            guard let bundle = Bundle(url: app), let bundleID = bundle.bundleIdentifier,
+                  !listed.contains(bundleID), seen.insert(bundleID).inserted, isChromiumApp(at: app) else { return nil }
+            let title = displayName(bundle, app)
+            // Chromium reads CrProductDirName from Info.plist when a build sets it; otherwise the folder is compiled in.
+            let folder = (bundle.object(forInfoDictionaryKey: "CrProductDirName") as? String) ?? likelyChromiumDataFolders[bundleID] ?? ""
+            return chromiumBrowser(id: bundleID, title: title, bundleID: bundleID, dataFolder: folder)
+        }
+        .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    /// Chromium profile folders under `support` (one or two levels down, like `Vivaldi` or `Arc/User Data`) that no
+    /// browser in `browsers` already covers. For `tw`, which runs outside the sandbox and can look.
+    public static func unlistedChromiumDataFolders(support: URL = applicationSupport) -> [String] {
+        unlistedDataFolders(support: support, where: isChromiumDataFolder)
+    }
+
+    private static func unlistedDataFolders(support: URL, where matches: (URL) -> Bool) -> [String] {
+        let fm = FileManager.default
+        let listed = Set(browsers.map(\.dataFolder))
+        var found: [String] = []
+        func children(_ relative: String) -> [String] {
+            let url = relative.isEmpty ? support : support.appending(path: relative)
+            return ((try? fm.contentsOfDirectory(atPath: url.path)) ?? []).filter { !$0.hasPrefix(".") }.sorted()
+                .map { relative.isEmpty ? $0 : relative + "/" + $0 }
+        }
+        for top in children("") {
+            for candidate in [top] + children(top) where !listed.contains(candidate) {
+                if matches(support.appending(path: candidate, directoryHint: .isDirectory)) { found.append(candidate) }
+            }
+        }
+        return found
+    }
+
+    // MARK: Other Firefox-based browsers
+
+    /// Where Firefox reads native-messaging hosts by default. Most Firefox-based browsers (LibreWolf, Waterfox, Floorp,
+    /// Mullvad Browser…) keep that default, so one file here serves all of them: the manifest is the same for each.
+    public static let mozillaHostFolder = "Mozilla/NativeMessagingHosts"
+
+    /// Firefox-family apps that use Gecko for something other than browsing the web.
+    static let notBrowsers: Set<String> = ["org.mozilla.thunderbird", "Thunderbird"]
+
+    /// A Firefox-based browser that isn't in `browsers`: it reads the shared Mozilla folder, and `dataFolder` is its own
+    /// folder under Application Support (where `profiles.ini` is), which some forks read instead (Zen does).
+    public static func firefoxBrowser(id: String, title: String, bundleID: String = "", dataFolder: String) -> Browser {
+        .init(id: id, title: title, bundleID: bundleID, family: .firefox, dataFolder: dataFolder, hostFolder: mozillaHostFolder)
+    }
+
+    /// Whether the app at `app` is built on Firefox's engine: it ships `XUL`, Gecko's library.
+    public static func isFirefoxApp(at app: URL) -> Bool {
+        FileManager.default.fileExists(atPath: app.appending(path: "Contents/MacOS/XUL").path)
+    }
+
+    /// Where a Firefox-based app keeps its profiles under Application Support. Gecko builds that from `application.ini`:
+    /// `Profile` when the app sets it, otherwise `Name` (`Firefox` for Firefox).
+    public static func firefoxDataFolder(app: URL) -> String? {
+        guard let text = try? String(contentsOf: app.appending(path: "Contents/Resources/application.ini"), encoding: .utf8) else { return nil }
+        var section = ""
+        var values: [String: String] = [:]
+        for raw in text.split(whereSeparator: \.isNewline) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("[") { section = line; continue }
+            guard section == "[App]", let eq = line.firstIndex(of: "=") else { continue }
+            values[String(line[..<eq])] = String(line[line.index(after: eq)...])
+        }
+        let folder = values["Profile"] ?? values["Name"]
+        return folder?.isEmpty == false ? folder : nil
+    }
+
+    /// The Firefox-based browsers among `apps` that `browsers` doesn't already list.
+    public static func discoverFirefoxBrowsers(apps: [URL]) -> [Browser] {
+        let listed = Set(browsers.map(\.bundleID))
+        var seen = Set<String>()
+        return apps.compactMap { app -> Browser? in
+            guard let bundle = Bundle(url: app), let bundleID = bundle.bundleIdentifier, !listed.contains(bundleID),
+                  !notBrowsers.contains(bundleID), seen.insert(bundleID).inserted, isFirefoxApp(at: app) else { return nil }
+            let folder = firefoxDataFolder(app: app) ?? ""
+            return firefoxBrowser(id: bundleID, title: displayName(bundle, app), bundleID: bundleID, dataFolder: folder)
+        }
+        .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    /// Every browser among `apps` that `browsers` doesn't list: Chromium-based and Firefox-based.
+    public static func discoverBrowsers(apps: [URL]) -> [Browser] {
+        (discoverChromiumBrowsers(apps: apps) + discoverFirefoxBrowsers(apps: apps))
+            .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    /// Firefox-family profile folders under `support` (with `profiles.ini`) that no browser in `browsers` covers.
+    public static func unlistedFirefoxDataFolders(support: URL = applicationSupport) -> [String] {
+        unlistedDataFolders(support: support) { folder in
+            !notBrowsers.contains(folder.lastPathComponent)
+                && FileManager.default.fileExists(atPath: folder.appending(path: "profiles.ini").path)
+        }
+    }
+
+    /// For a Firefox-based browser that isn't listed: its own folder's NativeMessagingHosts, which gets a copy of the
+    /// file next to the shared Mozilla one. Nil when it has no folder of its own or already reads it.
+    public static func ownHostFolder(_ browser: Browser) -> String? {
+        guard browser.family == .firefox, !browser.dataFolder.isEmpty, !browsers.contains(where: { $0.id == browser.id }) else { return nil }
+        let own = browser.dataFolder + "/NativeMessagingHosts"
+        return own == browser.hostFolder ? nil : own
+    }
+
+    static func displayName(_ bundle: Bundle, _ app: URL) -> String {
+        (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+            ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
+            ?? app.deletingPathExtension().lastPathComponent
+    }
+
+    /// `folder`'s path relative to `support`, or nil when it isn't inside it.
+    public static func relativeSupportPath(_ folder: URL, support: URL = applicationSupport) -> String? {
+        let base = support.standardizedFileURL.resolvingSymlinksInPath().path
+        let path = folder.standardizedFileURL.resolvingSymlinksInPath().path
+        guard path.hasPrefix(base + "/") else { return nil }
+        return String(path.dropFirst(base.count + 1)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    /// A name for a browser known only by its profile folder: `Vivaldi` for `Vivaldi`, `Thorium` for `Thorium/User Data`.
+    public static func title(forDataFolder folder: String) -> String {
+        let parts = folder.split(separator: "/").map(String.init).filter { $0 != "User Data" }
+        return parts.last ?? folder
+    }
+
     /// Folders under Application Support that should receive the host manifest for `browser`.
     /// Brave also keeps a copy under BraveSoftware in case a future Brave build starts reading it.
     public static func hostFoldersForInstall(_ browser: Browser) -> [String] {
@@ -63,6 +230,7 @@ public enum NativeHost {
                 "BraveSoftware/Brave-Browser/NativeMessagingHosts",
             ]
         }
+        if let own = ownHostFolder(browser) { return [browser.hostFolder, own] }
         return [browser.hostFolder]
     }
 

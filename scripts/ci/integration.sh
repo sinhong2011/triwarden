@@ -33,6 +33,7 @@ openssl x509 -req -in "$state/server.csr" -CA "$state/ca.pem" -CAkey "$state/ca-
 DATA_FOLDER="$state/data" ROCKET_ADDRESS=127.0.0.1 ROCKET_PORT=18880 \
   DOMAIN="https://localhost:$port" WEB_VAULT_ENABLED=false SIGNUPS_ALLOWED=true \
   SIGNUPS_VERIFY=false SHOW_PASSWORD_HINT=true LOGIN_RATELIMIT_MAX_BURST=1000 LOGIN_RATELIMIT_SECONDS=1 \
+  UNAUTHENTICATED_RATELIMIT_MAX_BURST=1000 UNAUTHENTICATED_RATELIMIT_SECONDS=1 \
   "$server" >build/ci-integration/server.log 2>&1 &
 server_pid=$!
 cat > "$state/Caddyfile" <<CADDY
@@ -56,6 +57,8 @@ for _ in {1..60}; do
 done
 [[ $ready == 1 ]] || { echo 'Disposable server did not become ready' >&2; exit 1; }
 export TRIWARDEN_DEV_HINT="synthetic CI password hint"
+# Vaultwarden 1.37+ issues momonga's 2FA key; seed.py saves it here for the tests.
+export TRIWARDEN_DEV_TOTP_DIR="$state/totp"
 "$python" DevServer/seed.py "https://localhost:$port" --ca "$state/ca.pem"
 (
   cd Packages/VaultCore

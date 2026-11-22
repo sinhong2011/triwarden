@@ -12,6 +12,16 @@ enum DevServer {
     static let host = env["TRIWARDEN_DEV_HOST"]
     static let password = env["TRIWARDEN_DEV_PASSWORD"] ?? "chiikawa-dev-password"
     static let totpSecret = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"
+
+    /// Momonga's 2FA secret. Vaultwarden 1.37+ issues its own key, which seed.py saves as
+    /// `$TRIWARDEN_DEV_TOTP_DIR/<port>.totp`; older servers use the fixed demo secret.
+    static func twoFactorSecret(port: Int) -> String {
+        guard let dir = env["TRIWARDEN_DEV_TOTP_DIR"],
+              let saved = try? String(contentsOf: URL(filePath: dir).appending(path: "\(port).totp"), encoding: .utf8)
+        else { return totpSecret }
+        let key = saved.trimmingCharacters(in: .whitespacesAndNewlines)
+        return key.isEmpty ? totpSecret : key
+    }
     static var enabled: Bool { host != nil }
 
     /// Latest Vaultwarden and a 1.30.x build, to cover older API shapes.
@@ -379,7 +389,7 @@ struct DevServerTests {
         }
         // Vaultwarden rejects a code already used in this time step (e.g. by a test run seconds ago),
         // so fall back to the next step, which its drift window accepts.
-        let totp = TOTP(DevServer.totpSecret)!
+        let totp = TOTP(DevServer.twoFactorSecret(port: port))!
         do {
             _ = try await client.login(email: "momonga@chiikawarden.test", password: DevServer.password,
                                        twoFactor: ("0", totp.code()))

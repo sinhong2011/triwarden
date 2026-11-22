@@ -19,6 +19,8 @@ import struct
 import sys
 import time
 import uuid
+from pathlib import Path
+from urllib.parse import urlsplit
 
 import requests
 from argon2.low_level import Type, hash_secret_raw
@@ -39,6 +41,9 @@ ACCOUNTS = [
 ]
 
 TOTP_SECRET = "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP"  # 20-byte demo secret; dev only (GitHub item, momonga's 2FA)
+# Vaultwarden 1.37+ issues the authenticator key itself, so momonga's 2FA secret differs per server. It is saved as
+# <dir>/<port>.totp, which DevServerTests reads too; servers without the file use TOTP_SECRET.
+TOTP_DIR = Path(os.environ.get("TRIWARDEN_DEV_TOTP_DIR") or Path(__file__).resolve().parent / "data" / "totp")
 CLOUDFLARE_TOTP = "MFRGGZDFMZTWQ2LKNNWG23TPOBYXE43U"  # a second secret so the two seeded codes differ
 
 # ---------------------------------------------------------------- crypto
@@ -98,6 +103,17 @@ class Server:
         self.s = requests.Session()
         self.s.verify = ca if ca else True
 
+    @property
+    def totp_file(self) -> Path:
+        u = urlsplit(self.base)
+        return TOTP_DIR / f"{u.port or (443 if u.scheme == 'https' else 80)}.totp"
+
+    def two_factor_secret(self) -> str:
+        try:
+            return self.totp_file.read_text().strip() or TOTP_SECRET
+        except FileNotFoundError:
+            return TOTP_SECRET
+
     def post(self, path: str, **tw):
         r = self.s.post(f"{self.base}/{path}", timeout=30, **tw)
         return r
@@ -143,7 +159,12 @@ class Server:
             form |= {"twoFactorProvider": "0", "twoFactorToken": code, "twoFactorRemember": "0"}
         r = self.post("identity/connect/token", data=form)
         if not r.ok and not code and "TwoFactor" in r.text:
-            return self.login(email, kdf, totp(TOTP_SECRET))
+            try:
+                return self.login(email, kdf, totp(self.two_factor_secret()))
+            except SystemExit:
+                # Vaultwarden refuses a code already used in this time step (e.g. by a run seconds ago);
+                # its drift window accepts the next one.
+                return self.login(email, kdf, totp(self.two_factor_secret(), time.time() + 30))
         if not r.ok:
             raise SystemExit(f"login {email}: {r.status_code} {r.text}")
         tok = r.json()
@@ -275,9 +296,20 @@ class Session:
         return fixed
 
     def enable_totp(self):
-        self.req("POST", "api/two-factor/get-authenticator", json={"masterPasswordHash": self.pw_hash})
+        r = self.req("POST", "api/two-factor/get-authenticator", json={"masterPasswordHash": self.pw_hash}) or {}
+        verification = r.get("userVerificationToken")
+        if not verification:
+            # Older servers accept a client-chosen key with the master password.
+            self.req("POST", "api/two-factor/authenticator",
+                     json={"key": TOTP_SECRET, "token": totp(TOTP_SECRET), "masterPasswordHash": self.pw_hash})
+            self.server.totp_file.unlink(missing_ok=True)
+            return
+        # 1.37+ binds activation to the key it just issued.
+        key = r["authenticator"]["key"].upper()
         self.req("POST", "api/two-factor/authenticator",
-                 json={"key": TOTP_SECRET, "token": totp(TOTP_SECRET), "masterPasswordHash": self.pw_hash})
+                 json={"key": key, "token": totp(key), "userVerificationToken": verification})
+        self.server.totp_file.parent.mkdir(parents=True, exist_ok=True)
+        self.server.totp_file.write_text(key + "\n")
 
 
 def main():
@@ -300,7 +332,7 @@ def main():
             sess.enable_totp()
         print(f"  ✓ {email:32} kdf={'Argon2id' if kdf['kdf'] else 'PBKDF2'}"
               f"{'  2FA=TOTP' if kdf.get('totp') else ''}{'' if created else '  (already existed)'}")
-    print(f"\nPassword for all accounts: {PASSWORD}\nTOTP secret: {TOTP_SECRET}")
+    print(f"\nPassword for all accounts: {PASSWORD}\nmomonga's TOTP secret: {srv.two_factor_secret()}")
 
 
 if __name__ == "__main__":
