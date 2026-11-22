@@ -177,4 +177,58 @@ struct NativeHostTests {
         #expect(found.map(\.dataFolder) == ["", "Nova/Browser", "Vivaldi"])
         #expect(found.allSatisfy { $0.family == .chromium })
     }
+
+    // MARK: Other Firefox-based browsers
+
+    private func makeGeckoApp(_ name: String, bundleID: String, ini: String, in base: URL) throws -> URL {
+        let app = try makeApp(name, bundleID: bundleID, framework: "unused", in: base)
+        try FileManager.default.removeItem(at: app.appending(path: "Contents/Frameworks"))
+        try makeFolder("Contents/MacOS", in: app, files: ["XUL"])
+        try makeFolder("Contents/Resources", in: app)
+        try Data(ini.utf8).write(to: app.appending(path: "Contents/Resources/application.ini"))
+        return app
+    }
+
+    @Test func discoversFirefoxBasedBrowsersAndTheirFolder() throws {
+        let apps = try temporarySupport()
+        defer { try? FileManager.default.removeItem(at: apps) }
+        let librewolf = try makeGeckoApp("LibreWolf", bundleID: "io.gitlab.librewolf-community.librewolf",
+                                         ini: "[App]\nVendor=LibreWolf\nName=LibreWolf\n", in: apps)
+        let custom = try makeGeckoApp("Kite", bundleID: "com.example.kite",
+                                      ini: "[App]\nName=Kite\nProfile=Kite Browser\n[Gecko]\nName=ignored\n", in: apps)
+        let thunderbird = try makeGeckoApp("Thunderbird", bundleID: "org.mozilla.thunderbird", ini: "[App]\nName=Thunderbird\n", in: apps)
+        let firefox = try makeGeckoApp("Firefox", bundleID: "org.mozilla.firefox", ini: "[App]\nName=Firefox\n", in: apps)
+        let vivaldi = try makeApp("Vivaldi", bundleID: "com.vivaldi.Vivaldi", framework: "Vivaldi Framework.framework", in: apps)
+
+        #expect(NativeHost.isFirefoxApp(at: librewolf))
+        #expect(!NativeHost.isFirefoxApp(at: vivaldi))
+        #expect(NativeHost.firefoxDataFolder(app: custom) == "Kite Browser")
+
+        let found = NativeHost.discoverFirefoxBrowsers(apps: [librewolf, custom, thunderbird, firefox, vivaldi])
+        #expect(found.map(\.id) == ["com.example.kite", "io.gitlab.librewolf-community.librewolf"])
+        #expect(found.allSatisfy { $0.family == .firefox && $0.hostFolder == NativeHost.mozillaHostFolder })
+        #expect(NativeHost.discoverBrowsers(apps: [librewolf, vivaldi]).map(\.title) == ["LibreWolf", "Vivaldi"])
+    }
+
+    @Test func firefoxForksGetTheSharedFolderAndTheirOwn() {
+        let librewolf = NativeHost.firefoxBrowser(id: "x", title: "LibreWolf", dataFolder: "LibreWolf")
+        #expect(NativeHost.hostFoldersForInstall(librewolf) == ["Mozilla/NativeMessagingHosts", "LibreWolf/NativeMessagingHosts"])
+        // The listed ones keep exactly their folder.
+        #expect(NativeHost.hostFoldersForInstall(firefox) == ["Mozilla/NativeMessagingHosts"])
+        let zen = NativeHost.browsers.first { $0.id == "zen" }!
+        #expect(NativeHost.hostFoldersForInstall(zen) == ["zen/NativeMessagingHosts"])
+        // No folder of its own: only the shared one.
+        #expect(NativeHost.hostFoldersForInstall(NativeHost.firefoxBrowser(id: "y", title: "Y", dataFolder: "")) == ["Mozilla/NativeMessagingHosts"])
+    }
+
+    @Test func findsUnlistedFirefoxProfileFolders() throws {
+        let support = try temporarySupport()
+        defer { try? FileManager.default.removeItem(at: support) }
+        try makeFolder("LibreWolf", in: support, files: ["profiles.ini"])
+        try makeFolder("Waterfox", in: support, files: ["profiles.ini"])
+        try makeFolder("Firefox", in: support, files: ["profiles.ini"])     // listed
+        try makeFolder("Thunderbird", in: support, files: ["profiles.ini"]) // mail, not a browser
+        try makeFolder("Mozilla/NativeMessagingHosts", in: support)
+        #expect(NativeHost.unlistedFirefoxDataFolders(support: support) == ["LibreWolf", "Waterfox"])
+    }
 }
