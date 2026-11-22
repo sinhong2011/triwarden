@@ -2209,6 +2209,7 @@ enum SelfTest {
             fresh.logOut(firstID)
             check(AccountStore.load(firstID) == nil && AccountStore.refreshToken(firstID) == nil && fresh.phase.id == AppModel.Phase.login.id,
                   "log out erases account and token")
+            for rejection in AppModel.serverRejections { check(false, rejection) }
             print(failures == 0 ? "SELFTEST OK" : "SELFTEST FAILED (\(failures))")
             UserDefaults.standard.set(savedFocus, forKey: "accountFocus")
             UserDefaults.standard.set(savedVaultFilter, forKey: "vaultFilter")

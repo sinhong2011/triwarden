@@ -54,6 +54,29 @@ repository is bumped, so the app, its Safari extension and the Chrome/Firefox zi
 Local builds report version `0.0.0` (`project.yml`, `package.json`): only a release sets the real one.
 `CHANGELOG.md` is the history up to 0.10.0; later notes are on GitHub Releases.
 
+## Release notes
+
+The notes are written for someone deciding whether to update, not for the people who wrote the code. Before you
+tag, check every point against this bar:
+
+- **Say what changed for the user.** Each Highlight or Fix states what someone can now do, or what they'll notice,
+  in their words. "**Send links open again on Vaultwarden 1.37.5.** Recipients no longer see *Not found*" beats
+  "fix send access route".
+- **Name the condition.** If it only affects some people, say who: a server version, Bitwarden cloud, a browser,
+  an account setting.
+- **Say what they need to do**, if anything: sign in again, update the browser extension, change a server setting.
+  Say so when nothing is needed but people might expect otherwise.
+- **Server compatibility is user-facing.** A newly supported or newly required Vaultwarden or Bitwarden version,
+  or a change in sign-in or two-step login, goes in the notes, with the versions. Keep
+  [COMPATIBILITY.md](COMPATIBILITY.md) in step.
+- **Leave out** release, CI, test and refactoring work, and anything a user can't observe.
+- **Write it yourself.** Don't paste another project's release notes or changelog, even for a matching fix.
+
+When a release changes behaviour that a README describes (features, supported servers, install or sign-in steps),
+update `README.md` and every translation in the same pull request: `README.es.md`, `README.fr.md`, `README.ja.md`,
+`README.ko.md`, `README.zh-Hans.md`, `README.zh-Hant.md` and `README.zh-HK.md`. If you can't translate a change,
+say so in the pull request rather than leaving the translations to disagree silently.
+
 ## One-time setup (maintainer)
 
 These are your credentials, so run each step yourself. Nothing secret goes into the repository.
@@ -150,6 +173,8 @@ The server source revisions and Rust toolchains are pinned in `.github/workflows
 explicitly when adding a new compatibility baseline. Pin `revision` to the commit the tag points to (not the
 annotated tag object) and `rust` to the `channel` in that revision's `rust-toolchain.toml`. UI smoke tests cover demo launch/lock and edit/cancel;
 they do not replace the broader manual UI, browser interoperability or physical Touch ID checks.
+[COMPATIBILITY.md](COMPATIBILITY.md) lists which server behaviour each of these covers, and what to check when a
+server changes its API.
 
 Release automation starts from a pushed `vX.Y.Z` tag. The workflow refuses a tag that is not on `main`. When the
 tagged commit has no passing push CI (a tag pushed by hand, or a rebuild through **Actions › Release › Run

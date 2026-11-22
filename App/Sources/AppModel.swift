@@ -513,6 +513,12 @@ final class AppModel {
     /// The app's live model, for App Intents and the CLI bridge.
     nonisolated(unsafe) static weak var current: AppModel?
 
+    /// Self-tests only: requests the server refused as malformed (400/422). In the app these are a toast; in a
+    /// self-test a newer server rejecting a shape we still send must fail the run, even when no later check
+    /// happens to look at the item that was never written. See docs/COMPATIBILITY.md.
+    static let recordsServerRejections = CommandLine.arguments.contains { $0.hasPrefix("--selftest") }
+    static var serverRejections: [String] = []
+
     init(secretsFactory: ((AppModel) -> SecretsController)? = nil) {
         // No updater while testing, rendering snapshots, previewing or showing the demo vault.
         let quiet = CommandLine.arguments.contains { ["--selftest", "--snapshot"].contains($0) || $0.hasPrefix("--selftest") || $0.hasPrefix("--demo") }
@@ -2339,6 +2345,11 @@ final class AppModel {
         }
         if error is AccountSession.WriteError { return offline() }
         if case .http(let status, let message)? = error as? APIError {
+            if Self.recordsServerRejections, status == 400 || status == 422 {
+                let line = "SERVER REJECTED REQUEST (\(status)): \(message ?? "no message")"
+                Self.serverRejections.append(line)
+                FileHandle.standardError.write(Data((line + "\n").utf8))
+            }
             flash(message ?? String(localized: "Server error (\(status))."))
         } else {
             flash(error.localizedDescription)

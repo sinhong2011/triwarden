@@ -120,6 +120,7 @@ enum CloudSelfTest {
             check(model.errorMessage == nil, "re-sync with the stored session")
             model.logOut(accountId)
             check(AccountStore.load(accountId) == nil && AccountStore.refreshToken(accountId) == nil, "log out erases account and token")
+            for rejection in AppModel.serverRejections { check(false, rejection) }
 
             print(failures == 0 ? "SELFTEST OK" : "SELFTEST FAILED (\(failures))")
             exit(failures == 0 ? 0 : 1)
