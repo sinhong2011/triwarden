@@ -121,7 +121,7 @@ notarize, without an Apple ID or password.
 ### 3. Licenses (Fork-style: paid, never locked)
 
 Every feature works unregistered and there's no time limit. An unregistered official build asks at launch, no
-more than once a week and never in the first week, whether the user wants to buy a license. Debug builds, and
+more than once a week and never in the first 30 days, whether the user wants to buy a license. Debug builds, and
 any build without `TW_STORE_URL`, never ask.
 
 Every purchased key is an Ed25519-signed payload. Triwarden verifies it on the Mac and makes no activation request.
