@@ -2830,6 +2830,21 @@ struct WindowCentered: ViewModifier {
 }
 
 struct ItemDetail: View {
+    /// The item's type for the details block: what the user saved it as, in plain words.
+    private var itemType: (label: String, symbol: String) {
+        if item.isAPIKey && model.showsAPIKeyTools { return (String(localized: "API Key"), "key.horizontal") }
+        let base: (String, String) = switch item.kind {
+        case .unsupported: (String(localized: "Unsupported item"), "questionmark.square")
+        case .login: (String(localized: "Login"), "key")
+        case .note: (String(localized: "Secure Note"), "note.text")
+        case .card: (String(localized: "Card"), "creditcard")
+        case .identity: (String(localized: "Identity"), "person.crop.rectangle")
+        case .sshKey: (String(localized: "SSH Key"), "terminal")
+        }
+        guard item.kind == .login, !item.passkeys.isEmpty else { return base }
+        return (base.0 + " · " + String(localized: "Passkey"), base.1)
+    }
+
     /// The cards' inset from the list (on the right they run to the pane's edge, like the header and footer).
     static let detailInset: CGFloat = 18
     @Environment(\.showsDetailToolbar) private var showsToolbar
@@ -3051,6 +3066,10 @@ struct ItemDetail: View {
                             .overlay(alignment: .top) {
                                 if index > 0 { Divider().opacity(0.6).padding(.leading, 16) }
                             }
+                    }
+                    // What kind of item this is, in plain words (Login, Card, API Key…), plus Passkey when a login has one.
+                    DetailRow(symbol: itemType.symbol, title: "Type") {
+                        Text(verbatim: itemType.label).fontWeight(.medium).foregroundStyle(.primary.opacity(0.75))
                     }
                     // Which vault it's in: the same names as the sidebar's Vaults (My vault, or a shared vault › its folders).
                     if item.organizationId == nil {
