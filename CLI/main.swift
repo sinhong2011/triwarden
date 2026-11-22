@@ -110,8 +110,8 @@ func installHost(_ family: NativeHost.Browser.Family, chromeExtensionID: String?
         guard let data = try? NativeHost.manifest(for: browser, tool: me, chromeExtensionID: chromeExtensionID) else { continue }
         for folder in NativeHost.hostFoldersForInstall(browser) {
             let file = NativeHost.applicationSupport.appending(path: folder).appending(path: "\(NativeHost.name).json")
-            let key = file.standardizedFileURL.path
-            guard seen.insert(key).inserted else { continue }
+            // Key on the folder name: a file URL's standardized path changes once the folder exists (/private/tmp → /tmp).
+            guard seen.insert(folder).inserted else { continue }
             try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
             if (try? data.write(to: file)) != nil { written.append(file.path) }
         }
