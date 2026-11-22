@@ -143,11 +143,12 @@ with `brew upgrade` or in the app; both work.
 ## CI and release gates
 
 `CI` runs for every PR and main push so required checks also finish on site-only changes. It runs VaultCore
-unit tests, HTTPS integration tests against disposable native Vaultwarden 1.35.0 and 1.30.5 servers, the app
+unit tests, HTTPS integration tests against disposable native Vaultwarden 1.37.5 and 1.30.5 servers, the app
 build, an offline compatibility self-test and two UI smoke tests. No development server or signing secrets
 are used. `Build app` fails if either the unit or server tests fail, even if its own build could succeed.
 The server source revisions and Rust toolchains are pinned in `.github/workflows/ci.yml`; update them
-explicitly when adding a new compatibility baseline. UI smoke tests cover demo launch/lock and edit/cancel;
+explicitly when adding a new compatibility baseline. Pin `revision` to the commit the tag points to (not the
+annotated tag object) and `rust` to the `channel` in that revision's `rust-toolchain.toml`. UI smoke tests cover demo launch/lock and edit/cancel;
 they do not replace the broader manual UI, browser interoperability or physical Touch ID checks.
 
 Release automation starts from a pushed `vX.Y.Z` tag. The workflow refuses a tag that is not on `main`. When the
