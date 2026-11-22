@@ -779,6 +779,28 @@ final class AppModel {
         watchtowerFocus = item.id
         requestedSection = .watchtower
     }
+
+    /// Reused-password cleanup on Watchtower, for this unlock: the logins picked to keep their password (one per
+    /// group), and the ones given a new password from there, still to be changed on their site. Item IDs only;
+    /// cleared on lock.
+    var reuseKeepers: Set<String> = []
+    var reuseFollowUps: [String] = []
+
+    /// Keeps this login's password and hands the rest of its group the change.
+    func keepReused(_ item: VaultItem, group: [VaultItem]) {
+        reuseKeepers.subtract(group.map(\.id))
+        reuseKeepers.insert(item.id)
+    }
+
+    /// Opens the login's editor with the password generator showing; once saved, it waits under "Finish on each
+    /// site" until the site has the new password too.
+    func newPasswordForReused(_ item: VaultItem) {
+        guarded(item) { [weak self] in
+            guard let self else { return }
+            if !reuseFollowUps.contains(item.id) { reuseFollowUps.append(item.id) }
+            beginEditing(EditRequest(mode: .edit(item), prefill: EditItemSheet.Prefill(openGenerator: true)))
+        }
+    }
     /// Asks the vault window to show its list filtered by this text (the palette's "Show all results").
     var requestedFilter: String?
     var showingGenerator = false
@@ -2497,6 +2519,8 @@ final class AppModel {
         cli?.reset()
         secrets?.reset()
         hiddenInbox = []
+        reuseKeepers = []
+        reuseFollowUps = []
         breachCounts = nil
         breachesCheckedAt = nil
         sessions.forEach { $0.close() }

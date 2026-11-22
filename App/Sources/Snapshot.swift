@@ -833,13 +833,20 @@ enum Snapshot {
                           password: twice.password, totp: nil, notes: nil, favorite: false)
         var old = demoItems[0]
         old.created = Calendar.current.date(byAdding: .year, value: -4, to: .now)
-        vault.items = vault.items.map { $0.id == expiring.id ? expiring : $0.id == old.id ? old : $0 } + [twice]
+        // Reused: the NAS shares its password with a router, kept on the NAS, so the group shows its next step.
+        let nas = demoItems.first { $0.id == "4" }!
+        var router = VaultItem(id: "reuse-router", accountId: nas.accountId, name: "Home Router", username: "admin",
+                               host: "router.example.net", password: nas.password, totp: nil, notes: nil, favorite: false)
+        router.reuseCount = 1
+        vault.items = vault.items.map { $0.id == expiring.id ? expiring : $0.id == old.id ? old : $0 } + [twice, router]
+        vault.reuseKeepers = [nas.id]
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             render(desktop(WatchtowerView(onOpen: { _ in }).environment(vault).tint(.brand), dark: name == "dark"),
                    size: CGSize(width: 820, height: 1400), appearance: appearance,
                    to: dir.appending(path: "watchtower-\(name).png"))
         }
         vault.items = demoVault
+        vault.reuseKeepers = []
         vault.breachCounts = nil
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             render(LargeTypeView(text: "m7Kq#vR2!tLp 0O1lI|"), size: CGSize(width: 1000, height: 420), appearance: appearance,
