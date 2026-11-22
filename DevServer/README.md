@@ -29,7 +29,7 @@ All use the password `chiikawa-dev-password` (dev only — override with `TRIWAR
 |---|---|---|
 | `usagi@chiikawarden.test` | PBKDF2 600k | Logins (TOTP, unicode, reused/weak), note, card, identity; member of org “Chiikawa Family” |
 | `hachiware@chiikawarden.test` | Argon2id t3 m64 p4 | Same personal items |
-| `momonga@chiikawarden.test` | PBKDF2 600k | TOTP 2FA enabled, secret `JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP` |
+| `momonga@chiikawarden.test` | PBKDF2 600k | TOTP 2FA enabled. Vaultwarden 1.37+ issues the secret, and `seed` saves it to `data/totp/<port>.totp`; older servers use `JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP` |
 
 `seed.py` does the client-side crypto in Python (`cryptography`, `argon2-cffi`), so it doubles as an
 independent reference implementation for the Swift crypto.

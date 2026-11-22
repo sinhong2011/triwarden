@@ -524,22 +524,65 @@ public actor VaultClient {
 
     /// Opens a Send the way a recipient does (no account). `passwordHash` from `SendCrypto.passwordHash`.
     public func accessSend(accessId: String, passwordHash: String? = nil) async throws(APIError) -> SendResponse {
-        let body: Data
-        do { body = try JSONSerialization.data(withJSONObject: passwordHash.map { ["password": $0] } ?? [:]) } catch {
-            throw .http(status: -1, message: "encode")
+        let body = try sendAccessBody(passwordHash)
+        do {
+            return try await send(post(environment.apiURL, "sends/access/\(accessId)", jsonBody: body))
+        } catch {
+            guard case .http(status: 404, _) = error else { throw error }
+            let token = try await sendAccessToken(accessId: accessId, passwordHash: passwordHash, otherwise: error)
+            var r = try post(environment.apiURL, "sends/access", jsonBody: Data("{}".utf8))
+            r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            return try await send(r)
         }
-        return try await send(post(environment.apiURL, "sends/access/\(accessId)", jsonBody: body))
     }
 
     /// Downloads a file Send's encrypted contents as a recipient.
     public func accessSendFile(sendId: String, fileId: String, passwordHash: String? = nil) async throws(APIError) -> Data {
         struct Located: Decodable { let url: String }
-        let body: Data
-        do { body = try JSONSerialization.data(withJSONObject: passwordHash.map { ["password": $0] } ?? [:]) } catch {
+        let located: Located
+        do {
+            located = try await send(post(environment.apiURL, "sends/\(sendId)/access/file/\(fileId)",
+                                          jsonBody: sendAccessBody(passwordHash)))
+        } catch {
+            guard case .http(status: 404, _) = error else { throw error }
+            // A recipient's Send id is already the access id; an owner's UUID becomes one as its base64url bytes.
+            let accessId = UUID(uuidString: sendId).map { uuid in withUnsafeBytes(of: uuid.uuid) { Data($0) }.base64URLEncoded } ?? sendId
+            let token = try await sendAccessToken(accessId: accessId, passwordHash: passwordHash, otherwise: error)
+            var r = try post(environment.apiURL, "sends/access/file/\(fileId)", jsonBody: Data("{}".utf8))
+            r.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            located = try await send(r)
+        }
+        return try await fetchLink(located.url)
+    }
+
+    private func sendAccessBody(_ passwordHash: String?) throws(APIError) -> Data {
+        do { return try JSONSerialization.data(withJSONObject: passwordHash.map { ["password": $0] } ?? [:]) } catch {
             throw .http(status: -1, message: "encode")
         }
-        let located: Located = try await send(post(environment.apiURL, "sends/\(sendId)/access/file/\(fileId)", jsonBody: body))
-        return try await fetchLink(located.url)
+    }
+
+    /// Vaultwarden 1.37.5 removed the per-Send access routes: recipients first exchange the access id (and password
+    /// hash) for a short-lived token. Servers without that grant get `otherwise`, the old route's own 404.
+    private func sendAccessToken(accessId: String, passwordHash: String?, otherwise: APIError) async throws(APIError) -> String {
+        var form = ["grant_type": "send_access", "client_id": "send", "send_id": accessId]
+        form["password_hash_b64"] = passwordHash
+        let request = try post(environment.identityURL, "connect/token", formBody: form)
+        let data: Data
+        let response: URLResponse
+        do { (data, response) = try await session.data(for: request) } catch { throw otherwise }
+        let status = (response as? HTTPURLResponse)?.statusCode ?? -1
+        guard (200..<300).contains(status) else {
+            // Only a server that speaks this grant labels its errors this way (wrong or missing password, expired).
+            guard String(decoding: data, as: UTF8.self).contains("send_access_error_type") else { throw otherwise }
+            throw APIError.from(status: status, body: data, decoder: .vaultwarden)
+        }
+        struct Token: Decodable {
+            let accessToken: String
+            enum CodingKeys: String, CodingKey { case accessToken = "access_token" }
+        }
+        do {
+            return try JSONDecoder().decode(Token.self, from: data).accessToken
+        } catch { throw otherwise }
     }
 
     // MARK: Password hint
