@@ -26,6 +26,11 @@ public enum NativeHost {
         public let dataFolder: String
         /// Where it reads native-messaging hosts from, under `~/Library/Application Support`.
         public let hostFolder: String
+
+        public init(id: String, title: String, bundleID: String, family: Family, dataFolder: String, hostFolder: String) {
+            self.id = id; self.title = title; self.bundleID = bundleID; self.family = family
+            self.dataFolder = dataFolder; self.hostFolder = hostFolder
+        }
     }
 
     /// The extension's page on Firefox Add-ons (AMO). No language in the address: AMO picks the visitor's.
@@ -53,6 +58,89 @@ public enum NativeHost {
         .init(id: "zen", title: "Zen", bundleID: "app.zen-browser.zen", family: .firefox, dataFolder: "zen", hostFolder: "zen/NativeMessagingHosts"),
         .init(id: "firefox", title: "Firefox", bundleID: "org.mozilla.firefox", family: .firefox, dataFolder: "Firefox", hostFolder: "Mozilla/NativeMessagingHosts"),
     ]
+
+    // MARK: Other Chromium browsers
+
+    /// Where some Chromium browsers that aren't in `browsers` usually keep their profiles. Only a starting point for the
+    /// folder picker: the folder the person picks is checked with `isChromiumDataFolder` before anything is written.
+    static let likelyChromiumDataFolders: [String: String] = [
+        "com.google.Chrome.canary": "Google/Chrome Canary",
+        "com.vivaldi.Vivaldi": "Vivaldi",
+        "com.operasoftware.Opera": "com.operasoftware.Opera",
+        "net.imput.helium": "net.imput.helium",
+    ]
+
+    /// A Chromium browser that isn't in `browsers`. Its folder is empty until the person picks its profile folder.
+    public static func chromiumBrowser(id: String, title: String, bundleID: String = "", dataFolder: String = "") -> Browser {
+        .init(id: id, title: title, bundleID: bundleID, family: .chromium, dataFolder: dataFolder,
+              hostFolder: dataFolder.isEmpty ? "" : dataFolder + "/NativeMessagingHosts")
+    }
+
+    /// Whether the app at `app` is built on Chromium: it ships a `<Name> Framework.framework`, which every Chromium
+    /// browser does. Electron apps ship one too, always named `Electron Framework`, so that one doesn't count.
+    public static func isChromiumApp(at app: URL) -> Bool {
+        let frameworks = (try? FileManager.default.contentsOfDirectory(atPath: app.appending(path: "Contents/Frameworks").path)) ?? []
+        return frameworks.contains { $0.hasSuffix(" Framework.framework") && $0 != "Electron Framework.framework" }
+    }
+
+    /// Whether `folder` is a Chromium browser's profile folder (its user data directory): it has `Local State` and a
+    /// `Default` or `Profile N` profile. Electron apps have `Local State` but no profile folders.
+    public static func isChromiumDataFolder(_ folder: URL) -> Bool {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: folder.appending(path: "Local State").path) else { return false }
+        let entries = (try? fm.contentsOfDirectory(atPath: folder.path)) ?? []
+        return entries.contains { $0 == "Default" || $0.hasPrefix("Profile ") }
+    }
+
+    /// The Chromium browsers among `apps` (the apps that open web pages) that `browsers` doesn't already list.
+    public static func discoverChromiumBrowsers(apps: [URL]) -> [Browser] {
+        let listed = Set(browsers.map(\.bundleID))
+        var seen = Set<String>()
+        return apps.compactMap { app -> Browser? in
+            guard let bundle = Bundle(url: app), let bundleID = bundle.bundleIdentifier,
+                  !listed.contains(bundleID), seen.insert(bundleID).inserted, isChromiumApp(at: app) else { return nil }
+            let title = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+                ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
+                ?? app.deletingPathExtension().lastPathComponent
+            // Chromium reads CrProductDirName from Info.plist when a build sets it; otherwise the folder is compiled in.
+            let folder = (bundle.object(forInfoDictionaryKey: "CrProductDirName") as? String) ?? likelyChromiumDataFolders[bundleID] ?? ""
+            return chromiumBrowser(id: bundleID, title: title, bundleID: bundleID, dataFolder: folder)
+        }
+        .sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
+    }
+
+    /// Chromium profile folders under `support` (one or two levels down, like `Vivaldi` or `Arc/User Data`) that no
+    /// browser in `browsers` already covers. For `tw`, which runs outside the sandbox and can look.
+    public static func unlistedChromiumDataFolders(support: URL = applicationSupport) -> [String] {
+        let fm = FileManager.default
+        let listed = Set(browsers.map(\.dataFolder))
+        var found: [String] = []
+        func children(_ relative: String) -> [String] {
+            let url = relative.isEmpty ? support : support.appending(path: relative)
+            return ((try? fm.contentsOfDirectory(atPath: url.path)) ?? []).filter { !$0.hasPrefix(".") }.sorted()
+                .map { relative.isEmpty ? $0 : relative + "/" + $0 }
+        }
+        for top in children("") {
+            for candidate in [top] + children(top) where !listed.contains(candidate) {
+                if isChromiumDataFolder(support.appending(path: candidate, directoryHint: .isDirectory)) { found.append(candidate) }
+            }
+        }
+        return found
+    }
+
+    /// `folder`'s path relative to `support`, or nil when it isn't inside it.
+    public static func relativeSupportPath(_ folder: URL, support: URL = applicationSupport) -> String? {
+        let base = support.standardizedFileURL.resolvingSymlinksInPath().path
+        let path = folder.standardizedFileURL.resolvingSymlinksInPath().path
+        guard path.hasPrefix(base + "/") else { return nil }
+        return String(path.dropFirst(base.count + 1)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+    }
+
+    /// A name for a browser known only by its profile folder: `Vivaldi` for `Vivaldi`, `Thorium` for `Thorium/User Data`.
+    public static func title(forDataFolder folder: String) -> String {
+        let parts = folder.split(separator: "/").map(String.init).filter { $0 != "User Data" }
+        return parts.last ?? folder
+    }
 
     /// Folders under Application Support that should receive the host manifest for `browser`.
     /// Brave also keeps a copy under BraveSoftware in case a future Brave build starts reading it.

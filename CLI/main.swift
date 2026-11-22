@@ -23,7 +23,7 @@ usage: tw <command> [arguments]
   code <item>               print the current one-time code
   generate [--length N]     a new random password (works while locked)
   lock                      lock every account
-  install-chrome <id>       register tw as the native host for the Chrome/Edge/Brave extension
+  install-chrome <id>       register tw as the native host for the extension in Chrome, Edge, Brave, Vivaldi and other Chromium browsers
   install-firefox           register tw as the native host for the Firefox extension
 
 <item> is an item id, an exact name, or a unique part of a name, username or site.
@@ -100,7 +100,13 @@ func installHost(_ family: NativeHost.Browser.Family, chromeExtensionID: String?
     }
     var written: [String] = []
     var seen = Set<String>()
-    for browser in NativeHost.browsers where browser.family == family && NativeHost.isInstalled(browser) {
+    // The listed browsers, plus any other Chromium browser whose profile folder is here (Vivaldi, Helium, Opera…).
+    let others = family == .chromium
+        ? NativeHost.unlistedChromiumDataFolders().map {
+            NativeHost.chromiumBrowser(id: "folder:\($0)", title: NativeHost.title(forDataFolder: $0), dataFolder: $0)
+        }
+        : []
+    for browser in NativeHost.browsers + others where browser.family == family && NativeHost.isInstalled(browser) {
         guard let data = try? NativeHost.manifest(for: browser, tool: me, chromeExtensionID: chromeExtensionID) else { continue }
         for folder in NativeHost.hostFoldersForInstall(browser) {
             let file = NativeHost.applicationSupport.appending(path: folder).appending(path: "\(NativeHost.name).json")

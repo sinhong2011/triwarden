@@ -102,4 +102,79 @@ struct NativeHostTests {
         #expect(NativeHost.manifestURL(chrome).lastPathComponent == "io.github.sinhong2011.triwarden.json")
         #expect(NativeHost.manifestURL(firefox).path.contains("Mozilla/NativeMessagingHosts"))
     }
+
+    // MARK: Other Chromium browsers
+
+    private func makeFolder(_ path: String, in base: URL, files: [String] = []) throws {
+        let dir = base.appending(path: path, directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        for file in files { try Data("{}".utf8).write(to: dir.appending(path: file)) }
+    }
+
+    private func makeApp(_ name: String, bundleID: String, framework: String, extra: [String: String] = [:], in base: URL) throws -> URL {
+        let app = base.appending(path: "\(name).app", directoryHint: .isDirectory)
+        try makeFolder("Contents/Frameworks/\(framework)", in: app)
+        var info: [String: Any] = ["CFBundleIdentifier": bundleID, "CFBundleName": name, "CFBundlePackageType": "APPL"]
+        for (key, value) in extra { info[key] = value }
+        let plist = try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+        try plist.write(to: app.appending(path: "Contents/Info.plist"))
+        return app
+    }
+
+    @Test func aChromiumProfileFolderHasLocalStateAndAProfile() throws {
+        let support = try temporarySupport()
+        defer { try? FileManager.default.removeItem(at: support) }
+        try makeFolder("Vivaldi", in: support, files: ["Local State"])
+        try makeFolder("Vivaldi/Default", in: support)
+        try makeFolder("Thorium/User Data", in: support, files: ["Local State"])
+        try makeFolder("Thorium/User Data/Profile 1", in: support)
+        try makeFolder("Slack", in: support, files: ["Local State", "Preferences"]) // an Electron app
+        try makeFolder("Google/Chrome", in: support, files: ["Local State"])         // listed already
+        try makeFolder("Google/Chrome/Default", in: support)
+
+        #expect(NativeHost.isChromiumDataFolder(support.appending(path: "Vivaldi")))
+        #expect(!NativeHost.isChromiumDataFolder(support.appending(path: "Slack")))
+        #expect(NativeHost.unlistedChromiumDataFolders(support: support) == ["Thorium/User Data", "Vivaldi"])
+    }
+
+    @Test func aBrowserKnownByItsFolderGetsAManifestInsideIt() throws {
+        let vivaldi = NativeHost.chromiumBrowser(id: "folder:Vivaldi", title: NativeHost.title(forDataFolder: "Vivaldi"), dataFolder: "Vivaldi")
+        #expect(vivaldi.title == "Vivaldi")
+        #expect(vivaldi.hostFolder == "Vivaldi/NativeMessagingHosts")
+        #expect(NativeHost.title(forDataFolder: "Thorium/User Data") == "Thorium")
+        let data = try NativeHost.manifest(for: vivaldi, tool: "/tw")
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["allowed_origins"] as? [String] == ["chrome-extension://\(NativeHost.chromeExtensionID)/"])
+
+        let unknown = NativeHost.chromiumBrowser(id: "x", title: "X")
+        #expect(unknown.hostFolder.isEmpty)
+    }
+
+    @Test func relativeSupportPathStaysInsideApplicationSupport() throws {
+        let support = try temporarySupport()
+        defer { try? FileManager.default.removeItem(at: support) }
+        try makeFolder("Thorium/User Data", in: support)
+        #expect(NativeHost.relativeSupportPath(support.appending(path: "Thorium/User Data"), support: support) == "Thorium/User Data")
+        #expect(NativeHost.relativeSupportPath(support, support: support) == nil)
+        #expect(NativeHost.relativeSupportPath(support.deletingLastPathComponent(), support: support) == nil)
+    }
+
+    @Test func discoversChromiumBrowsersThatAreNotListed() throws {
+        let apps = try temporarySupport()
+        defer { try? FileManager.default.removeItem(at: apps) }
+        let vivaldi = try makeApp("Vivaldi", bundleID: "com.vivaldi.Vivaldi", framework: "Vivaldi Framework.framework", in: apps)
+        let custom = try makeApp("Nova", bundleID: "com.example.nova", framework: "Nova Framework.framework",
+                                 extra: ["CrProductDirName": "Nova/Browser"], in: apps)
+        let unknown = try makeApp("Helix", bundleID: "com.example.helix", framework: "Helix Framework.framework", in: apps)
+        let electron = try makeApp("Chat", bundleID: "com.example.chat", framework: "Electron Framework.framework", in: apps)
+        let chrome = try makeApp("Google Chrome", bundleID: "com.google.Chrome", framework: "Google Chrome Framework.framework", in: apps)
+
+        #expect(NativeHost.isChromiumApp(at: vivaldi))
+        #expect(!NativeHost.isChromiumApp(at: electron))
+
+        let found = NativeHost.discoverChromiumBrowsers(apps: [vivaldi, custom, unknown, electron, chrome, vivaldi])
+        #expect(found.map(\.id) == ["com.example.helix", "com.example.nova", "com.vivaldi.Vivaldi"])
+        #expect(found.map(\.dataFolder) == ["", "Nova/Browser", "Vivaldi"])
+        #expect(found.allSatisfy { $0.family == .chromium })
+    }
 }
