@@ -376,6 +376,16 @@ public enum KeePassExport {
                 add("Private key", Self.string(ssh["privateKey"]), protected: true)
                 add("Public key", Self.string(ssh["publicKey"]))
                 add("Fingerprint", Self.string(ssh["keyFingerprint"]))
+            case let type? where CipherEditor.Kind(rawValue: type).map({ !DocumentField.fields(for: $0).isEmpty }) == true:
+                let kind = CipherEditor.Kind(rawValue: type)!
+                let object = item[kind.propertyObject!] as? [String: Any] ?? [:]
+                icon = kind == .bankAccount ? 66 : 9
+                let known = DocumentField.fields(for: kind)
+                for field in known { add(field.label, Self.string(object[field.key]), protected: field.secret) }
+                // Properties a newer server added keep their API name rather than being dropped.
+                for key in object.keys.sorted() where !known.contains(where: { $0.key == key }) {
+                    add(key, Self.string(object[key]), protected: true)
+                }
             default: break
             }
 

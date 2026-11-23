@@ -699,6 +699,16 @@ enum Snapshot {
             render(EditItemSheet(mode: .create(.sshKey)).environment(vault).tint(.brand),
                    size: CGSize(width: 580, height: 700), appearance: appearance,
                    to: dir.appending(path: "edit-ssh-\(name).png"))
+            // Bitwarden's document types: the edit form (secrets masked) and the detail they make.
+            for (kind, slug) in [(VaultItem.Kind.bankAccount, "bank"), (.driversLicense, "license"), (.passport, "passport")] {
+                guard let document = demoItems.first(where: { $0.kind == kind }) else { continue }
+                render(EditItemSheet(mode: .edit(document)).environment(vault).tint(.brand),
+                       size: CGSize(width: 580, height: 900), appearance: appearance,
+                       to: dir.appending(path: "edit-\(slug)-\(name).png"))
+                render(ItemDetail(item: document).environment(vault).tint(.brand).background(Color.windowBase),
+                       size: CGSize(width: 560, height: 860), appearance: appearance,
+                       to: dir.appending(path: "detail-\(slug)-\(name).png"))
+            }
             render(VStack(spacing: 14) {
                        FolderCascader(folders: vault.folders, selection: .constant(nil), create: { _ in nil }, newFolderIn: .constant(""))
                        FolderCascader(folders: vault.folders, selection: .constant(nil), create: { _ in nil }, newFolderIn: .constant("Work/Dev"))

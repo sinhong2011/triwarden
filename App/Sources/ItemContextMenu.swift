@@ -13,7 +13,8 @@ extension VaultItem {
     /// link is a standing second-factor bypass for whoever keeps it. Empty values are skipped.
     func shareText() -> String {
         var rows: [(String, String)] = []
-        if let username, !username.isEmpty { rows.append((String(localized: "Username"), username)) }
+        // Only a login's username is one; other kinds keep their list subtitle there (a bank's name, a card's last digits).
+        if kind == .login, let username, !username.isEmpty { rows.append((String(localized: "Username"), username)) }
         if let password, !password.isEmpty { rows.append((String(localized: "Password"), password)) }
         let sites = websites.filter { !$0.isEmpty }
         if !sites.isEmpty { rows.append((String(localized: "Website"), sites.joined(separator: "\n"))) }

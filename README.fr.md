@@ -61,7 +61,7 @@ Le bouton ci-dessus télécharge directement le dernier DMG signé et notarié. 
 
 **Un coffre natif sur Mac**
 
-- Gérez identifiants, notes sécurisées, cartes, identités et clés SSH, avec dossiers, favoris, champs personnalisés, pièces jointes, archives et corbeille.
+- Gérez identifiants, notes sécurisées, cartes, identités, clés SSH, comptes bancaires, permis de conduire et passeports, avec dossiers, favoris, champs personnalisés, pièces jointes, archives et corbeille.
 - Utilisez plusieurs comptes Vaultwarden ou Bitwarden à la fois, y compris les coffres partagés et collections, avec synchronisation WebSocket en direct. Connexion par mot de passe, double authentification et authentification unique (SSO).
 - Recherchez dans tous les coffres et filtrez par type, dossier, favori, code à usage unique, clé d’accès ou problème Watchtower.
 - Ajoutez, téléchargez et supprimez des pièces jointes depuis l’éditeur. La création d’un identifiant depuis l’onglet actif préremplit les informations du site.

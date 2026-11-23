@@ -5,7 +5,10 @@ import VaultwardenAPI
 // Shared by the app and the AutoFill extension.
 
 struct VaultItem: Identifiable, Hashable {
-    enum Kind: Int { case unsupported = 0, login = 1, note = 2, card = 3, identity = 4, sshKey = 5 }
+    enum Kind: Int {
+        case unsupported = 0, login = 1, note = 2, card = 3, identity = 4, sshKey = 5
+        case bankAccount = 6, driversLicense = 7, passport = 8
+    }
 
     let id: String
     /// Which saved account this item belongs to (several can be unlocked at once).
@@ -84,9 +87,9 @@ struct VaultItem: Identifiable, Hashable {
         return out
     }
 
-    /// Extra fields for non-login kinds (card, identity, SSH key), in display order.
+    /// Extra fields for non-login kinds (card, identity, SSH key, documents), in display order.
     var fields: [ItemField] = []
-    /// Raw card / identity / SSH-key properties by API name, for editing.
+    /// Raw card / identity / SSH-key / document properties by API name, for editing.
     var properties: [String: String] = [:]
     /// Custom fields (text, hidden, boolean, linked).
     var customFields: [CustomField] = []

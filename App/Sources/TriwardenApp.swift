@@ -147,6 +147,10 @@ struct TriwardenApp: App {
                         .keyboardShortcut("i", modifiers: [.command, .option])
                     Button("SSH Key") { model.beginEditing(EditRequest(mode: .create(.sshKey))) }
                         .keyboardShortcut("k", modifiers: [.command, .option])
+                    Divider()
+                    Button("Bank Account") { model.beginEditing(EditRequest(mode: .create(.bankAccount))) }
+                    Button("Driver's Licence") { model.beginEditing(EditRequest(mode: .create(.driversLicense))) }
+                    Button("Passport") { model.beginEditing(EditRequest(mode: .create(.passport))) }
                 }
                 .disabled(!model.isUnlocked)
                 Button("New Send") { model.composeNewSend() }

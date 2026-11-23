@@ -87,6 +87,10 @@ with `completeUntilFirstUserAuthentication` file protection, and both the app an
   Only shared metadata is shown; their payload is not interpreted as credentials or exposed as custom fields.
   The encrypted cache and raw cipher retain their data. Editing, cloning, attachments, moving, archiving,
   deleting and other item writes are blocked, including batches containing an unsupported item.
+- **Bank accounts, driver's licences and passports** (Bitwarden types 6–8) are never offered to AutoFill, the
+  browser extension or Auto-Type; their values can only be revealed and copied. Account, PIN, IBAN, licence,
+  passport and national ID numbers stay masked until revealed, and properties a newer server adds are kept and
+  shown masked.
 
 ## Import and export
 

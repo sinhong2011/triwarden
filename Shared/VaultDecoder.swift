@@ -140,6 +140,9 @@ enum VaultDecoder {
                     dec(k?.keyFingerprint).map { ItemField(label: String(localized: "Fingerprint"), value: $0, monospaced: true) },
                     dec(k?.privateKey).map { ItemField(label: String(localized: "Private key"), value: $0, secret: true, monospaced: true) },
                 ].compactMap { $0 }
+            case .bankAccount, .driversLicense, .passport:
+                // Every string property the server sent, known or not, so an edit never loses one.
+                item.setDocumentProperties((cipher.document?.values ?? [:]).compactMapValues { dec($0) })
             case .note:
                 item.username = item.notes.map { String($0.prefix(60)) }
             case .login:

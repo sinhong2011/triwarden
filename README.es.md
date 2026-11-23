@@ -61,7 +61,7 @@ El botón superior descarga directamente el DMG más reciente, firmado y notariz
 
 **Tu bóveda, nativa en Mac**
 
-- Gestiona inicios de sesión, notas seguras, tarjetas, identidades y claves SSH, además de carpetas, favoritos, campos personalizados, archivos adjuntos, archivo y papelera.
+- Gestiona inicios de sesión, notas seguras, tarjetas, identidades, claves SSH, cuentas bancarias, licencias de conducir y pasaportes, además de carpetas, favoritos, campos personalizados, archivos adjuntos, archivo y papelera.
 - Usa varias cuentas de Vaultwarden o Bitwarden a la vez, incluidas bóvedas compartidas y colecciones, con sincronización en directo mediante WebSocket. Admite inicio de sesión con contraseña, verificación en dos pasos y SSO.
 - Busca en todas las bóvedas y filtra por tipo, carpeta, favorito, código de un solo uso, llave de acceso o problema de Watchtower.
 - Añade, descarga o elimina archivos adjuntos desde el editor. Al crear un inicio de sesión desde la pestaña activa, los datos del sitio se rellenan automáticamente.
