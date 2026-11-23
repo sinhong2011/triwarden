@@ -65730,58 +65730,6 @@
         }
       }
     },
-    "Unlock this account to manage its two-step login, master password, devices and emergency access.": {
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "このアカウントのロックを解除すると、2段階ログイン、マスターパスワード、デバイス、緊急アクセスを管理できます。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "解锁此账户以管理其两步登录、主密码、设备和紧急访问。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "解鎖此帳號以管理其兩步驟登入、主密碼、裝置和緊急存取。"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "解鎖呢個帳戶就可以管理佢嘅兩步驟登入、主密碼、裝置同緊急存取。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "2단계 로그인, 마스터 비밀번호, 기기, 긴급 액세스를 관리하려면 이 계정을 잠금 해제하세요."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Déverrouillez ce compte pour gérer sa connexion en deux étapes, son mot de passe principal, ses appareils et l’accès d’urgence."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Desbloquea esta cuenta para gestionar su inicio de sesión en dos pasos, su contraseña maestra, sus dispositivos y el acceso de emergencia."
-          }
-        },
-        "th": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ปลดล็อกบัญชีนี้เพื่อจัดการการเข้าสู่ระบบสองขั้นตอน รหัสผ่านหลัก อุปกรณ์ และการเข้าถึงฉุกเฉิน"
-          }
-        }
-      }
-    },
     "Unlock to fill": {
       "localizations": {
         "ja": {
@@ -101162,6 +101110,1670 @@
           "stringUnit": {
             "state": "translated",
             "value": "คัดลอกวลีรหัสผ่านที่สร้าง"
+          }
+        }
+      }
+    },
+    "For example apple.com and icloud.com: a login saved for one is offered on the other.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例えば apple.com と icloud.com:一方に保存したログインがもう一方でも候補に表示されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 apple.com 和 icloud.com:为其中一个保存的登录信息也会在另一个上提供。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 apple.com 和 icloud.com:為其中一個儲存的登入資料也會在另一個上提供。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如 apple.com 同 icloud.com:幫其中一個儲存嘅登入資料,喺另一個都會建議。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "예: apple.com과 icloud.com — 한쪽에 저장한 로그인이 다른 쪽에서도 제안됩니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Par exemple apple.com et icloud.com : un identifiant enregistré pour l’un est proposé sur l’autre."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por ejemplo, apple.com e icloud.com: un inicio de sesión guardado para uno se ofrece también en el otro."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เช่น apple.com และ icloud.com: ข้อมูลเข้าสู่ระบบที่บันทึกไว้สำหรับไซต์หนึ่งจะแสดงในอีกไซต์ด้วย"
+          }
+        }
+      }
+    },
+    "Sites that share sign-ins": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログインを共有するサイト"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享登录信息的网站"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共用登入資料的網站"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共用登入資料嘅網站"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "로그인을 공유하는 사이트"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sites qui partagent leurs identifiants"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sitios que comparten inicio de sesión"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ไซต์ที่ใช้ข้อมูลเข้าสู่ระบบร่วมกัน"
+          }
+        }
+      }
+    },
+    "AutoFill, the command palette and the browser extension use these groups. They're saved with your account, so your other Bitwarden apps use them too.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動入力、コマンドパレット、ブラウザ拡張機能がこれらのグループを使います。アカウントに保存されるため、ほかの Bitwarden アプリでも使われます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动填充、命令面板和浏览器扩展会使用这些分组。它们保存在你的账户中,因此你的其他 Bitwarden 应用也会使用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動填入、指令面板和瀏覽器延伸功能會使用這些群組。它們儲存在你的帳號中,因此你的其他 Bitwarden App 也會使用。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自動填寫、指令面板同瀏覽器擴充功能都會用呢啲群組。佢哋儲存喺你個帳戶度,所以你其他 Bitwarden App 都會用。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "자동 완성, 명령 팔레트, 브라우저 확장 프로그램이 이 그룹을 사용합니다. 계정에 저장되므로 다른 Bitwarden 앱에서도 사용됩니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le remplissage automatique, la palette de commandes et l’extension du navigateur utilisent ces groupes. Ils sont enregistrés avec votre compte : vos autres apps Bitwarden les utilisent aussi."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El autorrelleno, la paleta de comandos y la extensión del navegador usan estos grupos. Se guardan con tu cuenta, así que tus otras apps de Bitwarden también los usan."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "การป้อนอัตโนมัติ แถบคำสั่ง และส่วนขยายเบราว์เซอร์ใช้กลุ่มเหล่านี้ กลุ่มจะบันทึกไว้กับบัญชีของคุณ แอป Bitwarden อื่นๆ ของคุณจึงใช้ด้วย"
+          }
+        }
+      }
+    },
+    "Bitwarden's built-in groups": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden の組み込みグループ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden 内置分组"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden 內建群組"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden 內置群組"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden 기본 그룹"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Groupes intégrés de Bitwarden"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grupos integrados de Bitwarden"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "กลุ่มในตัวของ Bitwarden"
+          }
+        }
+      }
+    },
+    "^[%lld group](inflect: true) of your own, plus the built-in ones": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独自のグループ %lld 件と組み込みグループ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个自己的分组,以及内置分组"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個自己的群組,以及內建群組"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 個自己嘅群組,加埋內置群組"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "내 그룹 %lld개와 기본 그룹"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld groupe(s) personnel(s), plus les groupes intégrés"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld grupo(s) propio(s), más los integrados"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "กลุ่มของคุณเอง %lld กลุ่ม และกลุ่มในตัว"
+          }
+        }
+      }
+    },
+    "Built-in groups, %lld turned off": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "組み込みグループ(%lld 件をオフ)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置分组,已关闭 %lld 个"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "內建群組,已關閉 %lld 個"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "內置群組,已關閂 %lld 個"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본 그룹, %lld개 끔"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Groupes intégrés, %lld désactivé(s)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grupos integrados, %lld desactivado(s)"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "กลุ่มในตัว ปิดอยู่ %lld กลุ่ม"
+          }
+        }
+      }
+    },
+    "^[%lld group](inflect: true) of your own · ^[%lld built-in group](inflect: true) off": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独自のグループ %1$lld 件 · 組み込みグループ %2$lld 件をオフ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 个自己的分组 · 已关闭 %2$lld 个内置分组"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 個自己的群組 · 已關閉 %2$lld 個內建群組"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 個自己嘅群組 · 已關閂 %2$lld 個內置群組"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "내 그룹 %1$lld개 · 기본 그룹 %2$lld개 끔"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld groupe(s) personnel(s) · %2$lld groupe(s) intégré(s) désactivé(s)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld grupo(s) propio(s) · %2$lld grupo(s) integrado(s) desactivado(s)"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "กลุ่มของคุณเอง %1$lld กลุ่ม · ปิดกลุ่มในตัว %2$lld กลุ่ม"
+          }
+        }
+      }
+    },
+    "A login saved for one site in a group is offered on the others.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グループ内の 1 つのサイトに保存したログインが、ほかのサイトでも候補に表示されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为分组中某个网站保存的登录信息,也会在其他网站上提供。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "為群組中某個網站儲存的登入資料,也會在其他網站上提供。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "幫群組入面一個網站儲存嘅登入資料,喺其他網站都會建議。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "그룹의 한 사이트에 저장한 로그인이 나머지 사이트에서도 제안됩니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un identifiant enregistré pour un site du groupe est proposé sur les autres."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un inicio de sesión guardado para un sitio del grupo se ofrece en los demás."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ข้อมูลเข้าสู่ระบบที่บันทึกไว้สำหรับไซต์หนึ่งในกลุ่มจะแสดงในไซต์อื่นๆ ด้วย"
+          }
+        }
+      }
+    },
+    "Your groups": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独自のグループ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的分组"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的群組"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你嘅群組"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "내 그룹"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vos groupes"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus grupos"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "กลุ่มของคุณ"
+          }
+        }
+      }
+    },
+    "Built-in groups": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "組み込みグループ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置分组"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "內建群組"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "內置群組"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "기본 그룹"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Groupes intégrés"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grupos integrados"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "กลุ่มในตัว"
+          }
+        }
+      }
+    },
+    "Each group needs at least two sites.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "各グループには 2 つ以上のサイトが必要です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每个分组至少需要两个网站。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每個群組至少需要兩個網站。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每個群組最少要有兩個網站。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "각 그룹에는 사이트가 두 개 이상 필요합니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chaque groupe doit contenir au moins deux sites."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cada grupo necesita al menos dos sitios."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "แต่ละกลุ่มต้องมีอย่างน้อยสองไซต์"
+          }
+        }
+      }
+    },
+    "No groups of your own yet": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独自のグループはまだありません"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有自己的分组"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還沒有自己的群組"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仲未有自己嘅群組"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "아직 내 그룹이 없습니다"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun groupe personnel pour l’instant"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no tienes grupos propios"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ยังไม่มีกลุ่มของคุณเอง"
+          }
+        }
+      }
+    },
+    "Make one when a site uses a sign-in from another address, for example apple.com and icloud.com, or your company's sites.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サイトが別のアドレスのログインを使うときに作成します。例えば apple.com と icloud.com、または会社のサイトなど。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当某个网站使用另一个地址的登录信息时创建一个,例如 apple.com 和 icloud.com,或你公司的网站。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "當某個網站使用另一個位址的登入資料時建立一個,例如 apple.com 和 icloud.com,或你公司的網站。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "當某個網站用另一個地址嘅登入資料,就整一個,例如 apple.com 同 icloud.com,或者你公司嘅網站。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사이트가 다른 주소의 로그인을 사용할 때 만드세요. 예: apple.com과 icloud.com, 또는 회사 사이트."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Créez-en un quand un site utilise l’identifiant d’une autre adresse, par exemple apple.com et icloud.com, ou les sites de votre entreprise."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea uno cuando un sitio use el inicio de sesión de otra dirección, por ejemplo apple.com e icloud.com, o los sitios de tu empresa."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "สร้างกลุ่มเมื่อไซต์ใช้ข้อมูลเข้าสู่ระบบจากที่อยู่อื่น เช่น apple.com และ icloud.com หรือไซต์ของบริษัทคุณ"
+          }
+        }
+      }
+    },
+    "New Group": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新規グループ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新建分组"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增群組"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增群組"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "새 그룹"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nouveau groupe"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuevo grupo"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "กลุ่มใหม่"
+          }
+        }
+      }
+    },
+    "Group %lld": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グループ %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组 %lld"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群組 %lld"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群組 %lld"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "그룹 %lld"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Groupe %lld"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Grupo %lld"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "กลุ่ม %lld"
+          }
+        }
+      }
+    },
+    "Remove Group": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グループを削除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除分组"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除群組"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除群組"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "그룹 제거"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supprimer le groupe"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quitar grupo"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ลบกลุ่ม"
+          }
+        }
+      }
+    },
+    "Add a site, like icloud.com": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サイトを追加(例: icloud.com)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加网站,例如 icloud.com"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入網站,例如 icloud.com"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加網站,例如 icloud.com"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사이트 추가(예: icloud.com)"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter un site, comme icloud.com"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade un sitio, como icloud.com"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เพิ่มไซต์ เช่น icloud.com"
+          }
+        }
+      }
+    },
+    "Add": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "追加"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加入"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "추가"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajouter"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añadir"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เพิ่ม"
+          }
+        }
+      }
+    },
+    "Add one more site to share this sign-in with.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このログインを共有するサイトをもう 1 つ追加してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再添加一个网站来共享此登录信息。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再加入一個網站來共用此登入資料。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再加多一個網站嚟共用呢個登入資料。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 로그인을 공유할 사이트를 하나 더 추가하세요."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajoutez un autre site avec lequel partager cet identifiant."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Añade otro sitio con el que compartir este inicio de sesión."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เพิ่มอีกหนึ่งไซต์เพื่อใช้ข้อมูลเข้าสู่ระบบนี้ร่วมกัน"
+          }
+        }
+      }
+    },
+    "Bitwarden keeps these groups up to date for everyone. Turn one off if its sites shouldn't share sign-ins for you.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "これらのグループは Bitwarden がすべてのユーザー向けに更新しています。サイト間でログインを共有したくない場合はオフにしてください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden 会为所有人更新这些分组。如果你不希望某个分组的网站共享登录信息,请将其关闭。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden 會為所有人更新這些群組。如果你不希望某個群組的網站共用登入資料,請將其關閉。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden 會幫所有人更新呢啲群組。如果你唔想某個群組嘅網站共用登入資料,就關閂佢。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden이 모든 사용자를 위해 이 그룹을 최신으로 유지합니다. 사이트끼리 로그인을 공유하지 않으려면 끄세요."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden tient ces groupes à jour pour tout le monde. Désactivez-en un si ses sites ne doivent pas partager vos identifiants."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden mantiene estos grupos al día para todos. Desactiva uno si sus sitios no deben compartir tus inicios de sesión."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bitwarden อัปเดตกลุ่มเหล่านี้ให้ทุกคน ปิดกลุ่มใดก็ได้หากไม่ต้องการให้ไซต์ในกลุ่มนั้นใช้ข้อมูลเข้าสู่ระบบร่วมกัน"
+          }
+        }
+      }
+    },
+    "Find a site": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "サイトを検索"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查找网站"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尋找網站"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搵網站"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "사이트 찾기"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rechercher un site"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar un sitio"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ค้นหาไซต์"
+          }
+        }
+      }
+    },
+    "Turn All On": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "すべてオン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部打开"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部開啟"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部開返"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "모두 켜기"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tout activer"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activar todos"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เปิดทั้งหมด"
+          }
+        }
+      }
+    },
+    "This server has no built-in groups.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このサーバーには組み込みグループがありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此服务器没有内置分组。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此伺服器沒有內建群組。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "呢部伺服器冇內置群組。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 서버에는 기본 그룹이 없습니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce serveur n’a pas de groupes intégrés."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este servidor no tiene grupos integrados."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "เซิร์ฟเวอร์นี้ไม่มีกลุ่มในตัว"
+          }
+        }
+      }
+    },
+    "No built-in group has that site.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのサイトを含む組み込みグループはありません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有内置分组包含该网站。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有內建群組包含該網站。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冇內置群組有呢個網站。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "해당 사이트가 포함된 기본 그룹이 없습니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aucun groupe intégré ne contient ce site."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ningún grupo integrado incluye ese sitio."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ไม่มีกลุ่มในตัวที่มีไซต์นั้น"
+          }
+        }
+      }
+    },
+    "and ^[%lld more site](inflect: true)": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ほか %lld サイト"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以及另外 %lld 个网站"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以及另外 %lld 個網站"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仲有 %lld 個網站"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "외 %lld개 사이트"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "et %lld autre(s) site(s)"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "y %lld sitio(s) más"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "และอีก %lld ไซต์"
+          }
+        }
+      }
+    },
+    "“%@” isn't a site address. Try something like icloud.com.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」はサイトのアドレスではありません。icloud.com のように入力してください。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@”不是网站地址。请尝试 icloud.com 这样的格式。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」不是網站位址。請試試 icloud.com 這樣的格式。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「%@」唔係網站地址。試吓 icloud.com 咁嘅格式。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@”은(는) 사이트 주소가 아닙니다. icloud.com 같은 형식으로 입력하세요."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "« %@ » n’est pas une adresse de site. Essayez par exemple icloud.com."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "«%@» no es la dirección de un sitio. Prueba algo como icloud.com."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "“%@” ไม่ใช่ที่อยู่ไซต์ ลองใช้รูปแบบเช่น icloud.com"
+          }
+        }
+      }
+    },
+    "That site is already in this group.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "そのサイトはすでにこのグループにあります。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该网站已在此分组中。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "該網站已在此群組中。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "呢個網站已經喺呢個群組度。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 사이트는 이미 이 그룹에 있습니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ce site est déjà dans ce groupe."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ese sitio ya está en este grupo."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ไซต์นั้นอยู่ในกลุ่มนี้แล้ว"
+          }
+        }
+      }
+    },
+    "Couldn't load this account's groups: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このアカウントのグループを読み込めませんでした: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法载入此账户的分组:%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法載入此帳號的群組:%@"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "載入唔到呢個帳戶嘅群組:%@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "이 계정의 그룹을 불러오지 못했습니다: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible de charger les groupes de ce compte : %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron cargar los grupos de esta cuenta: %@"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "โหลดกลุ่มของบัญชีนี้ไม่ได้: %@"
+          }
+        }
+      }
+    },
+    "Saved. Matching uses the new groups now.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存しました。照合に新しいグループが使われます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存。匹配现已使用新分组。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已儲存。比對現已使用新群組。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已儲存。配對而家用緊新群組。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장했습니다. 이제 새 그룹으로 일치 항목을 찾습니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistré. La correspondance utilise désormais les nouveaux groupes."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardado. La coincidencia ya usa los nuevos grupos."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "บันทึกแล้ว การจับคู่ใช้กลุ่มใหม่แล้ว"
+          }
+        }
+      }
+    },
+    "Saved. The new groups apply after the next sync.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存しました。新しいグループは次回の同期後に適用されます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存。新分组将在下次同步后生效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已儲存。新群組將在下次同步後生效。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已儲存。新群組會喺下次同步之後生效。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장했습니다. 새 그룹은 다음 동기화 후 적용됩니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enregistré. Les nouveaux groupes s’appliqueront après la prochaine synchronisation."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardado. Los nuevos grupos se aplicarán tras la próxima sincronización."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "บันทึกแล้ว กลุ่มใหม่จะมีผลหลังการซิงค์ครั้งถัดไป"
+          }
+        }
+      }
+    },
+    "Couldn't save: %@": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存できませんでした: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法保存:%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法儲存:%@"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "儲存唔到:%@"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "저장하지 못했습니다: %@"
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Impossible d’enregistrer : %@"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo guardar: %@"
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "บันทึกไม่ได้: %@"
+          }
+        }
+      }
+    },
+    "Unlock this account to manage its two-step login, master password, devices, emergency access and sites that share sign-ins.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このアカウントのロックを解除すると、2段階ログイン、マスターパスワード、デバイス、緊急アクセス、ログインを共有するサイトを管理できます。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解锁此账户以管理其两步登录、主密码、设备、紧急访问和共享登录信息的网站。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解鎖此帳號以管理其兩步驟登入、主密碼、裝置、緊急存取和共用登入資料的網站。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解鎖呢個帳戶就可以管理佢嘅兩步驟登入、主密碼、裝置、緊急存取同共用登入資料嘅網站。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "2단계 로그인, 마스터 비밀번호, 기기, 긴급 액세스, 로그인을 공유하는 사이트를 관리하려면 이 계정을 잠금 해제하세요."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Déverrouillez ce compte pour gérer sa connexion en deux étapes, son mot de passe principal, ses appareils, l’accès d’urgence et les sites qui partagent leurs identifiants."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloquea esta cuenta para gestionar su inicio de sesión en dos pasos, su contraseña maestra, sus dispositivos, el acceso de emergencia y los sitios que comparten inicio de sesión."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ปลดล็อกบัญชีนี้เพื่อจัดการการเข้าสู่ระบบสองขั้นตอน รหัสผ่านหลัก อุปกรณ์ การเข้าถึงฉุกเฉิน และไซต์ที่ใช้ข้อมูลเข้าสู่ระบบร่วมกัน"
           }
         }
       }

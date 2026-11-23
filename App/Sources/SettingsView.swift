@@ -1014,7 +1014,8 @@ private struct DeveloperSettings: View {
 // MARK: Accounts
 
 /// Everything about one account on one page: who and where; Touch ID and sync on this Mac; and, while it's
-/// unlocked, its security (two-step login, master password, fingerprint, devices) and emergency access; then
+/// unlocked, its security (two-step login, master password, fingerprint, devices), emergency access and sites that
+/// share sign-ins; then
 /// export, lock and log out.
 private struct AccountSettingsPage: View {
     @Environment(AppModel.self) private var model
@@ -1121,12 +1122,13 @@ private struct AccountSettingsPage: View {
             if let session {
                 AccountSecuritySections(session: session).id("security-" + session.id)
                 EmergencyAccessSections(session: session).id("emergency-" + session.id)
+                EquivalentDomainsSection(session: session).id("domains-" + session.id)
             } else {
                 Section {
                     LabeledContent {
                         Button("Unlock…") { unlockInVault() }
                     } label: {
-                        Text("Unlock this account to manage its two-step login, master password, devices and emergency access.")
+                        Text("Unlock this account to manage its two-step login, master password, devices, emergency access and sites that share sign-ins.")
                             .foregroundStyle(.secondary)
                     }
                 } header: {

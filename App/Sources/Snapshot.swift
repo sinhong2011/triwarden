@@ -959,6 +959,23 @@ enum Snapshot {
                        size: CGSize(width: 620, height: 620), appearance: appearance,
                        to: dir.appending(path: "settings-account-\(account.id)-\(name).png"))
             }
+            // Sites that share sign-ins: your own groups (one still needs a second site), and the built-in ones.
+            let domainRules = DomainRules(custom: [["apple.com", "icloud.com", "me.com"], ["northwind.example", "northwind-login.example"],
+                                                   ["intranet.example"]],
+                                          builtIn: [
+                .init(type: 0, domains: ["google.com", "youtube.com", "gmail.com", "google.co.uk", "google.de"], excluded: false),
+                .init(type: 1, domains: ["apple.com", "icloud.com"], excluded: true),
+                .init(type: 2, domains: ["microsoft.com", "live.com", "outlook.com", "office.com", "xbox.com", "skype.com"], excluded: false),
+                .init(type: 3, domains: ["amazon.com", "amazon.co.uk", "amazon.de"], excluded: false),
+            ])
+            for tab in [EquivalentDomainsSheet.Tab.own, .builtIn] {
+                render(EquivalentDomainsSheet(session: nil, preview: domainRules, tab: tab).environment(people).tint(.controlTint),
+                       size: CGSize(width: 560, height: 600), appearance: appearance,
+                       to: dir.appending(path: "settings-domains-\(tab == .own ? "own" : "builtin")-\(name).png"))
+            }
+            render(EquivalentDomainsSheet(session: nil, preview: DomainRules(custom: [], builtIn: [])).environment(people).tint(.controlTint),
+                   size: CGSize(width: 560, height: 600), appearance: appearance,
+                   to: dir.appending(path: "settings-domains-empty-\(name).png"))
         }
         print(dir.path)
         exit(0)

@@ -236,7 +236,7 @@ final class CLIBridge {
             guard let host = request.url.flatMap(URL.init(string:))?.host()?.lowercased() else {
                 return .list([], autoShow: autoShow)
             }
-            let matches = Self.logins(for: host, in: model.items)
+            let matches = Self.logins(for: host, in: model.items, equivalents: model.equivalentDomains)
             // Codes are secrets: they only come when the person asked for them (the icon in the field, the shortcut),
             // never because a field was focused. One approval covers that site for a minute, so a code that rolls over
             // or the fill that follows does not ask again.
@@ -270,7 +270,7 @@ final class CLIBridge {
             }
             let host = request.url.flatMap(URL.init(string:))?.host() ?? ""
             // Only fill a login on the site it belongs to.
-            guard Self.logins(for: host.lowercased(), in: [item]).count == 1 else { return .failure("“\(item.name)” isn't for \(host).") }
+            guard Self.logins(for: host.lowercased(), in: [item], equivalents: model.equivalentDomains).count == 1 else { return .failure("“\(item.name)” isn't for \(host).") }
             // A code reveal a moment ago on this site covers the fill that follows, except for logins that ask for the
             // master password: those are never waved through.
             let revealed = !item.reprompt && (revealedSites[host.lowercased()].map { $0 > .now } ?? false)
@@ -298,7 +298,7 @@ final class CLIBridge {
                 return .failure("That login is no longer in your vault.")
             }
             let host = request.url.flatMap(URL.init(string:))?.host() ?? ""
-            guard Self.logins(for: host.lowercased(), in: [item]).count == 1 else { return .failure("“\(item.name)” isn't for \(host).") }
+            guard Self.logins(for: host.lowercased(), in: [item], equivalents: model.equivalentDomains).count == 1 else { return .failure("“\(item.name)” isn't for \(host).") }
             let field = (request.field ?? "password").lowercased()
             guard ["username", "password", "totp"].contains(field) else { return .failure("Unsupported request.") }
             guard Self.value(field, of: item) != nil else {
@@ -545,11 +545,13 @@ final class CLIBridge {
     }
 
     /// Logins for `host`: same host or a subdomain/parent of it.
-    static func logins(for host: String, in items: [VaultItem]) -> [VaultItem] {
+    /// `equivalents`: sites that share sign-ins (the account's groups in Settings), so a google.com login also
+    /// belongs on youtube.com. Saving a new login looks at the exact site only.
+    static func logins(for host: String, in items: [VaultItem], equivalents: EquivalentDomains = .none) -> [VaultItem] {
         guard !host.isEmpty else { return [] }
         return items.filter { item in
             guard !item.isDeleted, !item.isArchived, item.kind == .login, item.password != nil else { return false }
-            return item.hosts.contains { h in h == host || host.hasSuffix("." + h) || h.hasSuffix("." + host) }
+            return item.hosts.contains { h in equivalents.matches(itemHost: h, site: host) }
         }
     }
 

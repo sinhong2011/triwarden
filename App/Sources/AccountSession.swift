@@ -14,6 +14,8 @@ final class AccountSession {
     private(set) var hiddenCount = 0
     /// Sites that share sign-ins, from the server's domain rules.
     private(set) var equivalents = EquivalentDomains.none
+    /// The same rules split into your own groups and the built-in ones, for Settings.
+    private(set) var syncedDomainRules: DomainRules?
     private(set) var lastSynced: Date?
     private(set) var isSyncing = false
     /// Set when a sync retry fails. Cleared on the next successful sync.
@@ -201,6 +203,7 @@ final class AccountSession {
         keyring = vault.keyring
         rawCiphers = vault.rawCiphers
         equivalents = EquivalentDomains(syncData: data)
+        syncedDomainRules = DomainRules(syncData: data)
         onChange()
     }
 
@@ -543,6 +546,23 @@ final class AccountSession {
     func devices() async throws -> [DeviceInfo] {
         guard let client else { throw WriteError.offline }
         return try await client.devices()
+    }
+
+    // MARK: Sites that share sign-ins
+
+    func domainRules() async throws -> DomainRules {
+        guard let client else { throw WriteError.offline }
+        return try await client.domainRules()
+    }
+
+    /// Saves the rules, then syncs: matching in the vault, AutoFill, the palette and the browser extension all read
+    /// the groups that come down with sync.
+    /// Returns false when the rules were saved but the sync after it failed (they apply on the next sync).
+    @discardableResult
+    func saveDomainRules(_ rules: DomainRules) async throws -> Bool {
+        guard let client else { throw WriteError.offline }
+        try await client.saveDomainRules(rules)
+        do { try await refresh(); return true } catch { return false }
     }
 
     /// Signs out every other session; this Mac signs straight back in.
