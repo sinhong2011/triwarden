@@ -4,7 +4,7 @@ import Foundation
 struct GeneratorHistoryEntry: Identifiable, Equatable {
     let id = UUID()
     let value: String
-    /// `password`, `passphrase` or `username` (GeneratorView.Mode's raw values).
+    /// `password`, `passphrase`, `username` or `pin` (GeneratorView.Mode's raw values; SSH keys are never kept).
     let kind: String
     let date: Date
     /// The site it was made for, when the browser extension asked for it (so a password whose save was missed can be

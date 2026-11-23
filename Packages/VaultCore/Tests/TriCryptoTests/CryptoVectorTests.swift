@@ -149,4 +149,15 @@ extension Data {
         let fingerprint = try run(["-l", "-E", "sha256", "-f", keyURL.path])
         #expect(fingerprint.contains(pair.fingerprint))
     }
+
+    /// Changing the comment (the Generator page's field) keeps the same key.
+    @Test func ed25519SeedKeepsTheKeyAcrossComments() throws {
+        let seed = SSHKeyPair.newEd25519Seed()
+        #expect(seed.count == 32)
+        let a = try SSHKeyPair.ed25519(seed: seed, comment: "laptop")
+        let b = try SSHKeyPair.ed25519(seed: seed, comment: "")
+        #expect(a.fingerprint == b.fingerprint)
+        #expect(a.publicKey == b.publicKey + " laptop")
+        #expect(SSHKeyPair.generateEd25519().fingerprint != a.fingerprint)
+    }
 }

@@ -41,6 +41,8 @@ struct EditItemSheet: View {
         var importSSH = false
         var apiKey = false
         var practiceAPIKey = false
+        /// Card / identity / SSH-key properties to start with (the Generator's "Save as SSH Key").
+        var properties: [String: String] = [:]
     }
 
     @Environment(AppModel.self) private var model
@@ -684,7 +686,7 @@ struct EditItemSheet: View {
                     .help(Text("Generate password"))
                     .accessibilityLabel(Text("Generate password"))
                     .popover(isPresented: $showGenerator, arrowEdge: .trailing) {
-                        GeneratorView(modes: [.password, .passphrase], compact: true) { generated in
+                        GeneratorView(modes: [.password, .passphrase, .pin], compact: true) { generated in
                             password = generated
                             showGenerator = false
                         }
@@ -1270,8 +1272,13 @@ struct EditItemSheet: View {
         if apiKeyPresentation == nil { apiKeyPresentation = model.showsAPIKeyTools }
         defer {
             prepareAPIFields()
-            // After the fields have settled (pickers tidy their values on appear).
-            DispatchQueue.main.async { original = draft }
+            // After the fields have settled (pickers tidy their values on appear). Handed-in properties (a key made on
+            // the Generator page) count as input, so closing the form asks before the key is lost.
+            DispatchQueue.main.async {
+                var start = draft
+                if case .create = mode, prefill?.properties.isEmpty == false { start.props = [:] }
+                original = start
+            }
         }
         focus = prefill?.focusTOTP == true ? .totp : .name
         // After the sheet has appeared, so the popover has its button to point at.
@@ -1291,6 +1298,7 @@ struct EditItemSheet: View {
             if let prefill {
                 name = prefill.name
                 password = prefill.password
+                if !prefill.properties.isEmpty { props = prefill.properties }
                 if !prefill.uri.isEmpty { websites = [WebsiteRow(text: prefill.uri)] }
                 if prefill.importSSH { DispatchQueue.main.async { choosingSSHKey = true } }
                 if prefill.apiKey {

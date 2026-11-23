@@ -158,3 +158,44 @@ public struct UsernameGenerator: Sendable, Equatable, Codable {
         }
     }
 }
+
+/// Numeric PINs (device unlock, cards, door codes). Digits only, from the same CSPRNG as passwords.
+public struct PINGenerator: Sendable, Equatable, Codable {
+    public var length = 6
+    /// Rejects PINs people guess first: a digit three times in a row (`777`) or a run of three (`123`, `987`).
+    public var avoidPatterns = true
+
+    public static let lengthRange = 4...16
+
+    public init() {}
+
+    enum CodingKeys: String, CodingKey { case length, avoidPatterns }
+
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        length = try c.decodeIfPresent(Int.self, forKey: .length) ?? 6
+        avoidPatterns = try c.decodeIfPresent(Bool.self, forKey: .avoidPatterns) ?? true
+    }
+
+    public func generate() -> String {
+        let count = Self.lengthRange.clamp(length)
+        while true {
+            let digits = (0..<count).map { _ in PasswordGenerator.uniform(upTo: 10) }
+            if !avoidPatterns || !Self.hasPattern(digits) { return digits.map(String.init).joined() }
+        }
+    }
+
+    /// Three in a row of the same digit, or three ascending / descending by one.
+    static func hasPattern(_ digits: [Int]) -> Bool {
+        guard digits.count >= 3 else { return false }
+        for i in 2..<digits.count {
+            let a = digits[i - 2], b = digits[i - 1], c = digits[i]
+            if a == b && b == c { return true }
+            if b - a == c - b && abs(b - a) == 1 { return true }
+        }
+        return false
+    }
+
+    /// Every possible PIN of this length (an upper bound when patterns are avoided).
+    public var combinations: Double { pow(10, Double(Self.lengthRange.clamp(length))) }
+}
