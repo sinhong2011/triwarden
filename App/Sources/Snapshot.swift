@@ -1500,6 +1500,37 @@ enum SelfTest {
                 let identity = model.items.first { $0.name == "Selftest identity" }
                 check(identity?.properties["passportNumber"] == "X1234567" && identity?.username == "Hachiware", "create identity")
                 if let identity { await model.deleteForever(identity) }
+
+                // Bitwarden's document types (6–8), on servers that store them: created, shown, edited, filtered.
+                let documents: [(AppModel.NewItemKind, VaultSection, SearchFilters.ItemType, [String: String], String, String)] = [
+                    (.bankAccount, .bankAccounts, .bankAccount, ["bankName": "Pochi Bank", "accountNumber": "004417720193", "iban": "GB82 WEST 1234"],
+                     "Pochi Bank", "accountNumber"),
+                    (.driversLicense, .driversLicenses, .driversLicense, ["firstName": "Usagi", "lastName": "Ura", "issuingState": "Tokyo",
+                                                                          "licenseNumber": "D4410228"], "Usagi Ura, Tokyo", "licenseNumber"),
+                    (.passport, .passports, .passport, ["givenName": "Usagi", "surname": "Ura", "issuingCountry": "Japan",
+                                                        "passportNumber": "TR1234567"], "Usagi Ura, Japan", "passportNumber"),
+                ]
+                for (kind, section, filterType, properties, subtitle, secretKey) in documents {
+                    var edit = CipherEdit(name: "Selftest \(kind)")
+                    edit.properties = properties
+                    let ok = await model.createItem(kind, edit: edit)
+                    let made = model.items.first { $0.name == "Selftest \(kind)" }
+                    check(ok && made?.kind == kind.itemKind && made?.properties == properties && made?.username == subtitle
+                          && made?.fields.contains { $0.value == properties[secretKey] && $0.secret } == true,
+                          "create \(kind): fields, subtitle and masked number")
+                    guard let made else { continue }
+                    check(section.includes(made) && model.showsNavigation(.section(section)) && !VaultSection.identities.includes(made)
+                          && VaultItem.Kind(filterType) == made.kind && made.password == nil && made.websites.isEmpty,
+                          "\(kind) shows in its own section and filter, never as a login")
+                    var change = CipherEdit()
+                    change.properties = [secretKey: "CHANGED-1"]
+                    _ = await model.updateItem(made.id, edit: change)
+                    let after = model.items.first { $0.id == made.id }
+                    var expected = properties; expected[secretKey] = "CHANGED-1"
+                    check(after?.properties == expected, "edit \(kind) keeps the other fields")
+                    await model.deleteForever(after ?? made)
+                }
+
                 let pair = SSHKeyPair.generateEd25519(comment: "selftest")
                 var sshEdit = CipherEdit(name: "Selftest SSH")
                 sshEdit.properties = ["privateKey": pair.privateKey, "publicKey": pair.publicKey, "keyFingerprint": pair.fingerprint]

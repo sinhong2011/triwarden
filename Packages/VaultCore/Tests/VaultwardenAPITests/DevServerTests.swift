@@ -24,6 +24,10 @@ enum DevServer {
     }
     static var enabled: Bool { host != nil }
 
+    /// Servers that store Bitwarden's document types (6–8); none of the CI pins do yet.
+    static let documentPorts: [Int] = env["TRIWARDEN_DEV_DOCUMENT_PORTS"]?
+        .split(separator: ",").compactMap { Int($0) } ?? []
+
     /// Latest Vaultwarden and a 1.30.x build, to cover older API shapes.
     static let ports: [Int] = env["TRIWARDEN_DEV_PORTS"]?
         .split(separator: ",").compactMap { Int($0) } ?? [18843, 18844]
@@ -216,6 +220,65 @@ struct DevServerTests {
         let fields = (cipher.fields ?? []).map { "\(dec($0.name) ?? "")=\(dec($0.value) ?? "")/\($0.type)" }
         #expect(fields == ["PIN=9999/1", "Bank=Pochi/0"])
         try await client.deleteCipher(id: id)
+    }
+
+    /// Bank account, driver's licence and passport items (Bitwarden types 6–8). Only on servers that store them —
+    /// list their ports in `TRIWARDEN_DEV_DOCUMENT_PORTS` (comma-separated); older pins don't.
+    @Test(.enabled(if: !DevServer.documentPorts.isEmpty, "set TRIWARDEN_DEV_DOCUMENT_PORTS to run"),
+          arguments: DevServer.documentPorts)
+    func documentTypesRoundTrip(port: Int) async throws {
+        let client = try DevServer.client(port: port)
+        let key = try await client.login(email: "hachiware@chiikawarden.test", password: DevServer.password)
+        func dec(_ s: String?) -> String? { s.flatMap { try? EncString($0).decryptString(with: key) } }
+        let samples: [(CipherEditor.Kind, [String: String], (key: String, value: String))] = [
+            (.bankAccount, ["bankName": "Pochi Bank", "accountNumber": "004417720193", "iban": "GB82 WEST 1234 5698 7654 32",
+                            "pin": "0420"], ("accountNumber", "009988776655")),
+            (.driversLicense, ["firstName": "Hachi", "lastName": "Ware", "licenseNumber": "D4410228", "issuingState": "Tokyo",
+                               "expirationDate": "2030-04-12"], ("licenseNumber", "D9990001")),
+            (.passport, ["givenName": "Hachi", "surname": "Ware", "passportNumber": "TR1234567", "issuingCountry": "Japan",
+                         "nationalIdentificationNumber": "1234-5678"], ("passportNumber", "TR7654321")),
+        ]
+        for (kind, properties, change) in samples {
+            var edit = CipherEdit(name: "E2E \(kind)", notes: "e2e")
+            edit.properties = properties
+            edit.customFields = [CustomField(name: "Branch", value: "Shibuya", kind: .text)]
+            let id = try await client.createCipher(CipherEditor.newCipher(kind: kind, edit: edit, key: key))
+
+            var data = try await client.syncData()
+            var cipher = try #require(try SyncResponse.decode(data).ciphers.first { $0.id == id })
+            #expect(cipher.type == kind.rawValue, "server kept the type")
+            for (name, value) in properties { #expect(dec(cipher.document?[name]) == value, "\(kind).\(name) stored") }
+
+            // Edit one property; the rest, the custom field and the notes stay; the edit carries the revision.
+            let raw = try #require(CipherEditor.rawCiphers(fromSync: data)[id])
+            try await Task.sleep(for: .seconds(2.5))
+            var patch = CipherEdit()
+            patch.properties = [change.key: change.value]
+            let body = try CipherEditor.updatedCipher(raw: raw, edit: patch, key: key)
+            #expect((try JSONSerialization.jsonObject(with: body) as? [String: Any])?["lastKnownRevisionDate"] != nil)
+            try await client.updateCipher(id: id, body)
+            data = try await client.syncData()
+            cipher = try #require(try SyncResponse.decode(data).ciphers.first { $0.id == id })
+            #expect(dec(cipher.document?[change.key]) == change.value, "\(kind) edit saved")
+            for (name, value) in properties where name != change.key {
+                #expect(dec(cipher.document?[name]) == value, "\(kind).\(name) untouched by the edit")
+            }
+            #expect(dec(cipher.notes) == "e2e" && dec(cipher.fields?.first?.value) == "Shibuya")
+
+            // A stale edit (old revision) is refused rather than overwriting the newer one. Vaultwarden refuses it only when
+            // the item changed more than one whole second after that copy, hence the pause before the first edit.
+            var stale = CipherEdit()
+            stale.properties = [change.key: "stale"]
+            await #expect(throws: (any Error).self) {
+                try await client.updateCipher(id: id, CipherEditor.updatedCipher(raw: raw, edit: stale, key: key))
+            }
+
+            // The personal export carries it under Bitwarden's object name.
+            let export = try VaultExport.plainVault(syncData: data, userKey: key)
+            let item = try #require(export.items.first { $0["id"] as? String == id })
+            #expect((item[kind.propertyObject!] as? [String: Any])?[change.key] as? String == change.value)
+            try await client.deleteCipher(id: id)
+        }
     }
 
     @Test(arguments: DevServer.ports)
