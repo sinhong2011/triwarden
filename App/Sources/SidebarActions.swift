@@ -115,9 +115,9 @@ extension AppModel {
         case .section(.logins): return [create(.login, title: String(localized: "New Login")), search()]
         case .section(.cards): return [create(.card, title: String(localized: "New Card")), search()]
         case .section(.identities): return [create(.identity, title: String(localized: "New Identity")), search()]
-        case .section(.bankAccounts): return [create(.bankAccount, title: String(localized: "New Bank Account")), search()]
-        case .section(.driversLicenses): return [create(.driversLicense, title: String(localized: "New Driver's Licence")), search()]
-        case .section(.passports): return [create(.passport, title: String(localized: "New Passport")), search()]
+        case .section(.documents): return [create(.bankAccount, title: String(localized: "New Bank Account")),
+            create(.driversLicense, title: String(localized: "New Driver's Licence")),
+            create(.passport, title: String(localized: "New Passport")), search()]
         case .section(.notes): return [create(.secureNote, title: String(localized: "New Secure Note")), search()]
         case .section(.apiKeys): return [action(String(localized: "New API Key"), "key.horizontal", enabled: !ids.isEmpty) {
             self.beginAPIKey(accountIDs: ids)
@@ -249,9 +249,6 @@ extension SidebarSelection {
         case .section(.identities): filters.type = .identity
         case .section(.notes): filters.type = .note
         case .section(.sshKeys): filters.type = .sshKey
-        case .section(.bankAccounts): filters.type = .bankAccount
-        case .section(.driversLicenses): filters.type = .driversLicense
-        case .section(.passports): filters.type = .passport
         case .section(.favorites): filters.favorites = true
         case .section(.passkeys): filters.hasPasskey = true
         case .folder(let path): filters.folder = path

@@ -937,8 +937,7 @@ struct CommandPalette: View {
             let places: [(VaultSection, String)] = [
                 (.all, String(localized: "All Items")), (.favorites, String(localized: "Favorites")), (.logins, String(localized: "Logins")),
                 (.passkeys, String(localized: "Passkeys")), (.cards, String(localized: "Cards")), (.identities, String(localized: "Identities")),
-                (.bankAccounts, String(localized: "Bank Accounts")), (.driversLicenses, String(localized: "Driver's Licences")),
-                (.passports, String(localized: "Passports")),
+                (.documents, String(localized: "sidebar.documents")),
                 (.notes, String(localized: "Secure Notes")), (.apiKeys, String(localized: "API Keys")), (.sshKeys, String(localized: "SSH Keys")), (.archive, String(localized: "Archive")),
                 (.trash, String(localized: "Trash")),
             ]

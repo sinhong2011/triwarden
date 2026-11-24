@@ -86,9 +86,9 @@ enum CompatibilitySelfTest {
                       && bankItem.fields.contains { $0.value == "GB00 0000" && $0.secret }
                       && bankItem.properties["overdraftLimit"] == "500" && bankItem.fields.contains { $0.label == "Overdraft limit" },
                       "bank account decodes its fields, subtitle and a property added later")
-                check(VaultSection.bankAccounts.includes(bankItem) && !VaultSection.identities.includes(bankItem)
+                check(VaultSection.documents.includes(bankItem) && !VaultSection.identities.includes(bankItem)
                       && bankItem.password == nil && bankItem.websites.isEmpty,
-                      "bank account lists in its own section and never as a login")
+                      "bank account lists under Documents and never as a login")
                 for kind in [VaultItem.Kind.bankAccount, .driversLicense, .passport] {
                     let keys = DocumentFormLayout.groups(for: kind).flatMap { $0.rows.joined().map(\.key) }
                     check(keys.count == Set(keys).count && Set(keys) == Set(DocumentField.fields(for: kind.documentKind!).map(\.key)),

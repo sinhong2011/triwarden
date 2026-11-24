@@ -403,8 +403,8 @@ enum Snapshot {
         vault.setPreviewAccounts([SavedAccount(id: "demo", email: "alex@example.com", serverKind: "selfHosted",
                                                serverURL: "https://vault.home.arpa", kdf: .pbkdf2(iterations: 600_000),
                                                protectedUserKey: "")])
-        // The sidebar's Types group open, with a bank account, a licence and a passport in the vault: their sections
-        // show, the Passports one selected. A model of its own, so the README's vault renders stay as they are.
+        // The sidebar's Types group open, with a bank account, a licence and a passport in the vault: they
+        // gather under Documents, which is selected. A model of its own, so the README's vault renders stay as they are.
         if wanted(dir.appending(path: "vault-documents-light.png")) || wanted(dir.appending(path: "vault-documents-dark.png")) {
             let documents = AppModel()
             documents.phase = .vault
@@ -424,11 +424,11 @@ enum Snapshot {
             for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
                 documents.requestedSection = nil
                 documents.selectedID = documentSamples.first { $0.kind == .bankAccount }?.id
-                // All Items first (a bank account open), then the Passports section: a section is picked by a change.
+                // All Items first (a bank account open), then Documents: a section is picked by a change.
                 renderWindow(VaultView().environment(documents).tint(.brand), size: CGSize(width: 1180, height: 900),
                              appearance: appearance, to: dir.appending(path: "vault-documents-all-\(name).png"),
                              thenChange: {
-                                 documents.requestedSection = .section(.passports)
+                                 documents.requestedSection = .section(.documents)
                                  documents.selectedID = documentSamples.first { $0.kind == .passport }?.id
                              }, to: dir.appending(path: "vault-documents-\(name).png"))
             }
@@ -1564,11 +1564,11 @@ enum SelfTest {
 
                 // Bitwarden's document types (6–8), on servers that store them: created, shown, edited, filtered.
                 let documents: [(AppModel.NewItemKind, VaultSection, SearchFilters.ItemType, [String: String], String, String)] = [
-                    (.bankAccount, .bankAccounts, .bankAccount, ["bankName": "Pochi Bank", "accountNumber": "004417720193", "iban": "GB82 WEST 1234"],
+                    (.bankAccount, .documents, .bankAccount, ["bankName": "Pochi Bank", "accountNumber": "004417720193", "iban": "GB82 WEST 1234"],
                      "Pochi Bank", "accountNumber"),
-                    (.driversLicense, .driversLicenses, .driversLicense, ["firstName": "Usagi", "lastName": "Ura", "issuingState": "Tokyo",
+                    (.driversLicense, .documents, .driversLicense, ["firstName": "Usagi", "lastName": "Ura", "issuingState": "Tokyo",
                                                                           "licenseNumber": "D4410228"], "Usagi Ura, Tokyo", "licenseNumber"),
-                    (.passport, .passports, .passport, ["givenName": "Usagi", "surname": "Ura", "issuingCountry": "Japan",
+                    (.passport, .documents, .passport, ["givenName": "Usagi", "surname": "Ura", "issuingCountry": "Japan",
                                                         "passportNumber": "TR1234567"], "Usagi Ura, Japan", "passportNumber"),
                 ]
                 for (kind, section, filterType, properties, subtitle, secretKey) in documents {
@@ -1582,7 +1582,7 @@ enum SelfTest {
                     guard let made else { continue }
                     check(section.includes(made) && model.showsNavigation(.section(section)) && !VaultSection.identities.includes(made)
                           && VaultItem.Kind(filterType) == made.kind && made.password == nil && made.websites.isEmpty,
-                          "\(kind) shows in its own section and filter, never as a login")
+                          "\(kind) shows under Documents and in its type filter, never as a login")
                     var change = CipherEdit()
                     change.properties = [secretKey: "CHANGED-1"]
                     _ = await model.updateItem(made.id, edit: change)

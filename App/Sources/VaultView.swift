@@ -497,27 +497,18 @@ enum SidebarSelection: Hashable {
 }
 
 enum VaultSection: Hashable, CaseIterable {
-    case all, favorites, logins, passkeys, cards, identities, bankAccounts, driversLicenses, passports, notes, apiKeys, sshKeys
+    case all, favorites, logins, passkeys, cards, identities, documents, notes, apiKeys, sshKeys
     case archive, trash
 
-    /// Shown nested under All Items: narrower views of the same items. The document sections show once the vault
-    /// holds one (`showsNavigation`); new ones are made from the + menu.
-    static let underAll: [VaultSection] = [.favorites, .logins, .passkeys, .cards, .identities, .bankAccounts, .driversLicenses,
-                                           .passports, .notes, .apiKeys, .sshKeys]
-
-    /// The item kind this section lists, when it lists exactly one.
-    var documentKind: VaultItem.Kind? {
-        switch self {
-        case .bankAccounts: .bankAccount; case .driversLicenses: .driversLicense; case .passports: .passport
-        default: nil
-        }
-    }
+    /// Shown nested under All Items: narrower views of the same items. Documents (bank accounts, driver's licences,
+    /// passports) shows once the vault holds one (`showsNavigation`); new ones are made from the + menu.
+    static let underAll: [VaultSection] = [.favorites, .logins, .passkeys, .cards, .identities, .documents, .notes, .apiKeys, .sshKeys]
 
     var title: LocalizedStringKey {
         switch self {
         case .all: "All Items"; case .favorites: "Favorites"; case .logins: "Logins"; case .passkeys: "Passkeys"
         case .sshKeys: "SSH Keys"; case .cards: "Cards"; case .identities: "Identities"; case .notes: "Secure Notes"
-        case .bankAccounts: "Bank Accounts"; case .driversLicenses: "Driver's Licences"; case .passports: "Passports"
+        case .documents: "sidebar.documents"
         case .apiKeys: "API Keys"
         case .archive: "Archive"; case .trash: "Trash"
         }
@@ -527,7 +518,7 @@ enum VaultSection: Hashable, CaseIterable {
         switch self {
         case .all: "square.grid.2x2"; case .favorites: "star"; case .logins: "key"; case .passkeys: "person.badge.key"
         case .sshKeys: "terminal"; case .cards: "creditcard"; case .identities: "person.crop.rectangle"; case .notes: "note.text"
-        case .bankAccounts: "building.columns"; case .driversLicenses: "car"; case .passports: "globe.americas"
+        case .documents: "person.text.rectangle"
         case .apiKeys: "key.horizontal"
         case .archive: "archivebox"; case .trash: "trash"
         }
@@ -548,7 +539,7 @@ enum VaultSection: Hashable, CaseIterable {
         case .sshKeys: return item.kind == .sshKey
         case .cards: return item.kind == .card
         case .identities: return item.kind == .identity
-        case .bankAccounts, .driversLicenses, .passports: return item.kind == documentKind
+        case .documents: return item.kind.isDocument
         case .notes: return item.kind == .note
         case .apiKeys: return item.isAPIKey
         }
