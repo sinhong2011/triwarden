@@ -403,6 +403,37 @@ enum Snapshot {
         vault.setPreviewAccounts([SavedAccount(id: "demo", email: "alex@example.com", serverKind: "selfHosted",
                                                serverURL: "https://vault.home.arpa", kdf: .pbkdf2(iterations: 600_000),
                                                protectedUserKey: "")])
+        // The sidebar's Types group open, with a bank account, a licence and a passport in the vault: their sections
+        // show, the Passports one selected. A model of its own, so the README's vault renders stay as they are.
+        if wanted(dir.appending(path: "vault-documents-light.png")) || wanted(dir.appending(path: "vault-documents-dark.png")) {
+            let documents = AppModel()
+            documents.phase = .vault
+            documents.items = (vault.items + documentSamples.map { item in
+                var item = item
+                item.revised = Date(timeIntervalSince1970: 1_791_123_456)
+                item.created = Date(timeIntervalSince1970: 1_748_500_000)
+                return item
+            }).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            documents.previewUnlocked = true
+            documents.setPreviewAccounts([SavedAccount(id: "demo", email: "alex@example.com", serverKind: "selfHosted",
+                                                       serverURL: "https://vault.home.arpa", kdf: .pbkdf2(iterations: 600_000),
+                                                       protectedUserKey: "")])
+            let typesKey = "sidebarTypesExpanded"
+            let savedTypes = UserDefaults.standard.object(forKey: typesKey)
+            UserDefaults.standard.set(true, forKey: typesKey)
+            for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+                documents.requestedSection = nil
+                documents.selectedID = documentSamples.first { $0.kind == .bankAccount }?.id
+                // All Items first (a bank account open), then the Passports section: a section is picked by a change.
+                renderWindow(VaultView().environment(documents).tint(.brand), size: CGSize(width: 1180, height: 900),
+                             appearance: appearance, to: dir.appending(path: "vault-documents-all-\(name).png"),
+                             thenChange: {
+                                 documents.requestedSection = .section(.passports)
+                                 documents.selectedID = documentSamples.first { $0.kind == .passport }?.id
+                             }, to: dir.appending(path: "vault-documents-\(name).png"))
+            }
+            UserDefaults.standard.set(savedTypes, forKey: typesKey)
+        }
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             render(desktop(VaultView().environment(vault).tint(.brand), dark: name == "dark"),
                    size: CGSize(width: 1180, height: 760), appearance: appearance,
