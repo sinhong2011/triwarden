@@ -40,6 +40,16 @@ extension DocumentField {
         }
     }
 
+    /// A property this version doesn't list, named in plain words from its API name: "visaPages" → "Visa pages".
+    static func readableName(_ key: String) -> String {
+        var words = ""
+        for character in key {
+            if character.isUppercase, !words.isEmpty { words.append(" ") }
+            words.append(contentsOf: words.isEmpty ? character.uppercased() : character.lowercased())
+        }
+        return words.isEmpty ? key : words
+    }
+
     /// Account and document numbers read best in a fixed-width face.
     var monospaced: Bool {
         ["accountNumber", "routingNumber", "branchNumber", "pin", "swiftCode", "iban", "licenseNumber", "passportNumber",
@@ -73,7 +83,7 @@ extension VaultItem {
             properties[field.key].map { ItemField(label: field.localizedLabel, value: $0, secret: field.secret, monospaced: field.monospaced) }
         }
         fields += properties.keys.filter { key in !known.contains { $0.key == key } }.sorted().map {
-            ItemField(label: $0, value: properties[$0] ?? "", secret: true)
+            ItemField(label: DocumentField.readableName($0), value: properties[$0] ?? "", secret: true)
         }
     }
 }

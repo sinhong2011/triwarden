@@ -84,7 +84,7 @@ enum CompatibilitySelfTest {
                 let bankItem = decoded.items.first { $0.id == "bank" }!
                 check(bankItem.kind == .bankAccount && bankItem.username == "Maple CU"
                       && bankItem.fields.contains { $0.value == "GB00 0000" && $0.secret }
-                      && bankItem.properties["overdraftLimit"] == "500" && bankItem.fields.contains { $0.label == "overdraftLimit" },
+                      && bankItem.properties["overdraftLimit"] == "500" && bankItem.fields.contains { $0.label == "Overdraft limit" },
                       "bank account decodes its fields, subtitle and a property added later")
                 check(VaultSection.bankAccounts.includes(bankItem) && !VaultSection.identities.includes(bankItem)
                       && bankItem.password == nil && bankItem.websites.isEmpty,

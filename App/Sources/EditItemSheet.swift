@@ -1009,7 +1009,7 @@ struct EditItemSheet: View {
         let extra = props.keys.filter { !known.contains($0) }.sorted()
         if !extra.isEmpty {
             FormCard(title: "Other details") {
-                ForEach(extra, id: \.self) { key in prop(LocalizedStringKey(key), key, secret: true) }
+                ForEach(extra, id: \.self) { key in prop(LocalizedStringKey(DocumentField.readableName(key)), key, secret: true) }
             }
         }
     }

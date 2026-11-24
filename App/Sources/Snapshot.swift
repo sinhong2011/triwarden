@@ -700,13 +700,14 @@ enum Snapshot {
                    size: CGSize(width: 580, height: 700), appearance: appearance,
                    to: dir.appending(path: "edit-ssh-\(name).png"))
             // Bitwarden's document types: the edit form (secrets masked) and the detail they make.
-            for (kind, slug) in [(VaultItem.Kind.bankAccount, "bank"), (.driversLicense, "license"), (.passport, "passport")] {
-                guard let document = demoItems.first(where: { $0.kind == kind }) else { continue }
-                render(EditItemSheet(mode: .edit(document)).environment(vault).tint(.brand),
-                       size: CGSize(width: 580, height: 900), appearance: appearance,
+            for document in documentSamples {
+                let slug = switch document.kind { case .bankAccount: "bank"; case .driversLicense: "license"; default: "passport" }
+                // The panel form grows to its content, so every field (and Other details) is in the picture.
+                render(EditItemSheet(mode: .edit(document), inPanel: true).environment(vault).tint(.brand),
+                       size: CGSize(width: 580, height: 1500), appearance: appearance,
                        to: dir.appending(path: "edit-\(slug)-\(name).png"))
                 render(ItemDetail(item: document).environment(vault).tint(.brand).background(Color.windowBase),
-                       size: CGSize(width: 560, height: 860), appearance: appearance,
+                       size: CGSize(width: 560, height: 1700), appearance: appearance,
                        to: dir.appending(path: "detail-\(slug)-\(name).png"))
             }
             render(VStack(spacing: 14) {
@@ -1002,6 +1003,35 @@ enum Snapshot {
         p.waitUntilExit()
         return (p.terminationStatus, String(decoding: data, as: UTF8.self))
     }
+
+    /// One of each document type, filled in, for the edit and detail renders (kept out of `demoItems`, which the
+    /// README's vault screenshots use).
+    static let documentSamples: [VaultItem] = {
+        let samples: [(VaultItem.Kind, String, [String: String])] = [
+            (.bankAccount, "Everyday checking", ["bankName": "Maple Credit Union", "nameOnAccount": "Alex Chen", "accountType": "Checking",
+                                                "accountNumber": "004417720193", "routingNumber": "121000358", "branchNumber": "0042",
+                                                "swiftCode": "MCUSUS6S", "iban": "US12 MCUS 0044 1772 0193", "pin": "4821",
+                                                "bankContactPhone": "+1 800 555 0199"]),
+            (.driversLicense, "Driver's licence", ["firstName": "Alex", "middleName": "J.", "lastName": "Chen", "dateOfBirth": "1990-04-12",
+                                                   "licenseNumber": "D4410228", "issuingCountry": "United States", "issuingState": "CA",
+                                                   "licenseClass": "C", "issueDate": "2022-05-01", "issuingAuthority": "California DMV",
+                                                   "expirationDate": "2027-04-12"]),
+            (.passport, "Passport", ["givenName": "Alex", "surname": "Chen", "dateOfBirth": "1990-04-12", "sex": "X",
+                                     "birthPlace": "San Francisco", "nationality": "United States", "passportNumber": "X48210093",
+                                     "passportType": "P", "issuingCountry": "United States",
+                                     "issuingAuthority": "U.S. Department of State", "issueDate": "2021-03-02",
+                                     "expirationDate": "2031-03-01", "nationalIdentificationNumber": "123-45-6789",
+                                     "visaPages": "52"]),
+        ]
+        return samples.enumerated().map { index, sample in
+            var item = VaultItem(id: "doc\(index)", accountId: "demo", kind: sample.0, name: sample.1, username: nil, host: nil,
+                                 password: nil, totp: nil, notes: index == 2 ? "Renew six months before travel." : nil, favorite: false)
+            item.setDocumentProperties(sample.2)
+            item.folderId = "f-personal"
+            item.folderName = "Personal"
+            return item
+        }
+    }()
 
     static let demoItems: [VaultItem] = [
         VaultItem(id: "1", name: "Cloudflare", username: "ops@northwind.example", host: "dash.cloudflare.com",
