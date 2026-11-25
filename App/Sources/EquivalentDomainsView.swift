@@ -6,6 +6,9 @@ import VaultwardenAPI
 struct EquivalentDomainsSection: View {
     let session: AccountSession
     @State private var editing = false
+    /// The account's rules as the server has them. Sync leaves turned-off built-in groups out altogether, so only
+    /// this says how many are off.
+    @State private var rules: DomainRules?
 
     var body: some View {
         Section {
@@ -23,10 +26,15 @@ struct EquivalentDomainsSection: View {
                 .font(.caption).foregroundStyle(.secondary)
         }
         .sheet(isPresented: $editing) { EquivalentDomainsSheet(session: session) }
+        // Again after each sync, which includes the one that follows a save.
+        .task(id: session.lastSynced) {
+            if let loaded = try? await session.domainRules() { rules = loaded }
+        }
     }
 
     private var summary: String {
-        guard let rules = session.syncedDomainRules else { return String(localized: "Bitwarden's built-in groups") }
+        // Offline: your own groups still come down with sync; how many built-in ones are off doesn't.
+        guard let rules = rules ?? session.syncedDomainRules else { return String(localized: "Bitwarden's built-in groups") }
         let own = DomainRules.cleaned(rules.custom).count, off = rules.excludedBuiltInTypes.count
         switch (own, off) {
         case (0, 0): return String(localized: "Bitwarden's built-in groups")

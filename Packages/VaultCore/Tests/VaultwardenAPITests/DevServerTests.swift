@@ -41,6 +41,41 @@ enum DevServer {
 
 @Suite(.enabled(if: DevServer.enabled, "set TRIWARDEN_DEV_HOST to run"), .serialized)
 struct DevServerTests {
+    /// Sites that share sign-ins: what Settings saves comes back from `settings/domains` and in sync (which matching
+    /// reads), then the account's original rules are put back.
+    @Test(arguments: DevServer.ports)
+    func equivalentDomainsRoundTrip(port: Int) async throws {
+        let client = try DevServer.client(port: port)
+        _ = try await client.login(email: "hachiware@chiikawarden.test", password: DevServer.password)
+        let original = try await client.domainRules()
+        #expect(!original.builtIn.isEmpty)
+        let off = try #require(original.builtIn.first { !$0.excluded })
+        var edited = original
+        edited.custom = [["https://www.Chiikawa-Shop.example/login", "chiikawa-market.example", "CHIIKAWA-market.example"],
+                         ["only-one.example"]]
+        for i in edited.builtIn.indices where edited.builtIn[i].type == off.type { edited.builtIn[i].excluded = true }
+        do {
+            try await client.saveDomainRules(edited)
+            let saved = try await client.domainRules()
+            #expect(saved.custom == [["www.chiikawa-shop.example", "chiikawa-market.example"]])
+            #expect(saved.excludedBuiltInTypes.contains(off.type))
+            #expect(saved.builtIn.count == original.builtIn.count)
+            // Sync is what matching reads: your groups as saved, and a turned-off built-in group left out entirely
+            // (Vaultwarden drops excluded ones from sync rather than marking them).
+            let synced = try #require(DomainRules(syncData: try await client.syncData()))
+            #expect(synced.custom == saved.custom)
+            #expect(!synced.builtIn.contains { $0.type == off.type && !$0.excluded })
+            #expect(synced.builtIn.contains { $0.type != off.type })
+        } catch {
+            try? await client.saveDomainRules(original)
+            throw error
+        }
+        try await client.saveDomainRules(original)
+        let restored = try await client.domainRules()
+        #expect(restored.custom == DomainRules.cleaned(original.custom))
+        #expect(restored.excludedBuiltInTypes == original.excludedBuiltInTypes)
+    }
+
     @Test(arguments: DevServer.ports)
     func pbkdf2LoginAndSync(port: Int) async throws {
         let client = try DevServer.client(port: port)
