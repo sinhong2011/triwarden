@@ -46,7 +46,7 @@ import Testing
                                          ["not a site", "ok.example"]],
                                 builtIn: [.init(type: 4, domains: [], excluded: true), .init(type: 2, domains: [], excluded: false),
                                           .init(type: 3, domains: [], excluded: true)])
-        #expect(rules.body["equivalentDomains"] as? [[String]] == [["www.apple.com", "icloud.com"]])
+        #expect(rules.body["equivalentDomains"] as? [[String]] == [["apple.com", "icloud.com"]])
         #expect(rules.body["excludedGlobalEquivalentDomains"] as? [Int] == [3, 4])
         rules.builtIn[1].excluded = true
         #expect(rules.excludedBuiltInTypes == [2, 3, 4])
@@ -64,6 +64,8 @@ import Testing
         ("example.net.", "example.net"),
         ("bücher.de", "bücher.de"),
         ("192.168.1.10", "192.168.1.10"),
+        ("https://WWW.Apple.com/", "apple.com"),
+        ("www2.example.com", "www2.example.com"),
     ])
     func normalizesHosts(input: String, expected: String) {
         #expect(DomainRules.normalizedHost(input) == expected)

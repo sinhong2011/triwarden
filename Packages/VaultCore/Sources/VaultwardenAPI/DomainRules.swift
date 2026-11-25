@@ -68,8 +68,9 @@ public struct DomainRules: Sendable, Equatable {
         }
     }
 
-    /// A host from what someone typed or pasted: `https://www.Example.com/login` → `www.example.com`. Nil when it
-    /// isn't a site address (no dot, spaces, odd characters).
+    /// A site from what someone typed or pasted: `https://www.Example.com/login` → `example.com`. A leading `www.` is
+    /// dropped: whoever pastes www.apple.com means apple.com, and a group's site already covers its subdomains (the
+    /// built-in groups list bare domains too). Nil when it isn't a site address (no dot, spaces, odd characters).
     public static func normalizedHost(_ input: String) -> String? {
         var text = input.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         if let scheme = text.range(of: "://") { text = String(text[scheme.upperBound...]) }
@@ -78,6 +79,7 @@ public struct DomainRules: Sendable, Equatable {
         if let colon = text.lastIndex(of: ":") { text = String(text[..<colon]) }
         if text.hasPrefix("*.") { text.removeFirst(2) }
         while text.hasSuffix(".") { text.removeLast() }
+        if text.hasPrefix("www."), text.dropFirst(4).contains(".") { text.removeFirst(4) }
         let labels = text.split(separator: ".", omittingEmptySubsequences: false)
         guard labels.count > 1, text.count <= 253 else { return nil }
         for label in labels {

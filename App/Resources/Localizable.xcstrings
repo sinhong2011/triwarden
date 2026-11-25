@@ -101634,58 +101634,6 @@
         }
       }
     },
-    "Each group needs at least two sites.": {
-      "localizations": {
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "各グループには 2 つ以上のサイトが必要です。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "每个分组至少需要两个网站。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "每個群組至少需要兩個網站。"
-          }
-        },
-        "zh-HK": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "每個群組最少要有兩個網站。"
-          }
-        },
-        "ko": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "각 그룹에는 사이트가 두 개 이상 필요합니다."
-          }
-        },
-        "fr": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Chaque groupe doit contenir au moins deux sites."
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cada grupo necesita al menos dos sitios."
-          }
-        },
-        "th": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "แต่ละกลุ่มต้องมีอย่างน้อยสองไซต์"
-          }
-        }
-      }
-    },
     "No groups of your own yet": {
       "localizations": {
         "ja": {
@@ -102774,6 +102722,58 @@
           "stringUnit": {
             "state": "translated",
             "value": "ปลดล็อกบัญชีนี้เพื่อจัดการการเข้าสู่ระบบสองขั้นตอน รหัสผ่านหลัก อุปกรณ์ การเข้าถึงฉุกเฉิน และไซต์ที่ใช้ข้อมูลเข้าสู่ระบบร่วมกัน"
+          }
+        }
+      }
+    },
+    "Group %lld needs at least two sites.": {
+      "localizations": {
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "グループ %lld には 2 つ以上のサイトが必要です。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分组 %lld 至少需要两个网站。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群組 %lld 至少需要兩個網站。"
+          }
+        },
+        "zh-HK": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "群組 %lld 最少要有兩個網站。"
+          }
+        },
+        "ko": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "그룹 %lld에는 사이트가 두 개 이상 필요합니다."
+          }
+        },
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Le groupe %lld doit contenir au moins deux sites."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "El grupo %lld necesita al menos dos sitios."
+          }
+        },
+        "th": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "กลุ่ม %lld ต้องมีอย่างน้อยสองไซต์"
           }
         }
       }

@@ -1410,6 +1410,46 @@ enum SelfTest {
                   && !eq.matches(itemHost: "github.com", site: "gitlab.com"),
                   "equivalent domains from the server (\(eq.groups.count) groups)")
 
+            // Sites that share sign-ins, saved as Settings saves them: your own group and a turned-off built-in group
+            // reach matching (vault, palette, browser extension) as soon as Save returns. Then the rules go back.
+            _ = await model.createItem(.login, edit: CipherEdit(name: "Selftest shared sign-in", username: "kurimanju",
+                                                                password: "s3cret-shared", uri: "https://login.selftest-shop.example"))
+            if let login = model.items.first(where: { $0.name == "Selftest shared sign-in" }),
+               let session = model.session(for: login.accountId) {
+                var original: DomainRules?
+                do {
+                    let rules = try await session.domainRules()
+                    original = rules
+                    let google = rules.builtIn.first { !$0.excluded && $0.domains.contains("google.com") }
+                    var edited = rules
+                    edited.custom.append(["https://www.Selftest-Shop.example/login", "selftest-market.example"])
+                    for i in edited.builtIn.indices where edited.builtIn[i].type == google?.type { edited.builtIn[i].excluded = true }
+                    let synced = try await session.saveDomainRules(edited)
+                    let own = session.equivalents
+                    check(synced && own.matches(itemHost: "login.selftest-shop.example", site: "selftest-market.example")
+                          && google != nil && !own.matches(itemHost: "accounts.google.com", site: "youtube.com"),
+                          "saved domain rules reach matching at once (own group on, built-in Google group off)")
+                    let browser = CLIBridge.logins(for: "www.selftest-market.example", in: model.items, equivalents: model.equivalentDomains)
+                    check(browser.contains { $0.id == login.id }
+                          && CLIBridge.logins(for: "www.selftest-market.example", in: model.items).allSatisfy { $0.id != login.id },
+                          "browser extension offers the login on the other site of a saved group")
+                    check(EquivalentDomains.none.matches(itemHost: "selftest-shop.example", site: "selftest-shop.example")
+                          && !session.equivalents.matches(itemHost: "selftest-shop.example", site: "unrelated.example"),
+                          "saved group doesn't reach unrelated sites")
+                    try await session.saveDomainRules(rules)
+                    original = nil
+                    check(session.equivalents.matches(itemHost: "accounts.google.com", site: "youtube.com")
+                          && !session.equivalents.matches(itemHost: "login.selftest-shop.example", site: "selftest-market.example"),
+                          "domain rules restored")
+                } catch {
+                    check(false, "save domain rules: \(error)")
+                }
+                if let original { _ = try? await session.saveDomainRules(original) }
+                await model.deleteForever(login)
+            } else {
+                check(false, "save domain rules: test login not created")
+            }
+
             // Organizations: move a personal item in (re-encrypted with the organization key), change its collections.
             if let org = model.organizations.first, let collection = org.children.first {
                 _ = await model.createItem(.login, edit: CipherEdit(name: "Selftest share", username: "kurimanju", password: "s3cret-share",

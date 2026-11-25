@@ -93,8 +93,9 @@ struct EquivalentDomainsSheet: View {
                 if let saveError {
                     Label(saveError, systemImage: "exclamationmark.circle.fill").font(.system(size: 12)).foregroundStyle(.red)
                         .lineLimit(2)
-                } else if incomplete {
-                    Text("Each group needs at least two sites.").font(.system(size: 12)).foregroundStyle(.secondary)
+                } else if let short = groups.firstIndex(where: { $0.sites.count == 1 }) {
+                    // Named, since it may be off screen or on the other tab.
+                    Text("Group \(short + 1) needs at least two sites.").font(.system(size: 12)).foregroundStyle(.secondary)
                 }
             }
         }
@@ -228,6 +229,8 @@ struct EquivalentDomainsSheet: View {
                     Text("and ^[\(more) more site](inflect: true)").font(.system(size: 11)).foregroundStyle(.secondary)
                 }
             }
+            // Sites on the left, the switch at the row's right edge (outside a Form the switch hugs its label).
+            .frame(maxWidth: .infinity, alignment: .leading)
             .help(group.domains.joined(separator: ", "))
         }
         .toggleStyle(.brandSwitch)

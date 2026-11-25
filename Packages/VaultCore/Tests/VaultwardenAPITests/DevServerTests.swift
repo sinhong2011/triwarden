@@ -57,7 +57,7 @@ struct DevServerTests {
         do {
             try await client.saveDomainRules(edited)
             let saved = try await client.domainRules()
-            #expect(saved.custom == [["www.chiikawa-shop.example", "chiikawa-market.example"]])
+            #expect(saved.custom == [["chiikawa-shop.example", "chiikawa-market.example"]])
             #expect(saved.excludedBuiltInTypes.contains(off.type))
             #expect(saved.builtIn.count == original.builtIn.count)
             // Sync is what matching reads: your groups as saved, and a turned-off built-in group left out entirely
