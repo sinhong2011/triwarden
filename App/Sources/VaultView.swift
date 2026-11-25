@@ -497,15 +497,18 @@ enum SidebarSelection: Hashable {
 }
 
 enum VaultSection: Hashable, CaseIterable {
-    case all, favorites, logins, passkeys, cards, identities, notes, apiKeys, sshKeys, archive, trash
+    case all, favorites, logins, passkeys, cards, identities, documents, notes, apiKeys, sshKeys
+    case archive, trash
 
-    /// Shown nested under All Items: narrower views of the same items.
-    static let underAll: [VaultSection] = [.favorites, .logins, .passkeys, .cards, .identities, .notes, .apiKeys, .sshKeys]
+    /// Shown nested under All Items: narrower views of the same items. Documents (bank accounts, driver's licences,
+    /// passports) shows once the vault holds one (`showsNavigation`); new ones are made from the + menu.
+    static let underAll: [VaultSection] = [.favorites, .logins, .passkeys, .cards, .identities, .documents, .notes, .apiKeys, .sshKeys]
 
     var title: LocalizedStringKey {
         switch self {
         case .all: "All Items"; case .favorites: "Favorites"; case .logins: "Logins"; case .passkeys: "Passkeys"
         case .sshKeys: "SSH Keys"; case .cards: "Cards"; case .identities: "Identities"; case .notes: "Secure Notes"
+        case .documents: "sidebar.documents"
         case .apiKeys: "API Keys"
         case .archive: "Archive"; case .trash: "Trash"
         }
@@ -515,6 +518,7 @@ enum VaultSection: Hashable, CaseIterable {
         switch self {
         case .all: "square.grid.2x2"; case .favorites: "star"; case .logins: "key"; case .passkeys: "person.badge.key"
         case .sshKeys: "terminal"; case .cards: "creditcard"; case .identities: "person.crop.rectangle"; case .notes: "note.text"
+        case .documents: "person.text.rectangle"
         case .apiKeys: "key.horizontal"
         case .archive: "archivebox"; case .trash: "trash"
         }
@@ -535,6 +539,7 @@ enum VaultSection: Hashable, CaseIterable {
         case .sshKeys: return item.kind == .sshKey
         case .cards: return item.kind == .card
         case .identities: return item.kind == .identity
+        case .documents: return item.kind.isDocument
         case .notes: return item.kind == .note
         case .apiKeys: return item.isAPIKey
         }
@@ -1320,6 +1325,9 @@ private struct NewItemButton: View {
             ActionMenuEntry(title: String(localized: "New Card"), symbol: "creditcard", shortcut: "⌥⌘B") { model.beginEditing(EditRequest(mode: .create(.card))) },
             ActionMenuEntry(title: String(localized: "New Identity"), symbol: "person.crop.rectangle", shortcut: "⌥⌘I") { model.beginEditing(EditRequest(mode: .create(.identity))) },
             ActionMenuEntry(title: String(localized: "New SSH Key"), symbol: "terminal", shortcut: "⌥⌘K") { model.beginEditing(EditRequest(mode: .create(.sshKey))) },
+            ActionMenuEntry(title: String(localized: "New Bank Account"), symbol: "building.columns") { model.beginEditing(EditRequest(mode: .create(.bankAccount))) },
+            ActionMenuEntry(title: String(localized: "New Driver's Licence"), symbol: "car") { model.beginEditing(EditRequest(mode: .create(.driversLicense))) },
+            ActionMenuEntry(title: String(localized: "New Passport"), symbol: "globe.americas") { model.beginEditing(EditRequest(mode: .create(.passport))) },
             ActionMenuEntry(title: String(localized: "New Send"), symbol: "paperplane", shortcut: "⌥⌘S") { model.composeNewSend() },
             ActionMenuEntry(title: String(localized: "New Folder…"), symbol: "folder.badge.plus", shortcut: "⌥⌘N") { model.promptNewFolder() },
             ActionMenuEntry(title: String(localized: "Import…"), symbol: "square.and.arrow.down", shortcut: "⇧⌘I", enabled: !model.sessions.isEmpty) { model.beginImport() }
@@ -2840,6 +2848,9 @@ struct ItemDetail: View {
         case .card: (String(localized: "Card"), "creditcard")
         case .identity: (String(localized: "Identity"), "person.crop.rectangle")
         case .sshKey: (String(localized: "SSH Key"), "terminal")
+        case .bankAccount: (String(localized: "Bank Account"), "building.columns")
+        case .driversLicense: (String(localized: "Driver's Licence"), "car")
+        case .passport: (String(localized: "Passport"), "globe.americas")
         }
         guard item.kind == .login, !item.passkeys.isEmpty else { return base }
         return (base.0 + " · " + String(localized: "Passkey"), base.1)

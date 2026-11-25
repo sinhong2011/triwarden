@@ -121,9 +121,9 @@ public enum VaultExport {
             login["uris"] = (login["uris"] as? [[String: Any]])?.map { ["uri": $0["uri"] ?? NSNull(), "match": $0["match"] ?? NSNull()] }
             item["login"] = login
         case 2: item["secureNote"] = c["secureNote"] ?? ["type": 0]
-        case 3: item["card"] = c["card"] ?? [String: Any]()
-        case 4: item["identity"] = c["identity"] ?? [String: Any]()
-        case 5: item["sshKey"] = c["sshKey"] ?? [String: Any]()
+        case let type?:
+            // Cards, identities, SSH keys and the document types, under Bitwarden's own names.
+            if let object = CipherEditor.propertyObject(for: type) { item[object] = c[object] ?? [String: Any]() }
         default: break
         }
         return item
@@ -328,7 +328,7 @@ public enum VaultImport {
 
     /// The parts of an export item a new cipher takes (ids, dates and collections are the server's).
     static func importable(_ raw: [String: Any]) -> [String: Any]? {
-        guard let type = raw["type"] as? Int, (1...5).contains(type) else { return nil }
+        guard let type = raw["type"] as? Int, let kind = CipherEditor.Kind(rawValue: type) else { return nil }
         var item: [String: Any] = ["type": type, "favorite": raw["favorite"] as? Bool ?? false, "reprompt": raw["reprompt"] as? Int ?? 0]
         let name = (raw["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? "--"
         item["name"] = name
@@ -342,9 +342,8 @@ public enum VaultImport {
             }
             item["login"] = login
         case 2: item["secureNote"] = raw["secureNote"] as? [String: Any] ?? ["type": 0]
-        case 3: item["card"] = raw["card"] as? [String: Any] ?? [:]
-        case 4: item["identity"] = raw["identity"] as? [String: Any] ?? [:]
-        default: item["sshKey"] = raw["sshKey"] as? [String: Any] ?? [:]
+        default:
+            if let object = kind.propertyObject { item[object] = raw[object] as? [String: Any] ?? [:] }
         }
         return item
     }

@@ -15,6 +15,9 @@ extension VaultItem.Kind {
         case .identity: self = .identity
         case .note: self = .note
         case .sshKey: self = .sshKey
+        case .bankAccount: self = .bankAccount
+        case .driversLicense: self = .driversLicense
+        case .passport: self = .passport
         }
     }
 }

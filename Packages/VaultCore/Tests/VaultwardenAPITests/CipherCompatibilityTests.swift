@@ -6,7 +6,7 @@ import TriCrypto
 @Suite struct CipherCompatibilityTests {
     let key = try! SymmetricKeyPair(combined: Data((0..<64).map(UInt8.init)))
 
-    @Test(arguments: [0, -1, 6, 99])
+    @Test(arguments: [0, -1, 9, 99])
     func unknownTypesCannotBePatchedOrReencrypted(_ type: Int) throws {
         let raw = try JSONSerialization.data(withJSONObject: [
             "id": "future", "type": type, "name": "opaque", "futurePayload": ["token": "opaque"]
@@ -19,7 +19,7 @@ import TriCrypto
         }
     }
 
-    @Test(arguments: [1, 2, 3, 4, 5])
+    @Test(arguments: [1, 2, 3, 4, 5, 6, 7, 8])
     func knownTypesRetainFutureFieldsWhenPatched(_ type: Int) throws {
         let raw = Data("""
         {"id":"known","type":\(type),"revisionDate":"2026-10-12T00:00:00Z",

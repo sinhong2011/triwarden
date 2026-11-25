@@ -69,7 +69,7 @@ accounts requires one paid key per person. See [paid license terms](docs/LICENSE
 ## Features
 
 **Your vault, natively**
-- Logins, secure notes, cards, identities and SSH keys, with folders, favorites, custom fields, Archive and Trash;
+- Logins, secure notes, cards, identities, SSH keys, bank accounts, driver's licences and passports, with folders, favorites, custom fields, Archive and Trash;
   password history, clone, and "ask for master password" on sensitive items. Add, rename, replace, download and remove attachments in the item editor.
 - Several accounts at once, across servers: self-hosted Vaultwarden or Bitwarden, and Bitwarden cloud (US and EU).
   Password, two-step and single sign-on (SSO) login are supported.

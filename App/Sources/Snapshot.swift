@@ -403,6 +403,37 @@ enum Snapshot {
         vault.setPreviewAccounts([SavedAccount(id: "demo", email: "alex@example.com", serverKind: "selfHosted",
                                                serverURL: "https://vault.home.arpa", kdf: .pbkdf2(iterations: 600_000),
                                                protectedUserKey: "")])
+        // The sidebar's Types group open, with a bank account, a licence and a passport in the vault: they
+        // gather under Documents, which is selected. A model of its own, so the README's vault renders stay as they are.
+        if wanted(dir.appending(path: "vault-documents-light.png")) || wanted(dir.appending(path: "vault-documents-dark.png")) {
+            let documents = AppModel()
+            documents.phase = .vault
+            documents.items = (vault.items + documentSamples.map { item in
+                var item = item
+                item.revised = Date(timeIntervalSince1970: 1_791_123_456)
+                item.created = Date(timeIntervalSince1970: 1_748_500_000)
+                return item
+            }).sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+            documents.previewUnlocked = true
+            documents.setPreviewAccounts([SavedAccount(id: "demo", email: "alex@example.com", serverKind: "selfHosted",
+                                                       serverURL: "https://vault.home.arpa", kdf: .pbkdf2(iterations: 600_000),
+                                                       protectedUserKey: "")])
+            let typesKey = "sidebarTypesExpanded"
+            let savedTypes = UserDefaults.standard.object(forKey: typesKey)
+            UserDefaults.standard.set(true, forKey: typesKey)
+            for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
+                documents.requestedSection = nil
+                documents.selectedID = documentSamples.first { $0.kind == .bankAccount }?.id
+                // All Items first (a bank account open), then Documents: a section is picked by a change.
+                renderWindow(VaultView().environment(documents).tint(.brand), size: CGSize(width: 1180, height: 900),
+                             appearance: appearance, to: dir.appending(path: "vault-documents-all-\(name).png"),
+                             thenChange: {
+                                 documents.requestedSection = .section(.documents)
+                                 documents.selectedID = documentSamples.first { $0.kind == .passport }?.id
+                             }, to: dir.appending(path: "vault-documents-\(name).png"))
+            }
+            UserDefaults.standard.set(savedTypes, forKey: typesKey)
+        }
         for (name, appearance) in [("light", NSAppearance.Name.aqua), ("dark", .darkAqua)] {
             render(desktop(VaultView().environment(vault).tint(.brand), dark: name == "dark"),
                    size: CGSize(width: 1180, height: 760), appearance: appearance,
@@ -699,6 +730,17 @@ enum Snapshot {
             render(EditItemSheet(mode: .create(.sshKey)).environment(vault).tint(.brand),
                    size: CGSize(width: 580, height: 700), appearance: appearance,
                    to: dir.appending(path: "edit-ssh-\(name).png"))
+            // Bitwarden's document types: the edit form (secrets masked) and the detail they make.
+            for document in documentSamples {
+                let slug = switch document.kind { case .bankAccount: "bank"; case .driversLicense: "license"; default: "passport" }
+                // The panel form grows to its content, so every field (and Other details) is in the picture.
+                render(EditItemSheet(mode: .edit(document), inPanel: true).environment(vault).tint(.brand),
+                       size: CGSize(width: 580, height: 1500), appearance: appearance,
+                       to: dir.appending(path: "edit-\(slug)-\(name).png"))
+                render(ItemDetail(item: document).environment(vault).tint(.brand).background(Color.windowBase),
+                       size: CGSize(width: 560, height: 1700), appearance: appearance,
+                       to: dir.appending(path: "detail-\(slug)-\(name).png"))
+            }
             render(VStack(spacing: 14) {
                        FolderCascader(folders: vault.folders, selection: .constant(nil), create: { _ in nil }, newFolderIn: .constant(""))
                        FolderCascader(folders: vault.folders, selection: .constant(nil), create: { _ in nil }, newFolderIn: .constant("Work/Dev"))
@@ -1009,6 +1051,35 @@ enum Snapshot {
         p.waitUntilExit()
         return (p.terminationStatus, String(decoding: data, as: UTF8.self))
     }
+
+    /// One of each document type, filled in, for the edit and detail renders (kept out of `demoItems`, which the
+    /// README's vault screenshots use).
+    static let documentSamples: [VaultItem] = {
+        let samples: [(VaultItem.Kind, String, [String: String])] = [
+            (.bankAccount, "Everyday checking", ["bankName": "Maple Credit Union", "nameOnAccount": "Alex Chen", "accountType": "Checking",
+                                                "accountNumber": "004417720193", "routingNumber": "121000358", "branchNumber": "0042",
+                                                "swiftCode": "MCUSUS6S", "iban": "US12 MCUS 0044 1772 0193", "pin": "4821",
+                                                "bankContactPhone": "+1 800 555 0199"]),
+            (.driversLicense, "Driver's licence", ["firstName": "Alex", "middleName": "J.", "lastName": "Chen", "dateOfBirth": "1990-04-12",
+                                                   "licenseNumber": "D4410228", "issuingCountry": "United States", "issuingState": "CA",
+                                                   "licenseClass": "C", "issueDate": "2022-05-01", "issuingAuthority": "California DMV",
+                                                   "expirationDate": "2027-04-12"]),
+            (.passport, "Passport", ["givenName": "Alex", "surname": "Chen", "dateOfBirth": "1990-04-12", "sex": "X",
+                                     "birthPlace": "San Francisco", "nationality": "United States", "passportNumber": "X48210093",
+                                     "passportType": "P", "issuingCountry": "United States",
+                                     "issuingAuthority": "U.S. Department of State", "issueDate": "2021-03-02",
+                                     "expirationDate": "2031-03-01", "nationalIdentificationNumber": "123-45-6789",
+                                     "visaPages": "52"]),
+        ]
+        return samples.enumerated().map { index, sample in
+            var item = VaultItem(id: "doc\(index)", accountId: "demo", kind: sample.0, name: sample.1, username: nil, host: nil,
+                                 password: nil, totp: nil, notes: index == 2 ? "Renew six months before travel." : nil, favorite: false)
+            item.setDocumentProperties(sample.2)
+            item.folderId = "f-personal"
+            item.folderName = "Personal"
+            return item
+        }
+    }()
 
     static let demoItems: [VaultItem] = [
         VaultItem(id: "1", name: "Cloudflare", username: "ops@northwind.example", host: "dash.cloudflare.com",
@@ -1547,6 +1618,37 @@ enum SelfTest {
                 let identity = model.items.first { $0.name == "Selftest identity" }
                 check(identity?.properties["passportNumber"] == "X1234567" && identity?.username == "Hachiware", "create identity")
                 if let identity { await model.deleteForever(identity) }
+
+                // Bitwarden's document types (6–8), on servers that store them: created, shown, edited, filtered.
+                let documents: [(AppModel.NewItemKind, VaultSection, SearchFilters.ItemType, [String: String], String, String)] = [
+                    (.bankAccount, .documents, .bankAccount, ["bankName": "Pochi Bank", "accountNumber": "004417720193", "iban": "GB82 WEST 1234"],
+                     "Pochi Bank", "accountNumber"),
+                    (.driversLicense, .documents, .driversLicense, ["firstName": "Usagi", "lastName": "Ura", "issuingState": "Tokyo",
+                                                                          "licenseNumber": "D4410228"], "Usagi Ura, Tokyo", "licenseNumber"),
+                    (.passport, .documents, .passport, ["givenName": "Usagi", "surname": "Ura", "issuingCountry": "Japan",
+                                                        "passportNumber": "TR1234567"], "Usagi Ura, Japan", "passportNumber"),
+                ]
+                for (kind, section, filterType, properties, subtitle, secretKey) in documents {
+                    var edit = CipherEdit(name: "Selftest \(kind)")
+                    edit.properties = properties
+                    let ok = await model.createItem(kind, edit: edit)
+                    let made = model.items.first { $0.name == "Selftest \(kind)" }
+                    check(ok && made?.kind == kind.itemKind && made?.properties == properties && made?.username == subtitle
+                          && made?.fields.contains { $0.value == properties[secretKey] && $0.secret } == true,
+                          "create \(kind): fields, subtitle and masked number")
+                    guard let made else { continue }
+                    check(section.includes(made) && model.showsNavigation(.section(section)) && !VaultSection.identities.includes(made)
+                          && VaultItem.Kind(filterType) == made.kind && made.password == nil && made.websites.isEmpty,
+                          "\(kind) shows under Documents and in its type filter, never as a login")
+                    var change = CipherEdit()
+                    change.properties = [secretKey: "CHANGED-1"]
+                    _ = await model.updateItem(made.id, edit: change)
+                    let after = model.items.first { $0.id == made.id }
+                    var expected = properties; expected[secretKey] = "CHANGED-1"
+                    check(after?.properties == expected, "edit \(kind) keeps the other fields")
+                    await model.deleteForever(after ?? made)
+                }
+
                 let pair = SSHKeyPair.generateEd25519(comment: "selftest")
                 var sshEdit = CipherEdit(name: "Selftest SSH")
                 sshEdit.properties = ["privateKey": pair.privateKey, "publicKey": pair.publicKey, "keyFingerprint": pair.fingerprint]

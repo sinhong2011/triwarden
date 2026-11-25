@@ -127,6 +127,8 @@ public struct SyncResponse: Decodable, Sendable {
         public let card: Card?
         public let identity: Identity?
         public let sshKey: SSHKey?
+        /// A bank account, driver's licence or passport (types 6–8): its properties by API name.
+        public let document: DocumentProperties?
         public let fields: [Field]?
         public let attachments: [Attachment]?
         public let favorite: Bool?
@@ -141,6 +143,7 @@ public struct SyncResponse: Decodable, Sendable {
 
         enum CodingKeys: String, CodingKey {
             case id, type, organizationId, key, folderId, collectionIds, name, notes, login, card, identity, sshKey
+            case bankAccount, driversLicense, passport
             case fields, attachments, favorite, deletedDate, revisionDate, creationDate, archivedDate, reprompt, passwordHistory
         }
 
@@ -167,6 +170,12 @@ public struct SyncResponse: Decodable, Sendable {
             card = supported ? try c.decodeIfPresent(Card.self, forKey: .card) : nil
             identity = supported ? try c.decodeIfPresent(Identity.self, forKey: .identity) : nil
             sshKey = supported ? try c.decodeIfPresent(SSHKey.self, forKey: .sshKey) : nil
+            document = switch CipherEditor.Kind(rawValue: type) {
+            case .bankAccount: try c.decodeIfPresent(DocumentProperties.self, forKey: .bankAccount)
+            case .driversLicense: try c.decodeIfPresent(DocumentProperties.self, forKey: .driversLicense)
+            case .passport: try c.decodeIfPresent(DocumentProperties.self, forKey: .passport)
+            default: nil
+            }
             fields = supported ? try c.decodeIfPresent([Field].self, forKey: .fields) : nil
             attachments = supported ? try c.decodeIfPresent([Attachment].self, forKey: .attachments) : nil
             passwordHistory = supported ? try c.decodeIfPresent([PasswordHistoryEntry].self, forKey: .passwordHistory) : nil
@@ -254,6 +263,35 @@ public struct SyncResponse: Decodable, Sendable {
         public let name: String?
         public let value: String?
         public let type: Int
+    }
+
+    /// A document's properties (EncStrings) by API name. Values that aren't strings — a shape a newer server might
+    /// send — are skipped here and stay as they are in the raw cipher.
+    public struct DocumentProperties: Decodable, Sendable {
+        public let values: [String: String]
+
+        public init(values: [String: String]) { self.values = values }
+
+        public subscript(key: String) -> String? { values[key] }
+
+        struct Key: CodingKey {
+            var stringValue: String
+            var intValue: Int? { nil }
+            init(stringValue: String) { self.stringValue = stringValue }
+            init?(intValue: Int) { nil }
+        }
+
+        public init(from decoder: any Decoder) throws {
+            let c = try decoder.container(keyedBy: Key.self)
+            var out: [String: String] = [:]
+            for key in c.allKeys {
+                guard let value = try? c.decodeIfPresent(String.self, forKey: key) else { continue }
+                // Older Vaultwarden sends PascalCase; the editor patches camelCase.
+                let name = key.stringValue.first.map { $0.lowercased() + key.stringValue.dropFirst() } ?? key.stringValue
+                out[name] = value
+            }
+            values = out
+        }
     }
 
     public struct SSHKey: Decodable, Sendable {

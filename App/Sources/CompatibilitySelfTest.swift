@@ -68,16 +68,32 @@ enum CompatibilitySelfTest {
                     "fields": [["name": try enc("token"), "value": try enc("synthetic token"), "type": 0]],
                     "future": ["UpperCaseKey": [NSNull(), false, 0, "", "測試"]]
                 ]
-                let known: [[String: Any]] = try (1...5).map { type in
+                let known: [[String: Any]] = try (1...8).map { type in
                     ["id": "known-\(type)", "type": type, "name": try enc("Known \(type)")]
                 }
+                // A bank account with a property this version doesn't know: shown, kept, and still editable.
+                let bank: [String: Any] = ["id": "bank", "type": 6, "name": try enc("Everyday"),
+                    "bankAccount": ["bankName": try enc("Maple CU"), "iban": try enc("GB00 0000"), "overdraftLimit": try enc("500")]]
                 let data = try JSONSerialization.data(withJSONObject: [
                     "profile": ["id": "synthetic", "email": "synthetic@example.com", "key": ""],
-                    "folders": [["id": "folder", "name": try enc("Work")]], "ciphers": known + [future]
+                    "folders": [["id": "folder", "name": try enc("Work")]], "ciphers": known + [bank, future]
                 ])
                 let decoded = try VaultDecoder.decode(data, userKey: key, accountId: "compatibility")
                 let item = decoded.items.first { $0.id == "future" }!
-                check(decoded.items.count == 6 && decoded.hiddenCount == 0, "unknown item remains discoverable")
+                check(decoded.items.count == 10 && decoded.hiddenCount == 0, "unknown item remains discoverable")
+                let bankItem = decoded.items.first { $0.id == "bank" }!
+                check(bankItem.kind == .bankAccount && bankItem.username == "Maple CU"
+                      && bankItem.fields.contains { $0.value == "GB00 0000" && $0.secret }
+                      && bankItem.properties["overdraftLimit"] == "500" && bankItem.fields.contains { $0.label == "Overdraft limit" },
+                      "bank account decodes its fields, subtitle and a property added later")
+                check(VaultSection.documents.includes(bankItem) && !VaultSection.identities.includes(bankItem)
+                      && bankItem.password == nil && bankItem.websites.isEmpty,
+                      "bank account lists under Documents and never as a login")
+                for kind in [VaultItem.Kind.bankAccount, .driversLicense, .passport] {
+                    let keys = DocumentFormLayout.groups(for: kind).flatMap { $0.rows.joined().map(\.key) }
+                    check(keys.count == Set(keys).count && Set(keys) == Set(DocumentField.fields(for: kind.documentKind!).map(\.key)),
+                          "the \(kind) form lays out every Bitwarden field exactly once")
+                }
                 check(item.kind == .unsupported && item.unsupportedType == 99 && !item.isSupported,
                       "server type is retained without login fallback")
                 check(item.name == "Future item" && item.folderName == "Work" && item.favorite && item.revised != nil,
@@ -85,7 +101,7 @@ enum CompatibilitySelfTest {
                 check(item.username == nil && item.password == nil && item.totp == nil && item.notes == nil &&
                       item.websites.isEmpty && item.fields.isEmpty && item.passkeys.isEmpty && item.attachments.isEmpty,
                       "unknown payload never becomes credentials or visible fields")
-                check(decoded.items.filter(\.isSupported).count == 5, "all existing item types remain supported")
+                check(decoded.items.filter(\.isSupported).count == 9, "all known item types (1–8) are supported")
                 let raw = try JSONSerialization.jsonObject(with: decoded.rawCiphers["future"]!) as! NSDictionary
                 check(raw == future as NSDictionary, "raw unknown payload is retained losslessly")
 
@@ -97,7 +113,7 @@ enum CompatibilitySelfTest {
                     makeClient: { VaultClient(environment: $0, deviceIdentifier: "synthetic") }, makeSession: { .shared })
                 check(session.items.first { $0.id == "future" }?.unsupportedType == 99,
                       "unknown item survives an offline cache reopen")
-                try session.requireWritableItems(["known-1", "known-5"])
+                try session.requireWritableItems(["known-1", "known-5", "known-6", "known-7", "known-8"])
                 let writes: [(String, () async throws -> Void)] = [
                     ("edit", { try await session.update("future", edit: CipherEdit(name: "changed")) }),
                     ("move", { try await session.update("future", edit: CipherEdit(folderId: .some(nil))) }),

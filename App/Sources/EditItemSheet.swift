@@ -256,6 +256,9 @@ struct EditItemSheet: View {
         case .create(.card): "New Card"
         case .create(.identity): "New Identity"
         case .create(.sshKey): "New SSH Key"
+        case .create(.bankAccount): "New Bank Account"
+        case .create(.driversLicense): "New Driver's Licence"
+        case .create(.passport): "New Passport"
         case .edit: "Edit Item"
         case .clone: "Clone Item"
         }
@@ -267,6 +270,7 @@ struct EditItemSheet: View {
         case .unsupported: "questionmark.square"
         case .login: "key.fill"; case .note: "note.text"; case .card: "creditcard.fill"
         case .identity: "person.crop.rectangle.fill"; case .sshKey: "terminal.fill"
+        case .bankAccount: "building.columns.fill"; case .driversLicense: "car.fill"; case .passport: "globe.americas.fill"
         }
     }
 
@@ -279,12 +283,15 @@ struct EditItemSheet: View {
         case .card: "A payment card, ready for AutoFill."
         case .identity: "Your details, for filling in forms."
         case .sshKey: "A key the Triwarden SSH agent can sign with."
+        case .bankAccount: "Account and routing numbers, kept for copying — never filled in automatically."
+        case .driversLicense: "Your licence details, to hand when a form or a rental desk asks."
+        case .passport: "Your passport details, to hand when booking travel."
         }
     }
 
     /// Hidden item values or custom fields hide until asked for.
     private var hasHiddenValues: Bool {
-        kind == .card || kind == .identity || kind == .sshKey
+        kind == .card || kind == .identity || kind == .sshKey || kind.isDocument
             || customFields.contains { $0.kind == .hidden }
     }
 
@@ -433,6 +440,7 @@ struct EditItemSheet: View {
             case .card: cardSection
             case .identity: identitySection
             case .sshKey: sshSection
+            case .bankAccount, .driversLicense, .passport: documentSection
             case .note, .unsupported: EmptyView()
             }
 
@@ -984,6 +992,32 @@ struct EditItemSheet: View {
         }
     }
 
+    /// A bank account, driver's licence or passport: Bitwarden's fields, grouped the way the document reads.
+    @ViewBuilder private var documentSection: some View {
+        let layout = DocumentFormLayout.groups(for: kind)
+        ForEach(Array(layout.enumerated()), id: \.offset) { _, group in
+            FormCard(title: group.title) {
+                ForEach(group.rows, id: \.self) { row in
+                    HStack(alignment: .top, spacing: 12) {
+                        ForEach(row, id: \.key) { documentProp($0) }
+                    }
+                }
+            }
+        }
+        // Properties a newer Bitwarden added that this version doesn't lay out: still here, still editable.
+        let known = Set(layout.flatMap { $0.rows.joined().map(\.key) })
+        let extra = props.keys.filter { !known.contains($0) }.sorted()
+        if !extra.isEmpty {
+            FormCard(title: "Other details") {
+                ForEach(extra, id: \.self) { key in prop(LocalizedStringKey(DocumentField.readableName(key)), key, secret: true) }
+            }
+        }
+    }
+
+    private func documentProp(_ field: DocumentField) -> some View {
+        prop(LocalizedStringKey(field.localizedLabel), field.key, secret: field.secret, monospaced: field.monospaced)
+    }
+
     @ViewBuilder private var sshSection: some View {
         let hasKey = !(props["privateKey"] ?? "").isEmpty
         FormCard(title: "Key") {
@@ -1510,5 +1544,35 @@ struct StrengthMeter: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text("Strength") + Text(verbatim: ", ") + Text(level.1))
         .accessibilityAddTraits(.isStaticText)
+    }
+}
+
+/// How the document forms group Bitwarden's fields: cards of rows, one or two fields to a row.
+enum DocumentFormLayout {
+    struct Group {
+        let title: LocalizedStringKey
+        let rows: [[DocumentField]]
+    }
+
+    static func groups(for kind: VaultItem.Kind) -> [Group] {
+        guard let documentKind = kind.documentKind else { return [] }
+        let byKey = Dictionary(DocumentField.fields(for: documentKind).map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        func rows(_ keys: [[String]]) -> [[DocumentField]] { keys.map { $0.compactMap { byKey[$0] } } }
+        switch documentKind {
+        case .bankAccount:
+            return [Group(title: "Account", rows: rows([["bankName"], ["nameOnAccount", "accountType"]])),
+                    Group(title: "Numbers", rows: rows([["accountNumber"], ["routingNumber", "branchNumber"], ["iban"],
+                                                       ["swiftCode", "pin"]])),
+                    Group(title: "Contact", rows: rows([["bankContactPhone"]]))]
+        case .driversLicense:
+            return [Group(title: "Holder", rows: rows([["firstName", "middleName"], ["lastName", "dateOfBirth"]])),
+                    Group(title: "Licence", rows: rows([["licenseNumber"], ["licenseClass", "expirationDate"],
+                                                       ["issueDate", "issuingAuthority"], ["issuingCountry", "issuingState"]]))]
+        case .passport:
+            return [Group(title: "Holder", rows: rows([["givenName", "surname"], ["dateOfBirth", "sex"], ["birthPlace", "nationality"]])),
+                    Group(title: "Passport", rows: rows([["passportNumber", "passportType"], ["issuingCountry", "issuingAuthority"],
+                                                        ["issueDate", "expirationDate"], ["nationalIdentificationNumber"]]))]
+        default: return []
+        }
     }
 }

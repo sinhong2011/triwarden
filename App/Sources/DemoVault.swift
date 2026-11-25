@@ -169,7 +169,7 @@ enum DemoVault {
         ("Router recovery", "f-home", "Admin PIN 7781. Factory reset: hold 10 s."),
         ("Alarm system code", "f-home", "Arm 2468 · Duress 2469"),
         ("Garage door", "f-home", "Keypad 9034"),
-        ("Passport details", "f-personal", "Number in the identity item. Renew before 2031."),
+        ("Passport details", "f-personal", "Number in the passport item. Renew before 2031."),
         ("Health insurance", "f-personal", "Member ID KP-0042-88143 · Group 7710"),
         ("Car — Model 3", "f-personal", "VIN 5YJ3E1EA7PF000000\nInsurance policy GE-4410-2290"),
         ("Recovery kit — Google", "f-personal", "Backup codes: 4821 0093 · 7716 2201 · 9902 4417 · 3108 5562"),
@@ -245,12 +245,31 @@ enum DemoVault {
             ("Alex Chen", [ItemField(label: "Name", value: "Alex Chen"), ItemField(label: "Email", value: mail),
                            ItemField(label: "Phone", value: "+1 415 555 0142"),
                            ItemField(label: "Address", value: "1200 Maple Street\nSan Francisco, CA 94110")]),
-            ("Passport", [ItemField(label: "Name", value: "Alex Chen"), ItemField(label: "Passport number", value: "X48210093", secret: true)]),
-            ("Driver's licence", [ItemField(label: "Name", value: "Alex Chen"), ItemField(label: "Licence number", value: "D4410228", secret: true)]),
         ]
         for (index, identity) in identities.enumerated() {
             var item = VaultItem(id: "i\(index)", kind: .identity, name: identity.0, username: "Alex Chen", host: nil,
                                  password: nil, totp: nil, notes: nil, favorite: false, fields: identity.1)
+            item.folderId = "f-personal"
+            item.folderName = "Personal"
+            items.append(item)
+        }
+        // Bitwarden's document types: a bank account, a driver's licence and a passport.
+        let documents: [(VaultItem.Kind, String, [String: String])] = [
+            (.bankAccount, "Everyday checking", ["bankName": "Maple Credit Union", "nameOnAccount": "Alex Chen", "accountType": "Checking",
+                                                "accountNumber": "004417720193", "routingNumber": "121000358", "swiftCode": "MCUSUS6S",
+                                                "bankContactPhone": "+1 800 555 0199"]),
+            (.driversLicense, "Driver's licence", ["firstName": "Alex", "lastName": "Chen", "dateOfBirth": "1990-04-12",
+                                                   "licenseNumber": "D4410228", "issuingCountry": "United States", "issuingState": "CA",
+                                                   "licenseClass": "C", "issueDate": "2022-05-01", "expirationDate": "2027-04-12"]),
+            (.passport, "Passport", ["givenName": "Alex", "surname": "Chen", "dateOfBirth": "1990-04-12", "sex": "X",
+                                     "nationality": "United States", "passportNumber": "X48210093", "passportType": "P",
+                                     "issuingCountry": "United States", "issuingAuthority": "U.S. Department of State",
+                                     "issueDate": "2021-03-02", "expirationDate": "2031-03-01"]),
+        ]
+        for (index, document) in documents.enumerated() {
+            var item = VaultItem(id: "d\(index)", kind: document.0, name: document.1, username: nil, host: nil, password: nil,
+                                 totp: nil, notes: nil, favorite: false)
+            item.setDocumentProperties(document.2)
             item.folderId = "f-personal"
             item.folderName = "Personal"
             items.append(item)

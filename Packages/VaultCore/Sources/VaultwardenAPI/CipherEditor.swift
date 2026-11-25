@@ -22,7 +22,7 @@ public struct CipherEdit: Sendable, Equatable {
     public var favorite: Bool?
     /// `.some(nil)` moves the item out of any folder.
     public var folderId: String??
-    /// Card / identity / SSH-key properties by their API names (e.g. "number", "firstName", "privateKey").
+    /// Card / identity / SSH-key / document properties by their API names (e.g. "number", "firstName", "iban").
     /// Only the keys present are changed; an empty string clears that property.
     public var properties: [String: String] = [:]
     /// Replaces text/hidden/boolean custom fields; linked fields (type 3) are kept as they are.
@@ -55,7 +55,20 @@ public struct CustomField: Sendable, Equatable, Hashable, Identifiable {
 /// Edits ciphers by patching the server's own JSON, so fields we don't model — the per-item `key`,
 /// passkeys (`fido2Credentials`), custom fields, attachments — survive an edit untouched.
 public enum CipherEditor {
-    public enum Kind: Int, Sendable { case login = 1, secureNote = 2, card = 3, identity = 4, sshKey = 5 }
+    public enum Kind: Int, Sendable, CaseIterable {
+        case login = 1, secureNote = 2, card = 3, identity = 4, sshKey = 5
+        /// Bitwarden's document types (server 2026.7 / Vaultwarden 1.37+).
+        case bankAccount = 6, driversLicense = 7, passport = 8
+
+        /// The JSON object holding this kind's properties, or nil for logins and notes.
+        public var propertyObject: String? {
+            switch self {
+            case .card: "card"; case .identity: "identity"; case .sshKey: "sshKey"
+            case .bankAccount: "bankAccount"; case .driversLicense: "driversLicense"; case .passport: "passport"
+            case .login, .secureNote: nil
+            }
+        }
+    }
     public enum CompatibilityError: Error, Equatable, Sendable { case unsupportedType(Int) }
 
     /// Unknown cipher types are read-only until their schema is understood, including metadata-only writes.
@@ -64,9 +77,7 @@ public enum CipherEditor {
     }
 
     /// The JSON object holding each kind's properties.
-    static func propertyObject(for type: Int) -> String? {
-        switch type { case 3: "card"; case 4: "identity"; case 5: "sshKey"; default: nil }
-    }
+    static func propertyObject(for type: Int) -> String? { Kind(rawValue: type)?.propertyObject }
 
     /// A brand-new personal item.
     public static func newCipher(kind: Kind, edit: CipherEdit, key: SymmetricKeyPair) throws -> Data {
@@ -113,7 +124,7 @@ public enum CipherEditor {
             ]
         }
         let fields = ["type", "folderId", "name", "notes", "fields", "login", "card", "identity", "secureNote", "sshKey",
-                      "favorite", "reprompt", "passwordHistory"]
+                      "bankAccount", "driversLicense", "passport", "favorite", "reprompt", "passwordHistory"]
         var plain: [String: Any] = [:]
         for k in fields { if let v = dict[k], !(v is NSNull) { plain[k] = CipherFields.decrypt(v, key: key, field: k) } }
         guard var out = try CipherFields.encrypt(plain, key: organizationKey) as? [String: Any] else {

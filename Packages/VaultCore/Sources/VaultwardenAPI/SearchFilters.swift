@@ -2,10 +2,10 @@ import Foundation
 
 /// The vault window's search filters: what the list is narrowed to besides the typed text. Saved between launches.
 ///
-/// Each one can be typed as a token in the search field — `type:card`, `is:favorite`, `has:otp`, `has:passkey`,
+/// Each one can be typed as a token in the search field — `type:card` (or `type:bank`, `type:license`, `type:passport`), `is:favorite`, `has:otp`, `has:passkey`,
 /// `is:weak`, `folder:Work` (or `#Work`), `vault:personal` — or picked from the filter menu.
 public struct SearchFilters: Codable, Equatable, Sendable {
-    public enum ItemType: String, Codable, CaseIterable, Sendable { case login, card, identity, note, sshKey }
+    public enum ItemType: String, Codable, CaseIterable, Sendable { case login, card, identity, note, sshKey, bankAccount, driversLicense, passport }
 
     public var type: ItemType?
     /// A folder path, as the sidebar shows it ("Work/Servers"); its subfolders count too.
@@ -108,6 +108,7 @@ public enum SearchToken: Hashable, Sendable {
 
     private static let typeNames: [SearchFilters.ItemType: String] = [
         .login: "login", .card: "card", .identity: "identity", .note: "note", .sshKey: "ssh",
+        .bankAccount: "bank", .driversLicense: "license", .passport: "passport",
     ]
     private static let types: [String: SearchFilters.ItemType] = [
         "login": .login, "logins": .login, "password": .login, "passwords": .login,
@@ -115,6 +116,11 @@ public enum SearchToken: Hashable, Sendable {
         "identity": .identity, "identities": .identity, "id": .identity,
         "note": .note, "notes": .note, "securenote": .note,
         "ssh": .sshKey, "sshkey": .sshKey, "sshkeys": .sshKey, "key": .sshKey, "keys": .sshKey,
+        "bank": .bankAccount, "banks": .bankAccount, "bankaccount": .bankAccount, "bankaccounts": .bankAccount,
+        "license": .driversLicense, "licenses": .driversLicense, "licence": .driversLicense, "licences": .driversLicense,
+        "driverslicense": .driversLicense, "driverslicence": .driversLicense, "driverlicense": .driversLicense,
+        "driverlicence": .driversLicense, "dl": .driversLicense,
+        "passport": .passport, "passports": .passport,
     ]
 
     private static func quoted(_ s: String) -> String { s.contains(" ") ? "\"\(s)\"" : s }

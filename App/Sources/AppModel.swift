@@ -1792,17 +1792,20 @@ final class AppModel {
 
     // MARK: Editing
 
-    enum NewItemKind {
-        case login, secureNote, card, identity, sshKey
+    enum NewItemKind: CaseIterable {
+        case login, secureNote, card, identity, sshKey, bankAccount, driversLicense, passport
         init?(_ kind: VaultItem.Kind) {
             switch kind { case .unsupported: return nil; case .login: self = .login; case .note: self = .secureNote; case .card: self = .card
-                          case .identity: self = .identity; case .sshKey: self = .sshKey }
+                          case .identity: self = .identity; case .sshKey: self = .sshKey; case .bankAccount: self = .bankAccount
+                          case .driversLicense: self = .driversLicense; case .passport: self = .passport }
         }
         var itemKind: VaultItem.Kind {
-            switch self { case .login: .login; case .secureNote: .note; case .card: .card; case .identity: .identity; case .sshKey: .sshKey }
+            switch self { case .login: .login; case .secureNote: .note; case .card: .card; case .identity: .identity; case .sshKey: .sshKey
+                          case .bankAccount: .bankAccount; case .driversLicense: .driversLicense; case .passport: .passport }
         }
         var editorKind: CipherEditor.Kind {
-            switch self { case .login: .login; case .secureNote: .secureNote; case .card: .card; case .identity: .identity; case .sshKey: .sshKey }
+            switch self { case .login: .login; case .secureNote: .secureNote; case .card: .card; case .identity: .identity; case .sshKey: .sshKey
+                          case .bankAccount: .bankAccount; case .driversLicense: .driversLicense; case .passport: .passport }
         }
     }
 

@@ -905,6 +905,12 @@ struct CommandPalette: View {
                                keywords: ["add", "address"]) { create(.identity) },
                 PaletteCommand(id: "new-ssh", title: String(localized: "New SSH Key"), symbol: "terminal", shortcut: "⌥⌘K",
                                keywords: ["add", "ed25519"]) { create(.sshKey) },
+                PaletteCommand(id: "new-bank-account", title: String(localized: "New Bank Account"), symbol: "building.columns",
+                               keywords: ["add", "iban", "routing", "swift"]) { create(.bankAccount) },
+                PaletteCommand(id: "new-drivers-license", title: String(localized: "New Driver's Licence"), symbol: "car",
+                               keywords: ["add", "license", "driving", "id"]) { create(.driversLicense) },
+                PaletteCommand(id: "new-passport", title: String(localized: "New Passport"), symbol: "globe.americas",
+                               keywords: ["add", "travel", "id"]) { create(.passport) },
                 PaletteCommand(id: "new-folder", title: String(localized: "New Folder…"), symbol: "folder.badge.plus", shortcut: "⌥⌘N") {
                     model.bringToFront(); model.promptNewFolder()
                 },
@@ -931,10 +937,11 @@ struct CommandPalette: View {
             let places: [(VaultSection, String)] = [
                 (.all, String(localized: "All Items")), (.favorites, String(localized: "Favorites")), (.logins, String(localized: "Logins")),
                 (.passkeys, String(localized: "Passkeys")), (.cards, String(localized: "Cards")), (.identities, String(localized: "Identities")),
+                (.documents, String(localized: "sidebar.documents")),
                 (.notes, String(localized: "Secure Notes")), (.apiKeys, String(localized: "API Keys")), (.sshKeys, String(localized: "SSH Keys")), (.archive, String(localized: "Archive")),
                 (.trash, String(localized: "Trash")),
             ]
-            for (section, name) in places {
+            for (section, name) in places where model.showsNavigation(.section(section)) {
                 list.append(PaletteCommand(id: "go-\(section)", title: String(localized: "Go to \(name)"), symbol: section.symbol,
                                            keywords: ["show", "open", "view"]) { go(.section(section)) })
             }

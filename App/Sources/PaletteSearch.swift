@@ -212,6 +212,9 @@ extension VaultItem.Kind {
         case .card: String(localized: "Cards")
         case .identity: String(localized: "Identities")
         case .sshKey: String(localized: "SSH Keys")
+        case .bankAccount: String(localized: "Bank Accounts")
+        case .driversLicense: String(localized: "Driver's Licences")
+        case .passport: String(localized: "Passports")
         }
     }
 
@@ -223,6 +226,9 @@ extension VaultItem.Kind {
         case .card: "creditcard"
         case .identity: "person.crop.rectangle"
         case .sshKey: "terminal"
+        case .bankAccount: "building.columns"
+        case .driversLicense: "car"
+        case .passport: "globe.americas"
         }
     }
 }

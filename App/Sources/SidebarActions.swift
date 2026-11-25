@@ -64,7 +64,7 @@ extension AppModel {
             }
         }
         func create(_ kind: NewItemKind, title: String, sshImport: Bool = false, totp: Bool = false) -> SidebarContextAction {
-            let symbol = switch kind { case .login: "key"; case .secureNote: "note.text"; case .card: "creditcard"; case .identity: "person.crop.rectangle"; case .sshKey: "terminal" }
+            let symbol = kind.itemKind.paletteSymbol
             return action(title, symbol, enabled: !ids.isEmpty && (collection == nil || collection?.canWrite == true)) {
                 self.leaveNewItemForm {
                     var prefill = EditItemSheet.Prefill()
@@ -96,7 +96,10 @@ extension AppModel {
                            create(.secureNote, title: String(localized: "New Secure Note")),
                            create(.card, title: String(localized: "New Card")),
                            create(.identity, title: String(localized: "New Identity")),
-                           create(.sshKey, title: String(localized: "New SSH Key"))])
+                           create(.sshKey, title: String(localized: "New SSH Key")),
+                           create(.bankAccount, title: String(localized: "New Bank Account")),
+                           create(.driversLicense, title: String(localized: "New Driver's Licence")),
+                           create(.passport, title: String(localized: "New Passport"))])
         }
         func web(_ title: String) -> SidebarContextAction? {
             guard let organization, let id = organization.accountId,
@@ -112,6 +115,9 @@ extension AppModel {
         case .section(.logins): return [create(.login, title: String(localized: "New Login")), search()]
         case .section(.cards): return [create(.card, title: String(localized: "New Card")), search()]
         case .section(.identities): return [create(.identity, title: String(localized: "New Identity")), search()]
+        case .section(.documents): return [create(.bankAccount, title: String(localized: "New Bank Account")),
+            create(.driversLicense, title: String(localized: "New Driver's Licence")),
+            create(.passport, title: String(localized: "New Passport")), search()]
         case .section(.notes): return [create(.secureNote, title: String(localized: "New Secure Note")), search()]
         case .section(.apiKeys): return [action(String(localized: "New API Key"), "key.horizontal", enabled: !ids.isEmpty) {
             self.beginAPIKey(accountIDs: ids)

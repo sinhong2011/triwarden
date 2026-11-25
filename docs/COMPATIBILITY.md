@@ -42,6 +42,7 @@ newer one replaces it.
 | One expired account doesn't block another | ✅ | ✅ | — | `expiredAccountDoesNotBlockHealthyAccount` |
 | Equivalent domains from sync | 🧑 | 🧑 | — | `make selftest` |
 | Emergency access, master-password change, 2FA on/off | 🧑 | 🧑 | — | `make selftest` |
+| Bank accounts, driver's licences, passports (types 6–8): decode, create, lossless edit, move, export/import | ✅ (offline) | ✅ (offline) | ✅ (offline) | `DocumentTypesTests`, `--selftest-compatibility`; live: `documentTypesRoundTrip` and `make selftest` on a server that stores them (`TRIWARDEN_DEV_DOCUMENT_PORTS`; Vaultwarden 1.37.4 does, 1.30.5 answers `Invalid type`) |
 | Unknown future item types (shown, kept losslessly, never written) | ✅ (offline) | ✅ (offline) | ✅ (offline) | `--selftest-compatibility`, `CipherCompatibilityTests` |
 
 When you add a server behaviour, add its row here in the same pull request.
@@ -62,7 +63,9 @@ Use this when a new Vaultwarden or Bitwarden release changes a request or respon
   servers, not only the newest.
 - **Unknown item types.** Never drop or rewrite an item type we don't understand: show it, keep its raw payload and
   refuse edits before any request (`CipherEditor.CompatibilityError`). Extend `--selftest-compatibility` if a new
-  type needs its own handling.
+  type needs its own handling. A type becomes writable by adding it to `CipherEditor.Kind` with its JSON object
+  (`propertyObject`); for a document-style type, list its fields in `DocumentField` so the form, detail, KeePass
+  export and search pick it up. Keep a higher number (99) as the forward-compatibility probe in the tests.
 - **Loud failures.** A server refusing a request with 400 or 422 during any `--selftest` is printed as
   `SERVER REJECTED REQUEST (…)` and fails the run, even when no later check looks at the item. In `DevServerTests`
   the thrown `APIError.http` fails the test with the server's message. Don't catch these with `try?` in tests.
