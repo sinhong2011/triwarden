@@ -189,7 +189,10 @@ public actor VaultClient {
     }
 
     /// Step 2: exchange the callback's code for tokens.
-    public func finishSSO(callback: URL, start: SSOStart) async throws(APIError) -> SSOSession {
+    /// - Parameter twoFactor: provider id ("0" = authenticator app) and code, when the first exchange answered
+    ///   `.twoFactorRequired`. The same code is sent again with it, as the official clients do.
+    public func finishSSO(callback: URL, start: SSOStart,
+                          twoFactor: (provider: String, token: String)? = nil) async throws(APIError) -> SSOSession {
         let items = URLComponents(url: callback, resolvingAgainstBaseURL: false)?.queryItems ?? []
         guard items.first(where: { $0.name == "state" })?.value == start.state else {
             throw .http(status: 400, message: "Single sign-on was interrupted (state mismatch). Try again.")
@@ -208,11 +211,17 @@ public actor VaultClient {
             let kdfMemory: Int?
             let kdfParallelism: Int?
         }
-        let token: Token = try await send(post(environment.identityURL, "connect/token", formBody: [
+        var form = [
             "grant_type": "authorization_code", "code": code, "code_verifier": start.verifier,
             "redirect_uri": Self.ssoRedirectURI, "client_id": Self.clientName, "scope": "api offline_access",
             "deviceType": "7", "deviceIdentifier": deviceIdentifier, "deviceName": "triwarden",
-        ]))
+        ]
+        if let twoFactor {
+            form["twoFactorProvider"] = twoFactor.provider
+            form["twoFactorToken"] = twoFactor.token
+            form["twoFactorRemember"] = "0"
+        }
+        let token: Token = try await send(post(environment.identityURL, "connect/token", formBody: form))
         accessToken = token.access_token
         refreshToken = token.refresh_token
         guard let email = Self.jwtClaim("email", token.access_token) else {

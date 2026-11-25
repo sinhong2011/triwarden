@@ -16,7 +16,11 @@ enum WebAuthentication {
     static func run(_ url: URL) async throws -> URL {
         let anchor = Anchor()
         return try await withCheckedThrowingContinuation { continuation in
-            let session = ASWebAuthenticationSession(url: url, callback: .customScheme("bitwarden")) { callback, error in
+            // AuthenticationServices calls this on its own XPC queue, not the main thread. `@Sendable` keeps it out of
+            // this enum's MainActor isolation; otherwise Swift 6's executor check traps (EXC_BREAKPOINT) right here.
+            // The anchor is captured so it lives as long as the session (presentationContextProvider is weak).
+            let session = ASWebAuthenticationSession(url: url, callback: .customScheme("bitwarden")) { @Sendable [anchor] callback, error in
+                withExtendedLifetime(anchor) {}
                 if let callback {
                     continuation.resume(returning: callback)
                 } else if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin {

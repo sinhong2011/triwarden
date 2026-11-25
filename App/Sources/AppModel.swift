@@ -1335,9 +1335,15 @@ final class AppModel {
         errorMessage = nil
         defer { isBusy = false }
 
+        let isDeviceCode: Bool = if case .deviceVerification = phase { true } else { false }
+        // Two-step after single sign-on: repeat the SSO code exchange with the code. A password login here would be
+        // refused by servers that allow SSO only ("SSO sign-in is required").
+        if let exchange = pendingSSOExchange, !isDeviceCode, let code {
+            await finishSSOExchange(exchange, twoFactor: ("0", code))
+            return
+        }
         let client = self.client?.environment == environment ? self.client! : makeClient(environment)
         self.client = client
-        let isDeviceCode: Bool = if case .deviceVerification = phase { true } else { false }
         do {
             // Provider "0" is the authenticator app (TOTP).
             let result = try await client.loginDetailed(email: email, password: password,
@@ -1456,6 +1462,10 @@ final class AppModel {
 
     /// SSO handshake waiting for the master password.
     @ObservationIgnored private var pendingSSO: (client: VaultClient, session: VaultClient.SSOSession, environment: ServerEnvironment)?
+    /// SSO callback waiting for a two-step code: the same exchange is sent again with it.
+    private typealias SSOExchange = (client: VaultClient, callback: URL, start: VaultClient.SSOStart,
+                                     environment: ServerEnvironment, identifier: String)
+    @ObservationIgnored private var pendingSSOExchange: SSOExchange?
     /// Shows the identity provider and returns the `bitwarden://sso-callback…` URL. Swapped in the self-test.
     @ObservationIgnored var ssoAuthenticator: @MainActor (URL) async throws -> URL = WebAuthentication.run
 
@@ -1468,17 +1478,32 @@ final class AppModel {
         errorMessage = nil
         defer { isBusy = false }
         let client = makeClient(environment)
+        pendingSSOExchange = nil
         do {
             let start = try await client.beginSSO(identifier: identifier)
             let callback = try await ssoAuthenticator(start.authorizeURL)
-            let session = try await client.finishSSO(callback: callback, start: start)
-            UserDefaults.standard.set(identifier, forKey: "ssoIdentifier")
-            email = session.email
-            pendingSSO = (client, session, environment)
-            phase = .ssoPassword
+            await finishSSOExchange((client, callback, start, environment, identifier), twoFactor: nil)
         } catch WebAuthentication.Cancelled.byUser {
             // Closed the sign-in window: stay on the login form.
         } catch {
+            handle(error)
+        }
+    }
+
+    /// Exchanges the SSO callback for tokens; on `.twoFactorRequired` keeps it so the code can be sent with it.
+    private func finishSSOExchange(_ exchange: SSOExchange, twoFactor: (provider: String, token: String)?) async {
+        do {
+            let session = try await exchange.client.finishSSO(callback: exchange.callback, start: exchange.start,
+                                                               twoFactor: twoFactor)
+            pendingSSOExchange = nil
+            UserDefaults.standard.set(exchange.identifier, forKey: "ssoIdentifier")
+            email = session.email
+            pendingSSO = (exchange.client, session, exchange.environment)
+            phase = .ssoPassword
+        } catch {
+            // Keep it for another try while a code is being asked for (a mistyped code is refused, not the sign-in).
+            let wantsCode: Bool = if case .twoFactorRequired? = error as? APIError { true } else { false }
+            pendingSSOExchange = wantsCode || twoFactor != nil ? exchange : nil
             handle(error)
         }
     }
@@ -2616,6 +2641,7 @@ final class AppModel {
     func cancelChallenge() {
         errorMessage = nil
         pendingSSO = nil
+        pendingSSOExchange = nil
         phase = .login
     }
 
