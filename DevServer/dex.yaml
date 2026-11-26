@@ -18,3 +18,8 @@ staticPasswords:
     hash: "$2a$10$eEzPoQZxkuJkbCToXaY7u.sqpHCTWZ7Y1aSlD9KSCHkkFbGSsI8Au"
     username: usagi
     userID: 7c9b1f3e-0d5a-4c1b-9a2e-usagi0000001
+  # TOTP two-step login is on (seed.py): single sign-on, then the authenticator code.
+  - email: momonga@chiikawarden.test
+    hash: "$2a$10$eEzPoQZxkuJkbCToXaY7u.sqpHCTWZ7Y1aSlD9KSCHkkFbGSsI8Au"
+    username: momonga
+    userID: 7c9b1f3e-0d5a-4c1b-9a2e-momonga00001

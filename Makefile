@@ -52,7 +52,9 @@ test-dev: ## VaultCore tests including both dev Vaultwarden servers and SSO
 		swift test
 
 selftest: build ## In-app self-test against the dev server (isolated storage)
-	@"$(BIN)" --selftest http://$(DEV_IP):18880 usagi@chiikawarden.test $(DEV_PASSWORD) \
+	@# Momonga's TOTP key on the SSO server, when seed.py saved one (Vaultwarden 1.37+ issues its own).
+	@TRIWARDEN_DEV_TOTP_SECRET=$$(cat DevServer/data/totp/18881.totp 2>/dev/null || echo JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP) \
+	"$(BIN)" --selftest http://$(DEV_IP):18880 usagi@chiikawarden.test $(DEV_PASSWORD) \
 		hachiware@chiikawarden.test $(DEV_PASSWORD) 2>&1
 
 selftest-compatibility: build ## Offline checks for unsupported item types (synthetic data, isolated storage)

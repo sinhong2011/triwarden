@@ -9,7 +9,7 @@ A disposable Vaultwarden environment for developing and testing Triwarden. It ru
 | `https://devbox.local:18844` | Vaultwarden **1.30.5**, for older API shapes |
 | `http://devbox.local:18880` | latest, plain HTTP (quick `curl`, app debugging) |
 | `http://<dev ip>:18881` | latest with SSO (OpenID Connect) against dex |
-| `http://<dev ip>:18856/dex` | dex identity provider; user `usagi@chiikawarden.test`, dev password |
+| `http://<dev ip>:18856/dex` | dex identity provider; users `usagi@` and `momonga@chiikawarden.test` (TOTP after sign-on), dev password |
 | `http://devbox.local:18826` | Mailpit — every email the servers send |
 | `…:18843/admin` | Admin panel; token is in `~/triwarden-dev/.env` on the dev box |
 

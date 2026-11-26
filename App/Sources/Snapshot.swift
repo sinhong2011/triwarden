@@ -2332,6 +2332,44 @@ enum SelfTest {
                 check(ssoAccount != nil && model.session(for: ssoAccount!.id)?.items.isEmpty == false && AccountStore.refreshToken(ssoAccount!.id) != nil,
                       "SSO: vault unlocked, account and session saved")
                 if let ssoAccount { model.logOut(ssoAccount.id) }
+
+                // Two-step after single sign-on (momonga has TOTP): the code goes with the SSO exchange, and a
+                // mistyped one can be retried without signing in at the identity provider again.
+                let twoStepEmail = "momonga@chiikawarden.test"
+                let totp = TOTP(ProcessInfo.processInfo.environment["TRIWARDEN_DEV_TOTP_SECRET"] ?? "JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP")!
+                model.ssoAuthenticator = { url in try await HeadlessIdP.signIn(url, login: twoStepEmail, password: password) }
+                model.beginAddAccount()
+                model.serverKind = .selfHosted
+                model.serverURL = ssoServer
+                await model.loginWithSSO(identifier: "triwarden")
+                check(model.phase.id == AppModel.Phase.twoFactor(providers: []).id, "SSO two-step: asks for the authenticator code \(model.errorMessage ?? "")")
+                await model.login(password: "", code: "000000")
+                check(model.phase.id == AppModel.Phase.twoFactor(providers: []).id && model.errorMessage != nil,
+                      "SSO two-step: a wrong code is refused and can be retried")
+                await model.login(password: "", code: totp.code())
+                check(model.phase.id == AppModel.Phase.ssoPassword.id && model.email == twoStepEmail,
+                      "SSO two-step: the code completes the same sign-on \(model.errorMessage ?? "")")
+                await model.completeSSO(password: password)
+                let twoStepSession = model.sessions.first { $0.account.email == twoStepEmail }
+                check(model.phase.id == AppModel.Phase.vault.id && twoStepSession != nil, "SSO two-step: vault unlocked")
+                if let twoStepSession { model.logOut(twoStepSession.account.id) }
+
+                // Leaving the code step another way (here Add Account) drops that sign-on: a password login's code
+                // then goes with the password, not to the abandoned SSO exchange.
+                model.beginAddAccount()
+                model.serverKind = .selfHosted
+                model.serverURL = ssoServer
+                await model.loginWithSSO(identifier: "triwarden")
+                model.beginAddAccount()
+                model.serverKind = .selfHosted
+                model.serverURL = ssoServer
+                model.email = twoStepEmail
+                await model.login(password: password)
+                await model.login(password: password, code: totp.code(at: .now.addingTimeInterval(30))) // the next step: this one's code was used
+                let passwordSession = model.sessions.first { $0.account.email == twoStepEmail }
+                check(model.phase.id == AppModel.Phase.vault.id && passwordSession != nil,
+                      "SSO two-step: leaving the code step drops the sign-on; a later password login completes \(model.errorMessage ?? "")")
+                if let passwordSession { model.logOut(passwordSession.account.id) }
                 model.ssoAuthenticator = WebAuthentication.run
             } else {
                 print("SKIP SSO (no SSO server at \(ssoServer))")

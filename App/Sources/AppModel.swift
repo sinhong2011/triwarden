@@ -46,7 +46,14 @@ final class AppModel {
         }
     }
 
-    var phase: Phase = .login
+    var phase: Phase = .login {
+        didSet {
+            // A single sign-on in progress belongs to its own step. Leaving that step any other way (Add Account,
+            // logging out the last account, locking) drops it, so a later password login's code can't be sent to it.
+            if case .twoFactor = phase {} else { pendingSSOExchange = nil }
+            if case .ssoPassword = phase {} else { pendingSSO = nil }
+        }
+    }
     /// Every account saved on this Mac, oldest first.
     private(set) var accounts: [SavedAccount] = AccountStore.accounts()
     /// Unlocked accounts. Items from all of them are merged into `items`.
@@ -2640,9 +2647,7 @@ final class AppModel {
 
     func cancelChallenge() {
         errorMessage = nil
-        pendingSSO = nil
-        pendingSSOExchange = nil
-        phase = .login
+        phase = .login // drops the pending single sign-on (see `phase`)
     }
 
     var serverDisplayName: String {
