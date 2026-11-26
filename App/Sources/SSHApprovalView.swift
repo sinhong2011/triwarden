@@ -69,11 +69,13 @@ struct SSHApprovalView: View {
             }
             .thinScroller()
             VStack(alignment: .leading, spacing: 0) {
-                Label("macOS will ask for Touch ID or your Mac login password.", systemImage: "lock.shield")
+                Label(prompt.confirmedByUnlock && grant != .always
+                      ? "You just unlocked Triwarden for this, so macOS won't ask again."
+                      : "macOS will ask for Touch ID or your Mac login password.", systemImage: "lock.shield")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 24).padding(.top, 14).padding(.bottom, 2)
-                FormFooter(action: "Allow Signing…", cancelTitle: "Deny", defaultAction: false, showsSeparator: false,
+                FormFooter(action: prompt.confirmedByUnlock && grant != .always ? LocalizedStringKey("Allow Signing") : LocalizedStringKey("Allow Signing…"), cancelTitle: "Deny", defaultAction: false, showsSeparator: false,
                            cancel: { choose(.deny) }, submit: { choose(.allow(grant)) }) {
                     DeadlineCountdown(deadline: deadline, duration: SSHApprovalQueue.timeout)
                 }

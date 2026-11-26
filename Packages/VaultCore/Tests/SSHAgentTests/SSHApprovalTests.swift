@@ -190,3 +190,42 @@ import Testing
                                keyName: "work", outcome: .allowlisted, trustKey: "k"))
     #expect(log.priorAsks(trustKey: "k", since: start) == 0)
 }
+
+// Issue #251: public keys are remembered across lock so a locked vault can still be asked to sign.
+@Test func publicKeyCacheFollowsUnlockedAccountsAndKeepsLockedOnes() throws {
+    let a1 = SSHPublicIdentity(id: "a1", name: "Work", publicBlob: Data([1]), accountID: "a")
+    let a2 = SSHPublicIdentity(id: "a2", name: "Old", publicBlob: Data([2]), accountID: "a")
+    let b1 = SSHPublicIdentity(id: "b1", name: "Home", publicBlob: Data([3]), accountID: "b")
+    var cache = SSHPublicKeyCache()
+    cache.replace(accounts: ["a", "b"], with: [a1, a2, b1])
+    #expect(cache.entries == [a1, a2, b1])
+
+    // Account a unlocked, its key a2 deleted: gone. Account b locked: kept.
+    cache.replace(accounts: ["a"], with: [a1])
+    #expect(cache.entries == [b1, a1])
+
+    // Listing: live keys first, then locked accounts' remembered keys, never twice.
+    #expect(cache.listing(live: [a1], unlocked: ["a"]) == [a1, b1])
+    #expect(cache.listing(live: [], unlocked: []) == [b1, a1])
+    #expect(cache.listing(live: [b1], unlocked: ["b"]) == [b1, a1])
+
+    cache.remove(accountID: "b")
+    #expect(cache.entries == [a1])
+
+    let url = FileManager.default.temporaryDirectory.appending(path: "ssh-public-keys-\(UUID()).json")
+    defer { try? FileManager.default.removeItem(at: url) }
+    try cache.save(to: url)
+    #expect(SSHPublicKeyCache.load(from: url) == cache)
+    #expect(SSHPublicKeyCache.load(from: url.appendingPathExtension("missing")).entries.isEmpty)
+}
+
+@Test func unlockWaitAnswersEveryWaiterOnce() async {
+    let wait = SSHUnlockWait()
+    async let first = wait.wait()
+    async let second = wait.wait()
+    while await wait.waiting < 2 { await Task.yield() }
+    await wait.finish(.timedOut)
+    let answers = await [first, second]
+    #expect(answers == [.timedOut, .timedOut])
+    #expect(await wait.waiting == 0)
+}
