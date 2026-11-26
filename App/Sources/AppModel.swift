@@ -915,7 +915,14 @@ final class AppModel {
     /// An SSH signature is waiting for this account. The vault window comes forward on that account's lock screen,
     /// where a line names the app and key that are waiting.
     func offerUnlockForSSH(accountID: String) {
-        if phase.id == Phase.locked.id, accounts.contains(where: { $0.id == accountID }) { unlockTargetID = accountID }
+        if accounts.contains(where: { $0.id == accountID }) {
+            if phase.id == Phase.locked.id {
+                unlockTargetID = accountID
+            } else if phase.id == Phase.vault.id, !isUnlocked(accountID) {
+                // Another account is open: show this account's own door, where the waiting line appears.
+                accountFocus = accountID
+            }
+        }
         reopenForUnlock()
     }
 
