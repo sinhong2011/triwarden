@@ -13,7 +13,8 @@
   <a href="README.md">English</a> · <a href="README.zh-Hant.md">繁體中文</a> ·
   <a href="README.zh-HK.md">粵語</a> · <a href="README.zh-Hans.md">简体中文</a> · 日本語 ·
   <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> ·
-  <a href="README.es.md">Español</a>
+  <a href="README.es.md">Español</a> ·
+  <a href="README.de.md">Deutsch</a>
 </p>
 
 <p align="center">
@@ -119,7 +120,7 @@ make run
 
 マスターパスワードと鍵が Mac の外に出ることはなく、サーバーには暗号化されたデータだけが送信されます。詳細と脆弱性の非公開報告方法は [SECURITY.md](SECURITY.md) をご覧ください。
 
-Triwarden は VoiceOver ラベル、キーボード操作、コントラストを上げる、視差効果を減らす設定に対応しています。English、繁體中文、粵語、简体中文、日本語、한국어、Français、Español、ไทยを利用できます。既知の制限は [ACCESSIBILITY.md](ACCESSIBILITY.md) に記載しています。
+Triwarden は VoiceOver ラベル、キーボード操作、コントラストを上げる、視差効果を減らす設定に対応しています。English、Deutsch、繁體中文、粵語、简体中文、日本語、한국어、Français、Español、ไทยを利用できます。既知の制限は [ACCESSIBILITY.md](ACCESSIBILITY.md) に記載しています。
 
 ## サポートとコントリビューション
 
