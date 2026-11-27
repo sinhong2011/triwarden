@@ -1,5 +1,6 @@
 {
   "extName": "Triwarden",
+  "locale": "zh-CN",
   "extDescription": "从 Triwarden 保险库填充并保存登录信息。填充时会在应用中要求 Touch ID。",
   "cmdFillLogin": "填充此页面的登录信息或一次性验证码",
 
@@ -17,6 +18,8 @@
     "lookingForLogins": "正在查找登录信息…",
     "noLogins": "此网站没有登录信息。",
     "noLoginsShort": "此网站没有登录信息",
+    "signInWith": "使用 $1 登录",
+    "useProviderButton": "请使用网站上的“使用 $1 登录”按钮。",
     "noOtpLogin": "此网站没有含一次性验证码的登录信息。",
     "noLoginHasCode": "没有含验证码的登录信息",
     "passwords": "密码",
@@ -26,7 +29,9 @@
     "hintClose": "关闭",
     "codeValidFor": "验证码还剩 $1 秒有效",
     "openToUnlock": "打开 Triwarden",
-    "codeCopied": "已复制验证码"
+    "codeCopied": "已复制验证码",
+    "youSignInWith": "你上次使用 $1 登录此网站",
+    "signInCard": "登录方式"
   },
 
   "ctx": {
@@ -93,6 +98,7 @@
     "saveFor": "保存 $1 的登录信息?",
     "updateFor": "更新“$1”的密码?",
     "noUsername": "无用户名",
+    "rememberSignIn": "记住你使用 $1 登录吗?",
     "close": "关闭(保留在 Triwarden 中)",
     "notNow": "以后再说",
     "save": "保存",

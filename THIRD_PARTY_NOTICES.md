@@ -168,3 +168,30 @@ these licenses can be found at:
 Passphrases and random usernames. "EFF's Long Wordlist" by the Electronic Frontier Foundation
 (<https://www.eff.org/dice>), licensed under CC BY 3.0 US (<https://creativecommons.org/licenses/by/3.0/us/>).
 Used unmodified.
+
+## oauth-remember-extension
+
+Detection of "Sign in with Google/Apple/…" buttons in the browser extension (`lib/sign-in-with.ts`), ported to
+TypeScript with a closed provider list. <https://github.com/icaroharry/oauth-remember-extension>. MIT License, as
+stated in its README (the repository has no separate license file):
+
+```
+Copyright (c) the oauth-remember-extension authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of
+this software and associated documentation files (the "Software"), to deal in
+the Software without restriction, including without limitation the rights to
+use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+the Software, and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```

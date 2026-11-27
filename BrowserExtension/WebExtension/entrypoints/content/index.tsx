@@ -5,6 +5,7 @@ import { render } from 'solid-js/web';
 import { pinOverlayHost, pinToTopLayer } from '../../lib/overlay-layout';
 import { vaultFillInOverlay } from '../../lib/runtime';
 import { watchForSubmits } from '../../lib/save';
+import { watchSignInWith } from '../../lib/sign-in-with';
 import BridgeDownBanner from './BridgeDownBanner';
 import GenerateOverlay from './GenerateOverlay';
 import Overlay from './Overlay';
@@ -20,6 +21,7 @@ export default defineContentScript({
 
   async main(ctx) {
     watchForSubmits();
+    watchSignInWith();
     const ui = await createShadowRootUi(ctx, {
       name: 'triwarden-overlay',
       position: 'overlay',

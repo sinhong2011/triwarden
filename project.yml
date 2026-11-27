@@ -156,6 +156,7 @@ targets:
       - App/Sources/IconStore.swift
       - App/Sources/BrowserLoginPrefill.swift
       - App/Sources/GeneratorHistory.swift
+      - App/Sources/SignInProvider.swift
       - Shared/IdentifiedArrayBinding.swift
     dependencies:
       - package: VaultCore

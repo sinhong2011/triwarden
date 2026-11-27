@@ -60,6 +60,9 @@ public struct CLIRequest: Codable, Sendable, Equatable {
     public var browser: String?
     /// `pending` with `field: save`: the unlocked account to save a new login to, picked on the page's card.
     public var account: String?
+    /// `save`: the site was signed in to with this provider (`google`, `apple`, …) instead of a password. The app
+    /// checks it against its own list; `username` is then the provider account's email, if the page showed it.
+    public var provider: String?
 
     public init(command: Command, query: String? = nil, field: String? = nil, length: Int? = nil,
                 uppercase: Bool? = nil, lowercase: Bool? = nil, digits: Bool? = nil, symbols: Bool? = nil,
@@ -67,14 +70,14 @@ public struct CLIRequest: Codable, Sendable, Equatable {
                 separator: String? = nil, capitalize: Bool? = nil, includeNumber: Bool? = nil,
                 url: String? = nil, username: String? = nil, password: String? = nil, codes: Bool? = nil,
                 reveal: Bool? = nil, foreground: Bool? = nil, silent: Bool? = nil, copyTotp: Bool? = nil,
-                origin: String? = nil, browser: String? = nil, account: String? = nil) {
+                origin: String? = nil, browser: String? = nil, account: String? = nil, provider: String? = nil) {
         self.command = command; self.query = query; self.field = field; self.length = length
         self.uppercase = uppercase; self.lowercase = lowercase; self.digits = digits; self.symbols = symbols
         self.avoidAmbiguous = avoidAmbiguous; self.minNumbers = minNumbers; self.minSpecial = minSpecial
         self.separator = separator; self.capitalize = capitalize; self.includeNumber = includeNumber
         self.url = url; self.username = username; self.password = password; self.codes = codes; self.reveal = reveal
         self.foreground = foreground; self.silent = silent; self.copyTotp = copyTotp
-        self.origin = origin; self.browser = browser; self.account = account
+        self.origin = origin; self.browser = browser; self.account = account; self.provider = provider
     }
 }
 
@@ -97,10 +100,13 @@ public struct CLIResponse: Codable, Sendable, Equatable {
         public var passkey: Bool?
         /// `pending`: the account Save writes to, named only when more than one is unlocked.
         public var account: String?
+        /// `match` / `pending`: a "Sign in with" login — the provider (`google`, `apple`, …) used instead of a password.
+        public var provider: String?
         public init(id: String, name: String, detail: String, totpPeriod: Int? = nil, icon: String? = nil,
-                    code: String? = nil, exact: Bool? = nil, passkey: Bool? = nil, account: String? = nil) {
+                    code: String? = nil, exact: Bool? = nil, passkey: Bool? = nil, account: String? = nil,
+                    provider: String? = nil) {
             self.id = id; self.name = name; self.detail = detail; self.totpPeriod = totpPeriod; self.icon = icon
-            self.code = code; self.exact = exact; self.passkey = passkey; self.account = account
+            self.code = code; self.exact = exact; self.passkey = passkey; self.account = account; self.provider = provider
         }
     }
 

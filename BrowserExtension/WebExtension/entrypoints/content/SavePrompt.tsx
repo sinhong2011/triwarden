@@ -4,6 +4,7 @@ import type { Row } from '../../lib/protocol';
 import { replyErrorMessage } from '../../lib/bridge-status';
 import { t } from '../../lib/i18n';
 import { send } from '../../lib/send';
+import { providerName } from '../../lib/sign-in-with';
 import { AppMark } from './AppMark';
 
 /**
@@ -67,7 +68,7 @@ export default function SavePrompt() {
     hidden.add(r.id);
     if (save) {
       const to = chosen()?.name ?? r.account;
-      setDone(r.name ? t('save.updated') : to ? t('save.savedTo', to) : t('save.saved'));
+      setDone(r.name && !r.provider ? t('save.updated') : to ? t('save.savedTo', to) : t('save.saved'));
       setTimeout(() => void check(), 1600);
     } else void check();
   }
@@ -148,9 +149,16 @@ export default function SavePrompt() {
             <div class="save-text" role="status" aria-live="polite">
               <Show when={!done()} fallback={<span class="save-title">{done()}</span>}>
                 <span class="save-title">
-                  {r().name ? t('save.updateFor', r().name) : t('save.saveFor', site() || location.hostname)}
+                  {r().provider
+                    ? t('save.rememberSignIn', providerName(r().provider!))
+                    : r().name
+                      ? t('save.updateFor', r().name)
+                      : t('save.saveFor', site() || location.hostname)}
                 </span>
-                <span class="save-detail">{r().detail || t('save.noUsername')}</span>
+                {/* A sign-in method has no username of its own: the email is shown when the person picked one. */}
+                <Show when={r().provider ? r().detail : (r().detail || t('save.noUsername'))}>
+                  {(detail) => <span class="save-detail">{detail()}</span>}
+                </Show>
                 <Show when={r().account}>
                   {(a) => (
                     <Show
@@ -225,7 +233,7 @@ export default function SavePrompt() {
                 {t('save.notNow')}
               </button>
               <button type="button" class="save-go" disabled={busy()} on:click={() => void answer(r(), true)}>
-                {r().name ? t('save.update') : t('save.save')}
+                {r().name && !r().provider ? t('save.update') : t('save.save')}
               </button>
             </div>
           </Show>

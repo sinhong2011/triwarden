@@ -1,5 +1,6 @@
 {
   "extName": "Triwarden",
+  "locale": "ja",
   "extDescription": "Triwarden の保管庫からログイン情報を入力・保存します。入力時はアプリで Touch ID を求めます。",
   "cmdFillLogin": "このページのログインまたはワンタイムコードを入力",
 
@@ -17,6 +18,8 @@
     "lookingForLogins": "ログインを検索中…",
     "noLogins": "このサイトのログインはありません。",
     "noLoginsShort": "このサイトのログインはありません",
+    "signInWith": "$1 でログイン",
+    "useProviderButton": "サイトの「$1 でログイン」ボタンを使ってください。",
     "noOtpLogin": "このサイトにワンタイムコード付きのログインはありません。",
     "noLoginHasCode": "コード付きのログインがありません",
     "passwords": "パスワード",
@@ -26,7 +29,9 @@
     "hintClose": "閉じる",
     "codeValidFor": "コードはあと $1 秒有効",
     "openToUnlock": "Triwarden を開く",
-    "codeCopied": "コードをコピーしました"
+    "codeCopied": "コードをコピーしました",
+    "youSignInWith": "前回は$1でサインインしました",
+    "signInCard": "サインイン方法"
   },
 
   "ctx": {
@@ -93,6 +98,7 @@
     "saveFor": "$1 のログインを保存しますか?",
     "updateFor": "「$1」のパスワードを更新しますか?",
     "noUsername": "ユーザー名なし",
+    "rememberSignIn": "$1 でログインすることを覚えておきますか?",
     "close": "閉じる(Triwarden に残す)",
     "notNow": "今はしない",
     "save": "保存",

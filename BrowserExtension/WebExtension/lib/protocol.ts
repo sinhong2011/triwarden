@@ -17,6 +17,8 @@ export type Row = {
   passkey?: boolean;
   /** `pending`: the account Save writes to, named only when more than one is unlocked. */
   account?: string;
+  /** `match` / `pending`: the login is a "Sign in with <provider>" login, not a password (canonical id: `google`, `apple`, …). */
+  provider?: string;
 };
 
 /** Options echoed by `generate` (and accepted on the request) — same keys as the app Generator prefs. */
@@ -71,6 +73,8 @@ export type Request = {
   account?: string;
   username?: string;
   password?: string;
+  /** `save`: the sign-in provider used instead of a password (canonical id: `google`, `apple`, …). */
+  provider?: string;
   /** `get` / `copy` / `generate`: for generate, `passphrase` asks for a passphrase instead of a password. */
   field?: string;
   codes?: boolean;

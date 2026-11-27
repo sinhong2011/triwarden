@@ -1,5 +1,6 @@
 {
   "extName": "Triwarden",
+  "locale": "en",
   "extDescription": "Fill and save logins from your Triwarden vault. Filling asks for Touch ID in the app.",
   "cmdFillLogin": "Fill the login or one-time code on this page",
 
@@ -17,6 +18,8 @@
     "lookingForLogins": "Looking for logins…",
     "noLogins": "No logins for this site.",
     "noLoginsShort": "No logins for this site",
+    "signInWith": "Sign in with $1",
+    "useProviderButton": "Use the site’s “Sign in with $1” button.",
     "noOtpLogin": "No login with a one-time code for this site.",
     "noLoginHasCode": "No login has a code",
     "passwords": "Passwords",
@@ -26,7 +29,9 @@
     "hintClose": "close",
     "codeValidFor": "Code valid for $1 more seconds",
     "openToUnlock": "Open Triwarden",
-    "codeCopied": "Code copied"
+    "codeCopied": "Code copied",
+    "youSignInWith": "You signed in here with $1",
+    "signInCard": "Sign-in method"
   },
 
   "ctx": {
@@ -93,6 +98,7 @@
     "saveFor": "Save this login for $1?",
     "updateFor": "Update the password for “$1”?",
     "noUsername": "No username",
+    "rememberSignIn": "Remember that you sign in with $1?",
     "close": "Close (keep it in Triwarden)",
     "notNow": "Not Now",
     "save": "Save",

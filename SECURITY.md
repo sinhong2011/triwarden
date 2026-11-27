@@ -80,6 +80,12 @@ with `completeUntilFirstUserAuthentication` file protection, and both the app an
   stores nothing and holds no keys. The page URL comes from the browser, not the page. Suggestions are names
   and usernames for that site only, and only our own bundled binaries may ask for them. Filling needs Touch ID
   and only fills a login on its own site. Saving or updating a login always asks you in the app first.
+  To remember a "Sign in with Google/Apple/…", it notes which provider button you clicked and, on the provider's own
+  sign-in page, reads only that page's address (to learn which site asked) and the email of the Google account row you
+  click — never a field's value. That note stays in the browser's session storage for at most 10 minutes; only when you
+  come back to the site does the app ask whether to keep it, as a "Sign in with" text field on a login with no password.
+  Providers outside a fixed list (Google, Apple, Microsoft, GitHub, Facebook, X, Amazon, Discord, Slack, LinkedIn,
+  GitLab, Twitch) are refused by the app.
 - **Shortcuts / Spotlight actions** only expose item names and usernames. Copying a password or a code works
   only while unlocked, and passwords go through the same concealed, auto-clearing clipboard.
 - **Updates** are off by default. A manual check, or daily checks after you enable them, reads the signed Sparkle

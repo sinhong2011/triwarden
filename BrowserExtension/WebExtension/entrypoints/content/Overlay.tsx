@@ -7,6 +7,7 @@ import { t } from '../../lib/i18n';
 import { iconPosition, menuLeft, menuVertical } from '../../lib/overlay-layout';
 import type { Row } from '../../lib/protocol';
 import { send } from '../../lib/send';
+import { findProviderButtons, providerName } from '../../lib/sign-in-with';
 import { AppMark } from './AppMark';
 
 const secondsLeft = (period: number, now: number) => period - (Math.floor(now / 1000) % period);
@@ -94,6 +95,9 @@ export default function Overlay() {
   const [menu, setMenu] = createSignal<Menu | null>(null);
   const [active, setActive] = createSignal(0); // the highlighted row, moved with the arrow keys
   const [now, setNow] = createSignal(Date.now()); // ticks once a second while the menu shows, for the countdowns
+  const [lastUsed, setLastUsed] = createSignal<Row[]>([]); // this site's "Sign in with" logins
+  const [signInDismissed, setSignInDismissed] = createSignal(false);
+  const [buttons, setButtons] = createSignal<ReturnType<typeof findProviderButtons>>([]);
   const [toast, setToast] = createSignal<string | null>(null); // quiet "Code copied" after fill, when the app did
   let root!: HTMLDivElement;
   let asking = 0; // bumped on every ask and every close, so an answer that arrives late is dropped
@@ -102,6 +106,9 @@ export default function Overlay() {
   let navigated = false; // arrow keys moved the highlight, so Enter means "fill this one"
   let filling = false; // we are putting values in fields: that moves focus, and must not open the menu again
   let toastTimer: number | undefined;
+  let askedLastUsed = false; // one quiet match per page, once a "Sign in with" button shows up
+  // Looking for provider buttons costs time on big pages: with none on screen, only for a while after load or a click.
+  let lookUntil = Date.now() + 10_000;
 
   const close = () => {
     asking++;
@@ -151,8 +158,39 @@ export default function Overlay() {
       if (first && !found.has(first)) found.set(first, { field: first, otp: boxes });
     }
     setTargets([...found.values()]);
+    scanProviderButtons();
     setTick((n) => n + 1);
     offerFor(document.activeElement);
+  }
+
+  /** Top frame only (a button in another frame cannot be pressed from here). Looks again only while there is a card to show. */
+  function scanProviderButtons() {
+    if (window !== window.top || (askedLastUsed && !lastUsed().length)) return;
+    if (!buttons().length && Date.now() > lookUntil) return;
+    setButtons(findProviderButtons());
+    if (askedLastUsed || !buttons().length) return;
+    askedLastUsed = true;
+    // Background match: never opens the unlock window, never shows codes. Locked or app not running: nothing happens.
+    void send({ command: 'match', silent: true }).then((reply) => {
+      if (reply.ok) setLastUsed((reply.rows ?? []).filter((r) => r.provider));
+    });
+  }
+
+  /** The remembered sign-ins whose button is on screen now (a login modal open), each with that button. */
+  const signIns = () => {
+    tick();
+    if (signInDismissed()) return [];
+    return lastUsed().flatMap((row) => {
+      const el = buttons().find((b) => b.provider === row.provider && b.el.isConnected)?.el;
+      const r = el?.getBoundingClientRect();
+      return el && r && r.width >= 8 && r.height >= 8 ? [{ row, el }] : [];
+    });
+  };
+
+  /** Press the page's own button: the provider takes it from there. */
+  function signInWith(el: Element) {
+    setSignInDismissed(true);
+    (el as HTMLElement).click();
   }
 
   const place = (t: Target) => {
@@ -287,6 +325,20 @@ export default function Overlay() {
 
   async function choose(row: Row, target: Target) {
     close();
+    // A "Sign in with Google" login: press the page's own button; the password is not involved.
+    if (row.provider) {
+      const button = findProviderButtons().find((b) => b.provider === row.provider)?.el;
+      if (button) return void (button as HTMLElement).click();
+      return setMenu({
+        target,
+        auto: false,
+        state: 'note',
+        rows: [],
+        note: t('overlay.useProviderButton', providerName(row.provider)),
+        at: Date.now(),
+        revealed: true,
+      });
+    }
     // Ask the app to copy with this fill when there is no OTP field (setting + totp live in the app).
     const copyTotp = shouldRequestTotpCopy(!!target.otp || otpTargets().length > 0);
     const filled = await send({
@@ -336,6 +388,7 @@ export default function Overlay() {
       timer = window.setTimeout(scan, 250);
     };
     const move = () => setTick((n) => n + 1);
+    const clicked = () => (lookUntil = Date.now() + 5_000); // a click may open a login dialog
     const observer = new MutationObserver(rescan);
     observer.observe(document.documentElement, {
       childList: true,
@@ -387,6 +440,7 @@ export default function Overlay() {
     addEventListener('scroll', move, { passive: true, capture: true });
     addEventListener('resize', move, { passive: true });
     document.addEventListener('mousedown', outside, true);
+    document.addEventListener('click', clicked, true);
     document.addEventListener('keydown', keys, true);
     document.addEventListener('focusin', focused, true);
     onCleanup(() => {
@@ -397,6 +451,7 @@ export default function Overlay() {
       removeEventListener('scroll', move, true);
       removeEventListener('resize', move);
       document.removeEventListener('mousedown', outside, true);
+      document.removeEventListener('click', clicked, true);
       document.removeEventListener('keydown', keys, true);
       document.removeEventListener('focusin', focused, true);
     });
@@ -419,6 +474,53 @@ export default function Overlay() {
           </button>
         )}
       </For>
+      {/* Like the save card, top right: how you signed in here last time, and one press to do it again. */}
+      <Show when={signIns().length ? signIns() : null}>
+        {(list) => (
+          <div class="save-prompt" role="region" aria-label={t('overlay.signInCard')}>
+            <div class="save-card" dir="auto">
+              <AppMark size={28} />
+              <div class="save-text" role="status" aria-live="polite">
+                {/* Every provider remembered here, in one sentence ("Google and Apple"), in the browser's language. */}
+                <span class="save-title">
+                  {t(
+                    'overlay.youSignInWith',
+                    new Intl.ListFormat(t('locale'), { type: 'conjunction' }).format([
+                      ...new Set(list().map((s) => providerName(s.row.provider!))),
+                    ]),
+                  )}
+                </span>
+                <Show when={list().length === 1 && list()[0]!.row.detail}>{(email) => <span class="save-detail">{email()}</span>}</Show>
+              </div>
+              <button
+                type="button"
+                class="bridge-banner-dismiss"
+                aria-label={t('dismiss')}
+                title={t('dismiss')}
+                on:click={() => setSignInDismissed(true)}
+              >
+                ×
+              </button>
+            </div>
+            {/* Google's own button is a frame of accounts.google.com: it cannot be pressed from here, so point at it. */}
+            <Show when={list().some((s) => s.el instanceof HTMLIFrameElement)}>
+              <div class="save-detail">
+                {t('overlay.useProviderButton', providerName(list().find((s) => s.el instanceof HTMLIFrameElement)!.row.provider!))}
+              </div>
+            </Show>
+            <div class="save-actions">
+              <For each={list().filter((s) => !(s.el instanceof HTMLIFrameElement))}>
+                {(s) => (
+                  <button type="button" class="save-go" on:click={() => signInWith(s.el)}>
+                    {t('overlay.signInWith', providerName(s.row.provider!))}
+                    {list().length > 1 && s.row.detail ? ` · ${s.row.detail}` : ''}
+                  </button>
+                )}
+              </For>
+            </div>
+          </div>
+        )}
+      </Show>
       <Show when={toast()}>
         {(text) => (
           <div class="fill-toast" role="status" aria-live="polite">
@@ -480,9 +582,13 @@ export default function Overlay() {
                           <span class="text">
                             {/* Names and usernames can be in any script: each takes its own direction. */}
                             <span class="name" dir="auto">
-                              {dupes().has(row.name) && row.detail ? row.detail : row.name}
+                              {row.provider
+                                ? t('overlay.signInWith', providerName(row.provider))
+                                : dupes().has(row.name) && row.detail
+                                  ? row.detail
+                                  : row.name}
                             </span>
-                            <Show when={dupes().has(row.name) ? row.name : row.detail}>
+                            <Show when={row.provider ? row.detail : dupes().has(row.name) ? row.name : row.detail}>
                               {(sub) => (
                                 <span class="detail" dir="auto">
                                   {sub()}

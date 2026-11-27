@@ -1,9 +1,10 @@
 // Relays page requests to the Triwarden app (Safari: the extension's native handler; Chrome and Firefox: the
 // bundled `tw` native-messaging host). The app decides everything: what matches, Touch ID, saving.
-import { browser } from 'wxt/browser';
+import { browser, type Browser } from 'wxt/browser';
 import { replyErrorMessage } from '../lib/bridge-status';
 import { t } from '../lib/i18n';
 import { COMMANDS, type Reply } from '../lib/protocol';
+import { arrive, idpSite, isProvider, providerFromUrl, stage, take, visit, type Attempt } from '../lib/sign-in-with';
 
 const HOST = 'io.github.sinhong2011.triwarden';
 
@@ -34,6 +35,80 @@ async function setSaveTab(tab: number, url: string | null): Promise<void> {
   }
 }
 
+/** The top frame's address. Asked of the page itself: the `tabs` permission (every tab's address) is not needed. */
+const pageUrl = async (tabId: number): Promise<string | undefined> => {
+  try {
+    const url = await browser.tabs.sendMessage(tabId, { ask: 'url' }, { frameId: 0 });
+    return typeof url === 'string' && /^https?:/.test(url) ? url : undefined;
+  } catch {
+    return undefined; // no content script here (browser pages, the web store, a tab still loading)
+  }
+};
+
+/**
+ * Sign-in-with attempts (see lib/sign-in-with.ts): a button click, the provider page, the return. Session storage like
+ * the saves above; changes are queued so two frames asking at once cannot both take the same attempt.
+ */
+const ATTEMPTS = 'signIns';
+let attemptsInMemory: Attempt[] = [];
+let queue: Promise<unknown> = Promise.resolve();
+const queued = <T>(job: () => Promise<T>): Promise<T> => {
+  const run = queue.then(job);
+  queue = run.catch(() => {});
+  return run;
+};
+async function attempts(): Promise<Attempt[]> {
+  try {
+    return ((await browser.storage.session.get(ATTEMPTS))[ATTEMPTS] as Attempt[] | undefined) ?? [];
+  } catch {
+    return attemptsInMemory;
+  }
+}
+async function setAttempts(list: Attempt[]): Promise<void> {
+  attemptsInMemory = list;
+  try {
+    await browser.storage.session.set({ [ATTEMPTS]: list });
+  } catch {
+    // Kept in memory only.
+  }
+}
+const hostOf = (url?: string): string | null => {
+  try {
+    return url && /^https?:/.test(url) ? new URL(url).hostname : null;
+  } catch {
+    return null;
+  }
+};
+
+/** Every address here is the browser's (sender.url, or the top frame's own answer), never a value the page sent. */
+function handleSignIn(message: { signIn?: string; provider?: unknown; email?: unknown }, sender: Browser.runtime.MessageSender): Promise<unknown> {
+  const tab = sender.tab?.id;
+  const top = sender.frameId === 0;
+  return queued(async () => {
+    const now = Date.now();
+    const list = await attempts();
+    if (message.signIn === 'stage' && isProvider(message.provider) && tab != null) {
+      const site = hostOf(top ? sender.url : await pageUrl(tab));
+      if (site) await setAttempts(stage(list, site, message.provider, now));
+    } else if (message.signIn === 'visit' && sender.url) {
+      const page = new URL(sender.url);
+      const flow = idpSite(page);
+      const provider = flow?.provider ?? providerFromUrl(page);
+      const email = typeof message.email === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(message.email) ? message.email.slice(0, 254) : undefined;
+      if (provider) await setAttempts(visit(list, flow?.site, provider, email, now));
+    } else if (message.signIn === 'arrive' && top) {
+      const host = hostOf(sender.url);
+      if (host && list.length) await setAttempts(arrive(list, host, now));
+    } else if (message.signIn === 'take' && top) {
+      const host = hostOf(sender.url);
+      const [hit, rest] = host ? take(list, host, now, (message as { fresh?: unknown }).fresh === true) : [undefined, list];
+      if (hit) await setAttempts(rest);
+      return hit ? { provider: hit.provider, email: hit.email } : null;
+    }
+    return null;
+  });
+}
+
 export default defineBackground(() => {
   // Right-click menu, like the password managers': Triwarden > Autofill login / Copy username / Copy password / Copy
   // verification code > one entry per login of the page's site. Chrome has no "menu is about to show" event, so the
@@ -58,12 +133,18 @@ export default defineBackground(() => {
       void saveTabs().then((tabs) => sendResponse(tabs[tab] ?? null));
       return true;
     }
+    if (message?.signIn && tab != null) {
+      void handleSignIn(message, sender).then(sendResponse, () => sendResponse(null));
+      return true;
+    }
     if (!message || !COMMANDS.has(message.command) || !sender.tab || tab == null) return false;
     // The page URL comes from the browser, not from the page, so a frame can't claim another site.
     const own = sender.url ?? sender.tab.url;
     void (async () => {
       // The save card asks about the login of this tab, where it was typed (which this browser recorded).
-      const url = message.command === 'pending' ? ((await saveTabs())[tab] ?? own) : own;
+      let url = message.command === 'pending' ? ((await saveTabs())[tab] ?? own) : own;
+      // Returning from a provider usually lands on a callback address carrying a one-time code: only the site goes on.
+      if (message.command === 'save' && message.provider && url) url = `${new URL(url).origin}/`;
       const reply = (await Promise.resolve(browser.runtime.sendNativeMessage(HOST, { ...message, url }))) as
         | Reply
         | undefined;
@@ -96,16 +177,6 @@ function setUpContextMenu() {
   let generation = 0;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  /** The top frame's address. Asked of the page itself: the `tabs` permission (every tab's address) is not needed. */
-  const pageUrl = async (tabId: number): Promise<string | undefined> => {
-    try {
-      const url = await browser.tabs.sendMessage(tabId, { ask: 'url' }, { frameId: 0 });
-      return typeof url === 'string' && /^https?:/.test(url) ? url : undefined;
-    } catch {
-      return undefined; // no content script here (browser pages, the web store, a tab still loading)
-    }
-  };
-
   const label = (row: { name: string; detail?: string }) => {
     const text = row.detail ? `${row.name} (${row.detail})` : row.name;
     return text.replace(/&/g, '&&'); // a lone & marks a keyboard mnemonic in menu titles
@@ -120,7 +191,7 @@ function setUpContextMenu() {
     if (url) {
       try {
         const reply = (await browser.runtime.sendNativeMessage(HOST, { command: 'match', url, silent: true })) as Reply | undefined;
-        if (reply?.ok) logins = (reply.rows ?? []).map((r) => ({ id: r.id, label: label(r), totp: !!r.totpPeriod }));
+        if (reply?.ok) logins = (reply.rows ?? []).filter((r) => !r.provider).map((r) => ({ id: r.id, label: label(r), totp: !!r.totpPeriod }));
         else problem = replyErrorMessage(reply);
       } catch (error) {
         problem = String((error as Error)?.message ?? error);

@@ -120,7 +120,8 @@ final class CLIBridge {
 
     /// What a submitted login means for the vault.
     static func decide(host: String, username: String, password: String, items: [VaultItem]) -> SaveDecision {
-        let siteLogins = Self.logins(for: host, in: items)
+        // A "Sign in with" login has no password to compare or replace: a typed password is a separate login.
+        let siteLogins = Self.logins(for: host, in: items).filter { $0.password != nil }
         guard !username.isEmpty else {
             if siteLogins.contains(where: { $0.password == password }) { return .unchanged }
             return siteLogins.isEmpty ? .add : .ignore
@@ -131,16 +132,32 @@ final class CLIBridge {
         return existing.password == password ? .unchanged : .update(existingID: existing.id, name: existing.name)
     }
 
+    /// What a "Sign in with" on the site means for the vault: already remembered (same provider, and the same account
+    /// when the page showed one), or new. The only change to an existing login: an email for one saved without it
+    /// (the provider skipped its chooser that time), so the same account is not saved twice.
+    static func decide(host: String, username: String, provider: SignInProvider, items: [VaultItem]) -> SaveDecision {
+        let known = Self.logins(for: host, in: items).filter { $0.signInProvider == provider }
+        if known.contains(where: { username.isEmpty || ($0.username ?? "").caseInsensitiveCompare(username) == .orderedSame }) {
+            return .unchanged
+        }
+        if let bare = known.first(where: { ($0.username ?? "").isEmpty }) { return .update(existingID: bare.id, name: bare.name) }
+        return .add
+    }
+
     /// Queues a submitted login for you to answer later, without taking the screen. Returns what happened.
-    func queueSave(host: String, scheme: String, username: String, password: String, items: [VaultItem]) -> String {
+    /// With `provider`, it is a "Sign in with" to remember: `password` is empty and `username` the provider's email.
+    func queueSave(host: String, scheme: String, username: String, password: String, provider: SignInProvider? = nil,
+                   items: [VaultItem]) -> String {
         let existing: (id: String, name: String)?
-        switch Self.decide(host: host, username: username, password: password, items: items) {
+        let decision = provider.map { Self.decide(host: host, username: username, provider: $0, items: items) }
+            ?? Self.decide(host: host, username: username, password: password, items: items)
+        switch decision {
         case .unchanged: return "unchanged"
         case .ignore: return "ignored"
         case .add: existing = nil
         case .update(let id, let name): existing = (id, name)
         }
-        let key = PendingLoginSave.key(host: host, username: username)
+        let key = PendingLoginSave.key(host: host, username: username, provider: provider)
         // Not Now puts away that attempt only: the same login with a new password asks again.
         guard !declinedSaves.contains(key + "\u{0}" + password) else { return "skipped" }
         // One entry per site and username: a retry after a typo replaces the first attempt instead of piling up. The same
@@ -161,7 +178,7 @@ final class CLIBridge {
         LoginSaveNotifier.withdraw(replaced.map(\.id))
         let pending = PendingLoginSave(host: host, scheme: scheme, username: username, password: password,
                                        existingID: existing?.id, existingName: existing?.name,
-                                       accountID: accountID, accountEmail: accountEmail)
+                                       accountID: accountID, accountEmail: accountEmail, provider: provider)
         pendingSaves.append(pending)
         if pendingSaves.count > Self.maxPendingSaves {
             let dropped = pendingSaves.prefix(pendingSaves.count - Self.maxPendingSaves)
@@ -192,11 +209,18 @@ final class CLIBridge {
         // The login it would update may have gone since: then it is a new login after all.
         if let existingID = pending.existingID,
            model.items.contains(where: { $0.id == existingID && !$0.isDeleted && !$0.isArchived }) {
-            written = await model.updateItem(existingID, edit: CipherEdit(password: pending.password))
+            // A "Sign in with" login gets the email it was missing; it has no password to replace.
+            let edit = pending.provider == nil ? CipherEdit(password: pending.password) : CipherEdit(username: pending.username)
+            written = await model.updateItem(existingID, edit: edit)
         } else {
             let name = pending.host.hasPrefix("www.") ? String(pending.host.dropFirst(4)) : pending.host
-            let edit = CipherEdit(name: name, username: pending.username, password: pending.password,
+            var edit = CipherEdit(name: name, username: pending.username, password: pending.password,
                                   uri: "\(pending.scheme)://\(pending.host)")
+            // A plain custom field, so every Bitwarden client shows it and an export keeps it.
+            if let provider = pending.provider {
+                edit.password = nil
+                edit.customFields = [CustomField(name: SignInProvider.fieldName, value: provider.displayName, kind: .text)]
+            }
             written = await model.createItem(.login, edit: edit, accountId: accountID ?? pending.accountID)
         }
         // Offline or refused: keep it in the bell to try again, unless the vault locked meanwhile.
@@ -261,7 +285,8 @@ final class CLIBridge {
                 CLIResponse.Row(id: $0.id, name: $0.name, detail: $0.username ?? "", totpPeriod: $0.totp?.period,
                                 icon: Self.iconPNG(for: $0, model: model),
                                 code: withCodes && !$0.reprompt ? $0.totp?.code() : nil,
-                                exact: $0.hosts.contains(host), passkey: $0.hasPasskey)
+                                exact: $0.hosts.contains(host), passkey: $0.hasPasskey,
+                                provider: $0.signInProvider?.rawValue)
             }, autoShow: autoShow)
         case .fill:
             guard model.isUnlocked else { return lockedFillOrCopy() }
@@ -274,6 +299,10 @@ final class CLIBridge {
             // A code reveal a moment ago on this site covers the fill that follows, except for logins that ask for the
             // master password: those are never waved through.
             let revealed = !item.reprompt && (revealedSites[host.lowercased()].map { $0 > .now } ?? false)
+            // Refused before Touch ID: there is nothing to fill, so nothing to approve.
+            if item.password == nil, let provider = item.signInProvider {
+                return .failure("“\(item.name)” signs in with \(provider.displayName): use that button on the page.")
+            }
             if !revealed {
                 guard await approve(String(localized: "fill “\(item.name)” on \(host)"), peer: peer, browser: true) else { return .failure(Self.denied) }
             }
@@ -320,9 +349,19 @@ final class CLIBridge {
         case .save:
             guard Self.isOwnBinary(peer) else { return .failure("Unknown client.") }
             guard model.isUnlocked else { return .failure(Self.locked) }
-            guard let url = request.url.flatMap(URL.init(string:)), let host = url.host()?.lowercased(),
-                  let password = request.password, !password.isEmpty else { return .failure("Nothing to save.") }
+            guard let url = request.url.flatMap(URL.init(string:)), let host = url.host()?.lowercased() else {
+                return .failure("Nothing to save.")
+            }
             let username = (request.username ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            // "Sign in with": only a provider on our own list. An account name that is not email-shaped (the page chose
+            // it) is dropped, not the save: the sign-in method is still worth remembering.
+            if let raw = request.provider {
+                guard let provider = SignInProvider(rawValue: raw), request.password == nil else { return .failure("Nothing to save.") }
+                let email = SignInProvider.isEmail(username) ? username : ""
+                return .success(queueSave(host: host, scheme: url.scheme ?? "https", username: email, password: "",
+                                          provider: provider, items: model.items))
+            }
+            guard let password = request.password, !password.isEmpty else { return .failure("Nothing to save.") }
             return .success(queueSave(host: host, scheme: url.scheme ?? "https", username: username, password: password,
                                       items: model.items))
         case .pending:
@@ -332,7 +371,8 @@ final class CLIBridge {
             guard let host = request.url.flatMap(URL.init(string:))?.host()?.lowercased() else { return .list([]) }
             guard let id = request.query else {
                 var reply = CLIResponse.list(pendingSaves.filter { $0.host == host }.map {
-                    CLIResponse.Row(id: $0.id, name: $0.existingName ?? "", detail: $0.username, account: $0.accountEmail)
+                    CLIResponse.Row(id: $0.id, name: $0.existingName ?? "", detail: $0.username, account: $0.accountEmail,
+                                    provider: $0.provider?.rawValue)
                 })
                 // More than one unlocked account: the card can send a new login to another one.
                 if model.sessions.count > 1 {
@@ -550,7 +590,8 @@ final class CLIBridge {
     static func logins(for host: String, in items: [VaultItem], equivalents: EquivalentDomains = .none) -> [VaultItem] {
         guard !host.isEmpty else { return [] }
         return items.filter { item in
-            guard !item.isDeleted, !item.isArchived, item.kind == .login, item.password != nil else { return false }
+            guard !item.isDeleted, !item.isArchived, item.kind == .login,
+                  item.password != nil || item.signInProvider != nil else { return false }
             return item.hosts.contains { h in equivalents.matches(itemHost: h, site: host) }
         }
     }
@@ -608,13 +649,21 @@ struct PendingLoginSave: Identifiable, Equatable, Sendable {
     /// Where Save writes: set only with more than one unlocked account, so every prompt can say which one.
     let accountID: String?
     let accountEmail: String?
+    /// Remembers a "Sign in with" instead of a password (`password` is then empty).
+    var provider: SignInProvider? = nil
     let date = Date.now
 
-    var key: String { Self.key(host: host, username: username) }
-    static func key(host: String, username: String) -> String { host + "\u{0}" + username.lowercased() }
+    var key: String { Self.key(host: host, username: username, provider: provider) }
+    static func key(host: String, username: String, provider: SignInProvider? = nil) -> String {
+        host + "\u{0}" + username.lowercased() + (provider.map { "\u{0}" + $0.rawValue } ?? "")
+    }
 
     var isUpdate: Bool { existingID != nil }
     var title: String {
+        if let provider {
+            let site = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+            return String(localized: "Remember that you sign in to \(site) with \(provider.displayName)?")
+        }
         if let existingName { return String(localized: "Update the password for “\(existingName)”?") }
         let site = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
         return String(localized: "Save the login for \(site)?")
@@ -683,5 +732,14 @@ enum LoginSaveNotifier {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: identifiers)
         center.removeDeliveredNotifications(withIdentifiers: identifiers)
+    }
+}
+
+extension VaultItem {
+    /// The provider this login signs in with, from its "Sign in with" text field.
+    var signInProvider: SignInProvider? {
+        customFields.lazy
+            .filter { $0.kind == .text && $0.name.caseInsensitiveCompare(SignInProvider.fieldName) == .orderedSame }
+            .compactMap { SignInProvider(fieldValue: $0.value) }.first
     }
 }
