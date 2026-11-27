@@ -183,9 +183,13 @@ function fromLabel(el: Element): Provider | null {
 
 const ICON_NAME = /\b(google|facebook|apple|github|microsoft|twitter|linkedin|discord|slack|twitch|gitlab|amazon)\b/;
 
+/** A pay, maps or music mark that happens to contain a provider's name: not a sign-in icon. */
+const NOT_SIGNIN_ICON = /(?:apple|google|amazon)[\s_-]*(?:pay|maps|music|wallet|cash|card)/i;
+
 function fromIcons(el: Element): Provider | null {
   for (const icon of el.querySelectorAll('img, svg')) {
-    const hint = `${icon.getAttribute('alt') ?? ''} ${icon.getAttribute('src') ?? ''}`.toLowerCase();
+    const hint = `${icon.getAttribute('alt') ?? ''} ${icon.getAttribute('title') ?? ''} ${icon.getAttribute('src') ?? ''}`.toLowerCase();
+    if (NOT_SIGNIN_ICON.test(hint)) continue;
     const name = ICON_NAME.exec(hint)?.[1];
     if (name) return providerFromName(name);
   }
@@ -259,7 +263,13 @@ export function findProviderButtons(root: ParentNode = document): Array<{ el: El
 export function providerAt(target: EventTarget | null): Provider | null {
   if (!(target instanceof Element)) return null;
   for (let el: Element | null = target, i = 0; el && el !== document.body && i < 6; el = el.parentElement, i++) {
-    const provider = el.matches(CANDIDATES) ? detectProvider(el) : fromText(el);
+    if (el.matches(CANDIDATES)) {
+      const provider = detectProvider(el);
+      // A control that is not a provider (payment, email, …) must not inherit one from a larger login container.
+      if (provider) return provider;
+      return null;
+    }
+    const provider = fromText(el);
     if (provider) return provider;
   }
   return null;

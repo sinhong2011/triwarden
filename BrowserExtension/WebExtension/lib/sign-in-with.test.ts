@@ -117,6 +117,38 @@ describe('button detection layers', () => {
     expect(providerAt(document.querySelector('#a'))).toBe('apple');
     expect(providerAt(document.body)).toBeNull();
   });
+
+  it('does not treat Apple Pay, Google Pay or Amazon Pay icons as sign-ins, even in a login container', () => {
+    const applePay = '<img alt="Apple Pay" src="https://cdn.example/apple-pay.svg">';
+    const loginButton = (html: string) => el(`<div class="login">${html}</div>`).firstElementChild!;
+    expect(detectProvider(loginButton(`<button>Buy with Apple Pay${applePay}</button>`))).toBeNull();
+    expect(detectProvider(loginButton(`<button>Check out with Apple Pay${applePay}</button>`))).toBeNull();
+    expect(detectProvider(loginButton(`<button>Continue with Apple Pay${applePay}</button>`))).toBeNull();
+    expect(providerAt(loginButton(`<button id="cont">Continue with Apple Pay${applePay}</button>`))).toBeNull();
+    expect(providerAt(loginButton(`<button>Buy with Apple Pay${applePay}</button>`).querySelector('img'))).toBeNull();
+
+    document.body.innerHTML =
+      '<section class="login">' +
+      '<button id="g">Continue with Google</button>' +
+      `<button id="buy">Buy with Apple Pay${applePay}</button>` +
+      `<button id="cont">Continue with Apple Pay${applePay}</button>` +
+      '<button id="gp">Continue with Google Pay<img alt="Google Pay" src="/google-pay.svg"></button>' +
+      '<button id="az">Continue with Amazon Pay<img alt="Amazon Pay" src="/amazon-pay.png"></button>' +
+      '<button id="maps"><img alt="Google Maps" src="/maps.svg"></button>' +
+      '</section>';
+    expect(findProviderButtons().map((b) => [(b.el as HTMLElement).id, b.provider])).toEqual([['g', 'google']]);
+    expect(providerAt(document.querySelector('#buy'))).toBeNull();
+    expect(providerAt(document.querySelector('#cont'))).toBeNull();
+    expect(providerAt(document.querySelector('#gp'))).toBeNull();
+    expect(providerAt(document.querySelector('#az'))).toBeNull();
+    expect(providerAt(document.querySelector('#maps'))).toBeNull();
+    expect(providerAt(document.querySelector('#g'))).toBe('google');
+
+    // A real sign-in mark still counts; a maps or pay file name does not.
+    expect(detectProvider(el('<div class="social-login"><button><img alt="Apple logo" src="/apple.svg"></button></div>').firstElementChild!)).toBe('apple');
+    expect(detectProvider(el('<div class="social-login"><button><img alt="GitHub" src="/github.svg"></button></div>').firstElementChild!)).toBe('github');
+    expect(detectProvider(el('<div class="login"><button><img alt="" src="/icons/apple-pay.svg"></button></div>').firstElementChild!)).toBeNull();
+  });
 });
 
 describe('which site started the flow', () => {
