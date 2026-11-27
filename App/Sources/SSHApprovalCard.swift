@@ -46,7 +46,9 @@ struct SSHApprovalCard: View {
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
             }
-            Text("macOS will ask for Touch ID or your Mac login password. That password stays with macOS.")
+            Text(prompt.confirmedByUnlock && grant != .always
+                 ? "You just unlocked Triwarden for this, so macOS won't ask again."
+                 : "macOS will ask for Touch ID or your Mac login password. That password stays with macOS.")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

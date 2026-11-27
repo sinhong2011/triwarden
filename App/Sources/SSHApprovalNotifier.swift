@@ -38,6 +38,21 @@ enum SSHApprovalNotifier {
         center.add(UNNotificationRequest(identifier: prompt.id.uuidString, content: content, trigger: nil))
     }
 
+    /// The vault is locked and a signature is waiting. A tap brings the unlock screen forward.
+    static func armUnlock(_ request: SSHUnlockRequest) {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            guard settings.authorizationStatus == .authorized || settings.authorizationStatus == .provisional else { return }
+            let content = UNMutableNotificationContent()
+            content.title = String(localized: "Unlock Triwarden to sign")
+            content.body = String(localized: "\(request.displayName) wants to sign with \(request.keyName) (via \(request.via)).")
+            content.sound = .default
+            content.categoryIdentifier = category
+            content.userInfo = ["id": request.id.uuidString]
+            center.add(UNNotificationRequest(identifier: request.id.uuidString, content: content, trigger: nil))
+        }
+    }
+
     static func cancel(_ id: UUID) {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [id.uuidString])

@@ -147,7 +147,10 @@ public struct SSHPrompt: Equatable, Sendable, Identifiable {
     public var keyID: String
     public var keyName: String
     public var waitingCount: Int
-    public init(id: UUID, trustKey: String, displayName: String, via: String, path: String?, keyID: String, keyName: String, appPath: String? = nil, waitingCount: Int = 1) {
+    /// The vault was just unlocked for this signature, so allowing it needs no second Touch ID or password.
+    public var confirmedByUnlock: Bool
+    public init(id: UUID, trustKey: String, displayName: String, via: String, path: String?, keyID: String, keyName: String, appPath: String? = nil, waitingCount: Int = 1,
+                confirmedByUnlock: Bool = false) {
         self.id = id
         self.trustKey = trustKey
         self.displayName = displayName
@@ -157,6 +160,7 @@ public struct SSHPrompt: Equatable, Sendable, Identifiable {
         self.keyID = keyID
         self.keyName = keyName
         self.waitingCount = waitingCount
+        self.confirmedByUnlock = confirmedByUnlock
     }
 }
 

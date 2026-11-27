@@ -99,6 +99,60 @@ import Testing
         #expect(denied != 0)
     }
 
+    /// Issue #251: the vault is locked. `ssh-add -L` still lists the remembered public key, and `ssh-keygen -Y sign`
+    /// (git commit signing) waits while the app asks to unlock, then signs once the key is handed over.
+    @Test func lockedVaultListsPublicKeysAndSignsAfterUnlock() async throws {
+        let k = try Self.makeKey("lockedsign", ["-t", "ed25519"])
+        let key = try SSHPrivateKey(pem: k.pem)
+        let other = try SSHPrivateKey(pem: try Self.makeKey("lockedother", ["-t", "ed25519"]).pem)
+        let listed = SSHPublicIdentity(id: "item-1", name: "GitHub", publicBlob: key.publicBlob, accountID: "acct")
+        let socket = Self.dir.appending(path: "locked.sock")
+        let unlock = SSHUnlockWait()
+        let handOver = LockedVault()
+        let agent = SSHAgentServer(socketURL: socket, list: { [listed] },
+                                   authorize: { identity, _ in
+                                       guard await unlock.wait() == .unlocked else { return nil }
+                                       return await handOver.key(identity.id == "item-1" ? key : nil, wrong: other)
+                                   })
+        try agent.start()
+        defer { agent.stop() }
+        let env = ["SSH_AUTH_SOCK": socket.path]
+
+        let (status, out) = try Self.run("ssh-add", ["-L"], env: env)
+        #expect(status == 0 && out.contains(k.pub.split(separator: " ")[1]))
+
+        let message = Data("signed while locked\n".utf8)
+        func sign() async throws -> Int32 {
+            try await Task.detached {
+                try Self.run("ssh-keygen", ["-Y", "sign", "-n", "git", "-f", k.path.path + ".pub", "-q"], env: env, stdin: message).0
+            }.value
+        }
+        func waitForWaiter() async throws {
+            for _ in 0..<100 where await unlock.waiting == 0 { try await Task.sleep(for: .milliseconds(20)) }
+            #expect(await unlock.waiting == 1)
+        }
+
+        async let unlocked = sign()
+        try await waitForWaiter()
+        await unlock.finish(.unlocked)
+        let unlockedStatus = try await unlocked
+        #expect(unlockedStatus == 0)
+
+        async let cancelled = sign()
+        try await waitForWaiter()
+        await unlock.finish(.cancelled)
+        let cancelledStatus = try await cancelled
+        #expect(cancelledStatus != 0)
+
+        // A different key handed back (the item was edited while waiting) never signs in its place.
+        await handOver.handBackWrongKey()
+        async let swapped = sign()
+        try await waitForWaiter()
+        await unlock.finish(.unlocked)
+        let swappedStatus = try await swapped
+        #expect(swappedStatus != 0)
+    }
+
     // MARK: RSA SHA-2 flags, over the socket
 
     /// What `ssh` sends: SSH_AGENTC_SIGN_REQUEST with flags 2 (rsa-sha2-256), 4 (rsa-sha2-512) or none
@@ -371,4 +425,10 @@ actor Approvals {
     private var allow = true
     func record(_ id: String, _ process: String) -> Bool { asked.append((id, process)); return allow }
     func deny() { allow = false }
+}
+
+actor LockedVault {
+    private var wrong = false
+    func handBackWrongKey() { wrong = true }
+    func key(_ right: SSHPrivateKey?, wrong other: SSHPrivateKey) -> SSHPrivateKey? { wrong ? other : right }
 }

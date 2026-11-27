@@ -29,6 +29,7 @@ struct TriwardenApp: App {
         Snapshot.runAPIKeyJourneyIfRequested()
         Snapshot.runSSHIfRequested()
         SSHApprovalSelfTest.runIfRequested()
+        SSHLockedSelfTest.runIfRequested()
         Snapshot.runSecretsIfRequested()
         Bench.runUnlockIfRequested()
         CompatibilitySelfTest.runIfRequested()
@@ -105,7 +106,7 @@ struct TriwardenApp: App {
                 .modifier(LiveAppearance())
                 .tracksWindowVisibility() // the panel stays built while it's closed
         } label: {
-            Image(nsImage: MenuBarGlyph.image(pending: model.sshAgent.pendingCount > 0))
+            Image(nsImage: MenuBarGlyph.image(pending: model.sshAgent.pendingCount > 0 || model.sshAgent.unlockRequest != nil))
                 .opacity(model.isUnlocked ? 1 : 0.55)
         }
         .menuBarExtraStyle(.window)

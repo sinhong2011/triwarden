@@ -55,7 +55,15 @@ with `completeUntilFirstUserAuthentication` file protection, and both the app an
   `ssh-allowlist.json`: it survives lock and quit, and while the vault is unlocked those apps sign with no
   further prompt. Every request is appended to `ssh-access-log.json` in the
   App Group container (newest 200; app, tool, path, key name, outcome; no key material and no signed payload).
-  Keys are only available while their account is unlocked.
+  Private keys are only available while their account is unlocked. So that `ssh` and `git` can still ask
+  while the vault is locked, the agent remembers each key's public key, name and account in
+  `agent-public-keys.json` next to the socket (public keys only; removed when the agent is turned off or the
+  account signs out). A signature for a locked account brings the vault window forward with a line naming
+  the app and key, and posts a notification; the request waits up to 60 seconds for unlock, and Cancel or the
+  deadline refuses it (logged as denied or "Vault locked"). After unlock the usual approval still appears.
+  Because unlocking for that request already proved the owner, allowing it within 90 seconds of the unlock
+  skips the second Touch ID / password prompt; Always still asks, since it outlives the unlock. A key that
+  changed or was removed while waiting does not sign: the agent only signs with the exact public key asked for.
 - **`tw` command line** (off by default) talks to the app over a `0600` socket in the App Group container.
   Status, generate and lock work without approval. Listing or reading anything needs the vault unlocked and
   Touch ID or the Mac password, with a prompt that names the calling program. Secrets go to stdout only,
