@@ -59,6 +59,17 @@ struct UnlockView: View {
                     .blur(radius: hubHidden ? 6 : 0)
                     .animation(.easeOut(duration: 0.25), value: assembling)
 
+                // An SSH signature brought the window forward: say who is waiting, and offer a way to refuse.
+                if let request = model.sshAgent?.unlockRequest {
+                    SSHUnlockBanner(request: request) { model.sshAgent?.cancelUnlockRequest() }
+                        .frame(maxWidth: 460)
+                        .padding(.horizontal, 24)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .padding(.top, 44)
+                        .opacity(opening ? 0 : 1)
+                        .transition(.opacity)
+                }
+
                 VStack(spacing: 10) {
                     // Above the account pill (was under the hub).
                     if model.accountDoor == nil {
@@ -520,5 +531,48 @@ private struct TouchIDGlyph: NSViewRepresentable {
             glyph.centerXAnchor.constraint(equalTo: container.centerXAnchor),
             glyph.centerYAnchor.constraint(equalTo: container.centerYAnchor),
         ])
+    }
+}
+
+/// "git is waiting to sign with GitHub": why the vault window just came forward. Unlocking continues to the usual
+/// approval; Cancel refuses the signature. Names only, never key material.
+struct SSHUnlockBanner: View {
+    let request: SSHUnlockRequest
+    let cancel: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "key.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("“\(request.displayName)” is waiting to sign with “\(request.keyName)”")
+                    .font(.system(size: 12, weight: .semibold))
+                    .lineLimit(1).truncationMode(.middle)
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    let left = max(0, Int(request.deadline.timeIntervalSince(context.date).rounded(.up)))
+                    Group {
+                        if request.waiting > 1 {
+                            Text("Unlock to review \(request.waiting) signatures · \(left)s")
+                        } else {
+                            Text("Unlock to review it · via \(request.via) · \(left)s")
+                        }
+                    }
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                }
+            }
+            Spacer(minLength: 8)
+            Button("Cancel", action: cancel)
+                .controlSize(.small)
+                .help(Text("Refuse this signature"))
+        }
+        .padding(.horizontal, 14).padding(.vertical, 9)
+        .background(.regularMaterial, in: .capsule)
+        .overlay(Capsule().strokeBorder(.separator, lineWidth: 0.5))
+        .accessibilityElement(children: .combine)
     }
 }

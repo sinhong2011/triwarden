@@ -19,7 +19,7 @@ DEV_CA  := $(CURDIR)/DevServer/data/root.crt
 SNAP_DIR := $(HOME)/Library/Group Containers/FX3VR69P5K.io.github.sinhong2011.triwarden/snapshots
 
 .DEFAULT_GOAL := help
-.PHONY: help project build run site extension test bench screenshots license license-keys test-dev selftest selftest-compatibility selftest-secrets selftest-secrets-online selftest-secrets-interactive selftest-secrets-presentation selftest-cloud snapshots dev-up dev-seed dev-status dev-logs tag release clean
+.PHONY: help project build run site extension test bench screenshots license license-keys test-dev selftest selftest-compatibility selftest-ssh-locked selftest-secrets selftest-secrets-online selftest-secrets-interactive selftest-secrets-presentation selftest-cloud snapshots dev-up dev-seed dev-status dev-logs tag release clean
 
 help: ## Show this list
 	@awk 'BEGIN {FS = ":.*## "} /^[a-z-]+:.*## / {printf "  \033[1m%-15s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -59,6 +59,9 @@ selftest: build ## In-app self-test against the dev server (isolated storage)
 
 selftest-compatibility: build ## Offline checks for unsupported item types (synthetic data, isolated storage)
 	@"$(BIN)" --selftest-compatibility
+
+selftest-ssh-locked: build ## Offline: git signing while the vault is locked (real ssh-keygen, isolated storage)
+	@"$(BIN)" --selftest-ssh-locked
 
 selftest-secrets: build ## Signed-app Keychain and Secrets profile checks (isolated records, no real vault)
 	@"$(BIN)" --selftest-secrets

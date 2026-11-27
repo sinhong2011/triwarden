@@ -3,9 +3,12 @@ import LocalAuthentication
 import Observation
 import SSHAgent
 
-/// Serves the unlocked vault's SSH keys to `ssh`, `git` and friends. A signature names the app that asked,
+/// Serves the vault's SSH keys to `ssh`, `git` and friends. A signature names the app that asked,
 /// then proves the device owner with Touch ID or the Mac login password. A grant can last 15 seconds,
 /// 10 minutes, or until the vault locks. An app on the allowlist signs whenever the vault is unlocked.
+///
+/// While the vault is locked the agent still lists remembered public keys. A signature then asks the person to
+/// unlock (the vault window comes forward and says who is waiting), and continues to the usual approval.
 @MainActor @Observable
 final class SSHAgentService {
     /// `~/Library/Group Containers/<group>/agent.sock`. Kept short: a socket path must fit in 104 bytes.
@@ -16,6 +19,12 @@ final class SSHAgentService {
 
     static var logURL: URL { defaultSocket.deletingLastPathComponent().appending(path: "ssh-access-log.json") }
     static var allowlistURL: URL { defaultSocket.deletingLastPathComponent().appending(path: "ssh-allowlist.json") }
+    /// Public keys remembered for listing while locked, next to the socket they are served on.
+    static func publicKeysURL(for socket: URL) -> URL {
+        socket.deletingLastPathComponent().appending(path: "\(socket.deletingPathExtension().lastPathComponent)-public-keys.json")
+    }
+    /// How long after unlocking for a waiting signature the unlock also counts as the owner check.
+    static let unlockConfirms: TimeInterval = 90
 
     private(set) var isRunning = false
     private(set) var lastError: String?
@@ -28,9 +37,14 @@ final class SSHAgentService {
     /// Apps that may sign whenever the vault is unlocked. Kept across lock and quit.
     private(set) var allowlist: SSHAllowlist
     private(set) var trustedUntilLock: [SSHTrust] = []
+    /// A signature waiting for the vault to unlock. The unlock screen names it.
+    private(set) var unlockRequest: SSHUnlockRequest?
 
     private var server: SSHAgentServer?
     private var parsed: [String: (pem: String, key: SSHPrivateKey)] = [:]
+    private var publicKeys = SSHPublicKeyCache()
+    private var publicKeysFile: URL?
+    private let unlockWait = SSHUnlockWait()
     private var trust = SSHTrustStore()
     var activeTrusts: [SSHTrust] { trust.entries.filter { $0.until.map { $0 > .now } ?? true } }
     private let prompts = SSHApprovalQueue()
@@ -55,6 +69,12 @@ final class SSHAgentService {
     private let allowlistFile: URL
     /// Self-test hook: skip the card and Touch ID. Arguments stay (key name, peer process name).
     var approveOverride: ((String, String) -> Bool)?
+    /// Self-test hook: replaces bringing the vault window forward for a locked signature (argument: account ID).
+    var unlockPresenter: ((String) -> Void)?
+
+    private func offerUnlock(_ accountID: String) {
+        if let unlockPresenter { unlockPresenter(accountID) } else { model?.offerUnlockForSSH(accountID: accountID) }
+    }
 
     init(model: AppModel? = nil, logURL: URL = SSHAgentService.logURL, allowlistURL: URL = SSHAgentService.allowlistURL) {
         self.model = model
@@ -65,10 +85,13 @@ final class SSHAgentService {
 
     func start(at socket: URL = defaultSocket) {
         guard server == nil else { return }
+        let keysFile = Self.publicKeysURL(for: socket)
+        publicKeysFile = keysFile
+        publicKeys = SSHPublicKeyCache.load(from: keysFile)
         let server = SSHAgentServer(
             socketURL: socket,
-            identities: { [weak self] in await self?.identities() ?? [] },
-            approve: { [weak self] identity, peer in await self?.approve(identity, peer) ?? false })
+            list: { [weak self] in await self?.list() ?? [] },
+            authorize: { [weak self] listed, peer in await self?.authorize(listed, peer) })
         do {
             try server.start()
             self.server = server
@@ -82,11 +105,25 @@ final class SSHAgentService {
         }
     }
 
+    /// Turning the agent off also forgets the remembered public keys.
     func stop() {
         reset()
+        cancelUnlockRequest()
         server?.stop()
         server = nil
         isRunning = false
+        forgetPublicKeys()
+    }
+
+    /// Signing out of an account (nil: every account) forgets its public keys.
+    func forgetPublicKeys(accountID: String? = nil) {
+        if let accountID { publicKeys.remove(accountID: accountID) } else { publicKeys.removeAll() }
+        guard let publicKeysFile else { return }
+        if publicKeys.entries.isEmpty {
+            try? FileManager.default.removeItem(at: publicKeysFile)
+        } else {
+            savePublicKeys()
+        }
     }
 
     var socketPath: String { server?.socketURL.path ?? Self.defaultSocket.path }
@@ -104,9 +141,20 @@ final class SSHAgentService {
         Task { await prompts.resolve(choice, for: promptID) }
     }
 
-    /// The menu bar or a notification tap brings the waiting card back.
+    /// The menu bar or a notification tap brings the waiting card back, or the unlock screen when the vault is locked.
     func reveal() {
+        if let unlockRequest, !isUnlocked(unlockRequest.accountID) {
+            offerUnlock(unlockRequest.accountID)
+            return
+        }
         presentPending(reveal: true)
+    }
+
+    /// "Cancel" on the unlock screen: every signature waiting for unlock is refused.
+    func cancelUnlockRequest() {
+        guard unlockRequest != nil else { return }
+        unlockRequest = nil
+        Task { await unlockWait.finish(.cancelled) }
     }
 
     func revokeTrust(id: String) {
@@ -122,8 +170,9 @@ final class SSHAgentService {
         recent = []
     }
 
-    /// Forget approvals and parsed keys (on lock). The access log stays.
+    /// Forget approvals and parsed keys (on lock). The access log and remembered public keys stay.
     func reset() {
+        _ = list() // remember the keys as they are at lock, so a key deleted just before is not offered
         authorizationGeneration = UUID()
         authentication?.invalidate()
         hidePrompt()
@@ -139,21 +188,130 @@ final class SSHAgentService {
 
     // MARK: Agent callbacks
 
-    /// SSH key items from every unlocked account. Empty while locked.
-    private func identities() -> [SSHAgentServer.Identity] {
+    /// SSH key items from every unlocked account, with the account that holds each. Empty while locked.
+    private func identities() -> [(identity: SSHAgentServer.Identity, accountID: String)] {
         guard let model else { return [] }
         return model.items.filter { $0.kind == .sshKey && !$0.isDeleted && !$0.isArchived }.compactMap { item in
             guard let pem = item.properties["privateKey"], !pem.isEmpty else { return nil }
             if let cached = parsed[item.id], cached.pem == pem {
-                return SSHAgentServer.Identity(id: item.id, name: item.name, key: cached.key)
+                return (SSHAgentServer.Identity(id: item.id, name: item.name, key: cached.key), item.accountId)
             }
             guard let key = try? SSHPrivateKey(pem: pem) else { return nil }
             parsed[item.id] = (pem, key)
-            return SSHAgentServer.Identity(id: item.id, name: item.name, key: key)
+            return (SSHAgentServer.Identity(id: item.id, name: item.name, key: key), item.accountId)
         }
     }
 
-    private func approve(_ identity: SSHAgentServer.Identity, _ peer: SSHAgentServer.Peer) async -> Bool {
+    /// Preview and demo vaults are unlocked without account sessions.
+    private var unlockedAccounts: Set<String> {
+        guard let model, model.isUnlocked else { return [] }
+        return model.previewUnlocked ? Set(model.accounts.map(\.id)) : Set(model.sessions.map(\.id))
+    }
+
+    private func isUnlocked(_ accountID: String) -> Bool { unlockedAccounts.contains(accountID) }
+
+    /// Unlocked keys, then remembered public keys of locked accounts. Keeps the remembered list current.
+    private func list() -> [SSHPublicIdentity] {
+        let unlocked = unlockedAccounts
+        let live = identities().map {
+            SSHPublicIdentity(id: $0.identity.id, name: $0.identity.name, publicBlob: $0.identity.key.publicBlob, accountID: $0.accountID)
+        }
+        // Accounts with no items yet are still loading after unlock: keep what was remembered for them.
+        let loaded = unlocked.filter { id in model?.items.contains { $0.accountId == id } == true }
+        var next = publicKeys
+        next.replace(accounts: loaded, with: live)
+        if let model { next.entries.map(\.accountID).filter { id in !model.accounts.contains { $0.id == id } }.forEach { next.remove(accountID: $0) } }
+        if next != publicKeys {
+            publicKeys = next
+            savePublicKeys()
+        }
+        return publicKeys.listing(live: live, unlocked: unlocked)
+    }
+
+    private func savePublicKeys() {
+        guard let publicKeysFile else { return }
+        try? publicKeys.save(to: publicKeysFile)
+        try? FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+                                               ofItemAtPath: publicKeysFile.path)
+    }
+
+    private func live(_ listed: SSHPublicIdentity) -> SSHAgentServer.Identity? {
+        identities().first { $0.identity.id == listed.id && $0.identity.key.publicBlob == listed.publicBlob }?.identity
+            ?? identities().first { $0.identity.key.publicBlob == listed.publicBlob }?.identity
+    }
+
+    /// A signature for a listed key. While its account is locked, asks to unlock first; then the usual approval.
+    private func authorize(_ listed: SSHPublicIdentity, _ peer: SSHAgentServer.Peer) async -> SSHPrivateKey? {
+        if let identity = live(listed) {
+            return await approve(identity, peer, unlockedAt: nil) ? identity.key : nil
+        }
+        let requester = SSHProcess.requester(for: peer)
+        guard approveOverride == nil, let model, model.accounts.contains(where: { $0.id == listed.accountID }) else {
+            record(requester, key: listed.name, outcome: .locked)
+            return nil
+        }
+        switch await waitForUnlock(requester, key: listed) {
+        case .unlocked: break
+        case .cancelled:
+            record(requester, key: listed.name, outcome: .denied)
+            return nil
+        case .timedOut:
+            record(requester, key: listed.name, outcome: .locked)
+            return nil
+        }
+        let unlockedAt = Date.now
+        // The account's items arrive just after unlock.
+        for _ in 0..<50 where live(listed) == nil && isUnlocked(listed.accountID) {
+            try? await Task.sleep(for: .milliseconds(100))
+        }
+        guard let identity = live(listed) else {
+            if isUnlocked(listed.accountID) {
+                model.flash(String(localized: "“\(listed.name)” is no longer in the vault, so “\(requester.displayName)” couldn't sign."))
+            }
+            record(requester, key: listed.name, outcome: .locked)
+            return nil
+        }
+        return await approve(identity, peer, unlockedAt: unlockedAt) ? identity.key : nil
+    }
+
+    /// Shows who is waiting on the unlock screen and waits for that account to unlock, Cancel, or the deadline.
+    private func waitForUnlock(_ requester: SSHRequester, key: SSHPublicIdentity) async -> SSHUnlockWait.Outcome {
+        if var request = unlockRequest {
+            request.waiting += 1
+            unlockRequest = request
+        } else {
+            let request = SSHUnlockRequest(id: UUID(), displayName: requester.displayName, via: requester.via, keyName: key.name,
+                                           accountID: key.accountID,
+                                           deadline: Date.now.addingTimeInterval(NotchStatusController.seconds(SSHUnlockWait.timeout)))
+            unlockRequest = request
+            SSHApprovalNotifier.armUnlock(request)
+            offerUnlock(key.accountID)
+            watchUnlock(request)
+        }
+        return await unlockWait.wait()
+    }
+
+    /// Polls rather than hooking every unlock path (password, PIN, Touch ID, an account's own door).
+    private func watchUnlock(_ request: SSHUnlockRequest) {
+        Task { @MainActor in
+            while self.unlockRequest?.id == request.id {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard self.unlockRequest?.id == request.id else { break }
+                if self.isUnlocked(request.accountID) {
+                    // Cleared first: a request arriving now finds the key unlocked and never joins a finished wait.
+                    self.unlockRequest = nil
+                    await self.unlockWait.finish(.unlocked)
+                } else if Date.now >= request.deadline {
+                    self.unlockRequest = nil
+                    await self.unlockWait.finish(.timedOut)
+                }
+            }
+            SSHApprovalNotifier.cancel(request.id)
+        }
+    }
+
+    /// `unlockedAt`: the vault was unlocked for this signature, which proves the owner is here.
+    private func approve(_ identity: SSHAgentServer.Identity, _ peer: SSHAgentServer.Peer, unlockedAt: Date?) async -> Bool {
         if let approveOverride {
             let allowed = approveOverride(identity.name, peer.processName)
             recent.insert((.now, identity.name, peer.processName, allowed), at: 0)
@@ -192,7 +350,7 @@ final class SSHAgentService {
 
         let prompt = SSHPrompt(id: UUID(), trustKey: requester.trustKey, displayName: requester.displayName,
                                via: requester.via, path: requester.peerPath, keyID: identity.id, keyName: identity.name,
-                               appPath: requester.appPath)
+                               appPath: requester.appPath, confirmedByUnlock: unlockedAt != nil)
         let generation = authorizationGeneration
         let task = Task { @MainActor in
             async let choice = self.prompts.ask(prompt)
@@ -201,7 +359,8 @@ final class SSHAgentService {
             SSHApprovalNotifier.arm(prompt)
             let decided = await choice
             SSHApprovalNotifier.cancel(prompt.id)
-            let ok = await self.authenticate(decided, requester: requester, identity: identity, generation: generation)
+            let ok = await self.authenticate(decided, requester: requester, identity: identity, generation: generation,
+                                             unlockedAt: unlockedAt)
             await self.refreshPending()
             return (ok, decided)
         }
@@ -215,18 +374,24 @@ final class SSHAgentService {
         return ok
     }
 
-    private func authenticate(_ choice: SSHChoice, requester: SSHRequester, identity: SSHAgentServer.Identity, generation: UUID) async -> Bool {
+    private func authenticate(_ choice: SSHChoice, requester: SSHRequester, identity: SSHAgentServer.Identity, generation: UUID,
+                              unlockedAt: Date? = nil) async -> Bool {
         guard case .allow(let grant) = choice, !authenticating, generation == authorizationGeneration,
               model?.isUnlocked == true else { return false }
-        authenticating = true
-        hidePrompt()
-        defer { authenticating = false; authentication = nil }
-        let context = LAContext()
-        authentication = context
-        context.localizedCancelTitle = String(localized: "Deny")
-        let reason = String(localized: "allow “\(requester.displayName)” to sign with the SSH key “\(identity.name)”")
-        let ok = (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) == true
-        guard ok, model?.isUnlocked == true, generation == authorizationGeneration else { return false }
+        // Unlocking for this very signature already proved the owner. Always Allow still asks: it outlives the unlock.
+        let confirmed = grant != .always && unlockedAt.map { Date.now.timeIntervalSince($0) < Self.unlockConfirms } == true
+        if !confirmed {
+            authenticating = true
+            hidePrompt()
+            defer { authenticating = false; authentication = nil }
+            let context = LAContext()
+            authentication = context
+            context.localizedCancelTitle = String(localized: "Deny")
+            let reason = String(localized: "allow “\(requester.displayName)” to sign with the SSH key “\(identity.name)”")
+            let ok = (try? await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)) == true
+            guard ok else { return false }
+        }
+        guard model?.isUnlocked == true, generation == authorizationGeneration else { return false }
         if grant == .always {
             var list = allowlist
             list.add(SSHAllowlistEntry(trustKey: requester.trustKey, displayName: requester.displayName))
@@ -343,4 +508,15 @@ final class SSHAgentService {
         case .deny, .timedOut: return .denied
         }
     }
+}
+
+/// A signature waiting for the vault to unlock, as the unlock screen shows it. No key material.
+struct SSHUnlockRequest: Equatable {
+    var id: UUID
+    var displayName: String
+    var via: String
+    var keyName: String
+    var accountID: String
+    var deadline: Date
+    var waiting = 1
 }

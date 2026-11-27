@@ -1197,7 +1197,7 @@ enum Snapshot {
         return create(.null, 1 << 3, UInt32(window.windowNumber), (1 << 0) | (1 << 3))?.takeRetainedValue()
     }
 
-    private static func render(_ view: some View, size: CGSize, appearance: NSAppearance.Name, to url: URL) {
+    static func render(_ view: some View, size: CGSize, appearance: NSAppearance.Name, to url: URL) {
         guard wanted(url) else { return }
         let window = NSWindow(contentRect: CGRect(origin: .zero, size: size),
                               styleMask: [.titled, .fullSizeContentView], backing: .buffered, defer: false)

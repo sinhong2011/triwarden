@@ -907,6 +907,25 @@ final class AppModel {
         }
     }
 
+    #if DEBUG
+    /// Self-tests run the agent with isolated history and permissions.
+    func useSSHAgentForSelfTest(_ agent: SSHAgentService) { sshAgent = agent }
+    #endif
+
+    /// An SSH signature is waiting for this account. The vault window comes forward on that account's lock screen,
+    /// where a line names the app and key that are waiting.
+    func offerUnlockForSSH(accountID: String) {
+        if accounts.contains(where: { $0.id == accountID }) {
+            if phase.id == Phase.locked.id {
+                unlockTargetID = accountID
+            } else if phase.id == Phase.vault.id, !isUnlocked(accountID) {
+                // Another account is open: show this account's own door, where the waiting line appears.
+                accountFocus = accountID
+            }
+        }
+        reopenForUnlock()
+    }
+
     /// Dock-click equivalent: reopen the vault over the browser, even when we have no user gesture in-app.
     private func reopenForUnlock() {
         if NSApp.activationPolicy() != .regular { NSApp.setActivationPolicy(.regular) }
@@ -1116,6 +1135,7 @@ final class AppModel {
     func logOut(_ accountId: String? = nil) {
         secrets?.reset()
         guard let id = accountId ?? unlockTarget?.id else { return }
+        sshAgent?.forgetPublicKeys(accountID: id)
         if let session = session(for: id) { session.close() }
         sessions.removeAll { $0.id == id }
         ItemSort.forgetLetters()
