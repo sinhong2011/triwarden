@@ -25,7 +25,7 @@ function chromeKey(key: string): string {
  * Translate for the browser UI language (`browser.i18n`). No in-extension language picker.
  * Source of truth: `locales/en.json`; other locales ship via `@wxt-dev/i18n` → `_locales/`.
  *
- * Chrome locale folders: `en`, `zh_TW` (zh-Hant), `zh_CN` (zh-Hans), `ja`.
+ * Chrome locale folders: `en`, `de`, `zh_TW` (zh-Hant), `zh_CN` (zh-Hans), `ja`.
  */
 export function t(key: string, substitutions?: string | string[]): string {
   const id = chromeKey(key);
