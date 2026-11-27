@@ -24,7 +24,10 @@ enum SSHLockedSelfTest {
             print(ok ? "PASS" : "FAIL", label)
             if !ok { failures += 1 }
         }
-        let root = URL(fileURLWithPath: "/tmp").appending(path: "tw-locked-\(getpid())")
+        // Signed builds are sandboxed: only the App Group container is writable (and short enough for a socket path).
+        let base = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AccountStore.appGroup)
+            ?? URL(fileURLWithPath: "/tmp")
+        let root = base.appending(path: "tl-\(getpid())")
         try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
         let socket = root.appending(path: "a.sock")
