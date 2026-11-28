@@ -14,7 +14,7 @@
   <a href="README.zh-HK.md">粵語</a> · <a href="README.zh-Hans.md">简体中文</a> ·
   <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> ·
   <a href="README.fr.md">Français</a> · Español ·
-  <a href="README.de.md">Deutsch</a>
+  <a href="README.de.md">Deutsch</a> · <a href="README.pl.md">Polski</a>
 </p>
 
 <p align="center">
@@ -120,7 +120,7 @@ Ejecuta `make` para ver todos los comandos. Los más habituales son `make test`,
 
 Tu contraseña maestra y tus claves nunca salen del Mac; el servidor solo recibe datos cifrados. Consulta [SECURITY.md](SECURITY.md) para conocer los detalles y cómo informar de una vulnerabilidad de forma privada.
 
-Triwarden incluye etiquetas de VoiceOver, atajos de teclado y compatibilidad con Aumentar contraste y Reducir movimiento. La aplicación está disponible en English, Deutsch, 繁體中文, 粵語, 简体中文, 日本語, 한국어, Français, Español y ไทย. Las limitaciones conocidas están documentadas en [ACCESSIBILITY.md](ACCESSIBILITY.md).
+Triwarden incluye etiquetas de VoiceOver, atajos de teclado y compatibilidad con Aumentar contraste y Reducir movimiento. La aplicación está disponible en English, Deutsch, 繁體中文, 粵語, 简体中文, 日本語, 한국어, Français, Español, Polski y ไทย. Las limitaciones conocidas están documentadas en [ACCESSIBILITY.md](ACCESSIBILITY.md).
 
 ## Soporte y contribuciones
 
