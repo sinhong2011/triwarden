@@ -13,7 +13,8 @@
   <a href="README.md">English</a> · <a href="README.zh-Hant.md">繁體中文</a> ·
   <a href="README.zh-HK.md">粵語</a> · <a href="README.zh-Hans.md">简体中文</a> ·
   <a href="README.ja.md">日本語</a> · 한국어 · <a href="README.fr.md">Français</a> ·
-  <a href="README.es.md">Español</a>
+  <a href="README.es.md">Español</a> ·
+  <a href="README.de.md">Deutsch</a>
 </p>
 
 <p align="center">
@@ -119,7 +120,7 @@ make run
 
 마스터 암호와 키는 Mac을 떠나지 않으며 서버에는 암호화된 데이터만 전송됩니다. 자세한 내용과 비공개 취약점 신고 방법은 [SECURITY.md](SECURITY.md)를 확인하세요.
 
-Triwarden은 VoiceOver 레이블, 키보드 단축키, 대비 증가 및 동작 줄이기를 지원합니다. English, 繁體中文, 粵語, 简体中文, 日本語, 한국어, Français, Español, ไทย를 사용할 수 있습니다. 알려진 제한 사항은 [ACCESSIBILITY.md](ACCESSIBILITY.md)에 설명되어 있습니다.
+Triwarden은 VoiceOver 레이블, 키보드 단축키, 대비 증가 및 동작 줄이기를 지원합니다. English, Deutsch, 繁體中文, 粵語, 简体中文, 日本語, 한국어, Français, Español, ไทย를 사용할 수 있습니다. 알려진 제한 사항은 [ACCESSIBILITY.md](ACCESSIBILITY.md)에 설명되어 있습니다.
 
 ## 지원 및 기여
 

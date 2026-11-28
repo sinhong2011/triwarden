@@ -13,7 +13,8 @@
   <a href="README.md">English</a> · <a href="README.zh-Hant.md">繁體中文</a> · 粵語 ·
   <a href="README.zh-Hans.md">简体中文</a> · <a href="README.ja.md">日本語</a> ·
   <a href="README.ko.md">한국어</a> · <a href="README.fr.md">Français</a> ·
-  <a href="README.es.md">Español</a>
+  <a href="README.es.md">Español</a> ·
+  <a href="README.de.md">Deutsch</a>
 </p>
 
 <p align="center">
@@ -119,7 +120,7 @@ make run
 
 你嘅主密碼同金鑰唔會離開部 Mac；伺服器只會收到加密資料。詳情同漏洞回報方法請睇 [SECURITY.md](SECURITY.md)。
 
-Triwarden 有 VoiceOver 標籤、鍵盤快捷鍵、增加對比同減少動態效果支援。App 支援 English、繁體中文、粵語、简体中文、日本語、한국어、Français、Español 同ไทย；已知限制請睇 [ACCESSIBILITY.md](ACCESSIBILITY.md)。
+Triwarden 有 VoiceOver 標籤、鍵盤快捷鍵、增加對比同減少動態效果支援。App 支援 English、Deutsch、繁體中文、粵語、简体中文、日本語、한국어、Français、Español 同ไทย；已知限制請睇 [ACCESSIBILITY.md](ACCESSIBILITY.md)。
 
 ## 支援同貢獻
 

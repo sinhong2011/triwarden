@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { t } from './i18n';
 import en from '../locales/en.json';
+import de from '../locales/de.json';
 import ja from '../locales/ja.json';
 import zhCN from '../locales/zh_CN.json';
 import zhTW from '../locales/zh_TW.json';
@@ -20,6 +21,7 @@ describe('locales', () => {
   const expected = leafKeys(en as Record<string, unknown>);
 
   it.each([
+    ['de', de],
     ['zh_TW', zhTW],
     ['zh_CN', zhCN],
     ['ja', ja],

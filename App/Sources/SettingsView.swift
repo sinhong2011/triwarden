@@ -284,7 +284,7 @@ private struct GeneralSettings: View {
             Section {
                 LanguagePicker()
             } footer: {
-                Text("Triwarden is available in English, 繁體中文, 粵語, 简体中文, 日本語, 한국어, Français, Español and ไทย. The AutoFill panel follows the system's language.")
+                Text("Triwarden is available in English, Deutsch, 繁體中文, 粵語, 简体中文, 日本語, 한국어, Français, Español and ไทย. The AutoFill panel follows the system's language.")
                     .font(.caption).foregroundStyle(.secondary)
             }
 
@@ -1707,7 +1707,7 @@ private struct ShortcutsSettings: View {
 private struct LanguagePicker: View {
     /// "" follows the system.
     static let choices: [(code: String, name: String)] = [
-        ("", String(localized: "System Default")), ("en", "English"), ("zh-Hant", "繁體中文"),
+        ("", String(localized: "System Default")), ("en", "English"), ("de", "Deutsch"), ("zh-Hant", "繁體中文"),
         ("zh-HK", "粵語"), ("zh-Hans", "简体中文"), ("ja", "日本語"),
         ("ko", "한국어"), ("fr", "Français"), ("es", "Español"), ("th", "ไทย"),
     ]
