@@ -1,9 +1,9 @@
 import Foundation
 
-/// Messages between Triwarden and its auto-type helper (one frame each way per request), over a socket in the
+/// Messages between Triwarden and its auto-type helper (one frame each way per request), over a short Unix socket whose path is published in the
 /// App Group container. The helper types only for Triwarden itself, and only into the app it's told to.
 public enum AutoTypeProtocol {
-    /// The socket's file name in the App Group container.
+    /// The socket's file name (and the stem of its App Group pointer file).
     public static let socketName = "autotype.sock"
 
     public struct Request: Codable, Sendable {

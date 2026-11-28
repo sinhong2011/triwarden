@@ -10,9 +10,8 @@ enum AutoType {
 
     static var helperURL: URL { Bundle.main.bundleURL.appending(path: "Contents/Library/Helpers/Triwarden Auto-Type.app") }
 
-    private static var socketPath: String? {
-        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AccountStore.appGroup)?
-            .appending(path: AutoTypeProtocol.socketName).path
+    private static var socketPath: String {
+        UnixSocketLocation.connectPath(kind: .autotype)
     }
 
     /// Types `steps` into the app `pid` (brought forward first). Without Accessibility for the helper yet, macOS's
@@ -40,7 +39,8 @@ enum AutoType {
     // MARK: Talking to the helper
 
     private static func send(_ request: AutoTypeProtocol.Request) async -> AutoTypeProtocol.Response? {
-        guard let path = socketPath, let body = try? JSONEncoder().encode(request) else { return nil }
+        guard let body = try? JSONEncoder().encode(request) else { return nil }
+        let path = socketPath
         if let reply = await exchange(path, body) { return reply }
         guard await launchHelper() else { return nil }
         for _ in 0..<40 {

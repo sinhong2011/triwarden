@@ -11,18 +11,29 @@ import SSHAgent
 /// unlock (the vault window comes forward and says who is waiting), and continues to the usual approval.
 @MainActor @Observable
 final class SSHAgentService {
-    /// `~/Library/Group Containers/<group>/agent.sock`. Kept short: a socket path must fit in 104 bytes.
-    static var defaultSocket: URL {
-        (FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AccountStore.appGroup)
-            ?? FileManager.default.temporaryDirectory).appending(path: "agent.sock")
+    /// App Group folder for logs, the allowlist and remembered public keys (regular files, not sockets).
+    static var appGroupDirectory: URL {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AccountStore.appGroup)
+            ?? FileManager.default.temporaryDirectory
     }
 
-    static var logURL: URL { defaultSocket.deletingLastPathComponent().appending(path: "ssh-access-log.json") }
-    static var allowlistURL: URL { defaultSocket.deletingLastPathComponent().appending(path: "ssh-allowlist.json") }
-    /// Public keys remembered for listing while locked, next to the socket they are served on.
-    static func publicKeysURL(for socket: URL) -> URL {
-        socket.deletingLastPathComponent().appending(path: "\(socket.deletingPathExtension().lastPathComponent)-public-keys.json")
+    /// Short `/tmp` socket planned for this Mac; falls back to the classic App Group path.
+    static var defaultSocket: URL {
+        URL(fileURLWithPath: (try? UnixSocketLocation.plannedPath(kind: .agent))
+            ?? UnixSocketLocation.connectPath(kind: .agent))
     }
+
+    static var logURL: URL { appGroupDirectory.appending(path: "ssh-access-log.json") }
+    static var allowlistURL: URL { appGroupDirectory.appending(path: "ssh-allowlist.json") }
+    /// Public keys remembered for listing while locked. Isolated test sockets keep the file next to
+    /// the socket; the managed `/tmp` socket stores it in the App Group.
+    static func publicKeysURL(for socket: URL) -> URL {
+        if UnixSocketLocation.isManaged(socket) {
+            return appGroupDirectory.appending(path: "agent-public-keys.json")
+        }
+        return socket.deletingLastPathComponent().appending(path: "\(socket.deletingPathExtension().lastPathComponent)-public-keys.json")
+    }
+
     /// How long after unlocking for a waiting signature the unlock also counts as the owner check.
     static let unlockConfirms: TimeInterval = 90
 
@@ -41,6 +52,7 @@ final class SSHAgentService {
     private(set) var unlockRequest: SSHUnlockRequest?
 
     private var server: SSHAgentServer?
+    private var managesLocation = false
     private var parsed: [String: (pem: String, key: SSHPrivateKey)] = [:]
     private var publicKeys = SSHPublicKeyCache()
     private var publicKeysFile: URL?
@@ -83,26 +95,51 @@ final class SSHAgentService {
         allowlist = SSHAllowlist.load(from: allowlistURL)
     }
 
-    func start(at socket: URL = defaultSocket) {
+    func start(at socket: URL? = nil) {
         guard server == nil else { return }
-        let keysFile = Self.publicKeysURL(for: socket)
+        let managed = socket == nil
+        let url: URL
+        if let socket {
+            url = socket
+        } else {
+            do {
+                url = URL(fileURLWithPath: try UnixSocketLocation.prepareBindPath(kind: .agent))
+            } catch {
+                lastError = Self.startError(error)
+                return
+            }
+        }
+        let keysFile = Self.publicKeysURL(for: url)
         publicKeysFile = keysFile
         publicKeys = SSHPublicKeyCache.load(from: keysFile)
         let server = SSHAgentServer(
-            socketURL: socket,
+            socketURL: url,
             list: { [weak self] in await self?.list() ?? [] },
             authorize: { [weak self] listed, peer in await self?.authorize(listed, peer) })
         do {
             try server.start()
+            if managed {
+                try UnixSocketLocation.publish(kind: .agent, socketPath: url.path)
+            }
             self.server = server
+            self.managesLocation = managed
             isRunning = true
             lastError = nil
             SSHApprovalNotifier.requestPermission()
-        } catch SSHAgentServer.Failure.pathTooLong {
-            lastError = String(localized: "Couldn't start the SSH agent: the socket path is longer than macOS allows (104 bytes). This happens with very long user names.")
         } catch {
-            lastError = String(localized: "Couldn't start the SSH agent: \(String(describing: error))")
+            server.stop()
+            lastError = Self.startError(error)
         }
+    }
+
+    private static func startError(_ error: Error) -> String {
+        if case FramedSocketServer.Failure.pathTooLong = error {
+            return String(localized: "Couldn't start the SSH agent: \(UnixSocketLocation.pathTooLongMessage)")
+        }
+        if case UnixSocketLocation.Failure.pathTooLong = error {
+            return String(localized: "Couldn't start the SSH agent: \(UnixSocketLocation.pathTooLongMessage)")
+        }
+        return String(localized: "Couldn't start the SSH agent: \(error.localizedDescription)")
     }
 
     /// Turning the agent off also forgets the remembered public keys.
@@ -111,6 +148,10 @@ final class SSHAgentService {
         cancelUnlockRequest()
         server?.stop()
         server = nil
+        if managesLocation {
+            UnixSocketLocation.unpublish(kind: .agent)
+            managesLocation = false
+        }
         isRunning = false
         forgetPublicKeys()
     }

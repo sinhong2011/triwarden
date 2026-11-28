@@ -1,6 +1,7 @@
 import CryptoKit
 import Darwin
 import Foundation
+import SSHAgent
 
 public struct SecretsFailure: Error, LocalizedError, Sendable {
     public let message: String
@@ -136,7 +137,31 @@ public struct SecretsProfileStore: Sendable {
         return Self(directory: root.appendingPathComponent("Secrets", isDirectory: true))
     }
 
-    public var socketURL: URL { directory.deletingLastPathComponent().appendingPathComponent("run.sock") }
+    /// App Group (or test) folder that holds pointer files for `run.sock`.
+    public var socketRoots: UnixSocketLocation.Roots {
+        UnixSocketLocation.Roots(
+            container: directory.deletingLastPathComponent(),
+            temporary: URL(fileURLWithPath: "/tmp", isDirectory: true),
+            uid: getuid())
+    }
+
+    /// Path clients connect to: the published short socket, or the classic `run.sock` beside the store.
+    public var socketURL: URL {
+        URL(fileURLWithPath: UnixSocketLocation.connectPath(kind: .run, roots: socketRoots))
+    }
+
+    /// Path the app should bind, creating the private `/tmp` directory when needed.
+    public func bindSocketURL() throws -> URL {
+        URL(fileURLWithPath: try UnixSocketLocation.prepareBindPath(kind: .run, roots: socketRoots))
+    }
+
+    public func publishSocket(_ path: String) throws {
+        try UnixSocketLocation.publish(kind: .run, socketPath: path, roots: socketRoots)
+    }
+
+    public func unpublishSocket() {
+        UnixSocketLocation.unpublish(kind: .run, roots: socketRoots)
+    }
 
     public func loadAll() throws -> [SecretsProfile] {
         let fd = open(fileURL.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)

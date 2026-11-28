@@ -1,6 +1,6 @@
 // Triwarden Auto-Type: types a login into another app for Triwarden. It lives inside Triwarden.app
 // (Contents/Library/Helpers) and is the only part that needs Accessibility, so the app itself stays sandboxed.
-// It listens on a socket in the App Group container and answers only Triwarden: the binary of the app bundle
+// It listens on a short Unix socket (path published in the App Group) and answers only Triwarden: the binary of the app bundle
 // it sits in, signed by the same team. It keeps nothing, and quits with Triwarden.
 import AppKit
 import ApplicationServices
@@ -182,27 +182,35 @@ func fail(_ message: String) -> Never {
     exit(1)
 }
 
-guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) else {
-    fail("no App Group container")
+let socketPath: String
+do {
+    socketPath = try UnixSocketLocation.prepareBindPath(kind: .autotype)
+} catch {
+    fail("couldn't prepare socket: \(error.localizedDescription)")
 }
-let server = FramedSocketServer(socketURL: container.appending(path: AutoTypeProtocol.socketName)) { data, peer in
+let server = FramedSocketServer(socketURL: URL(fileURLWithPath: socketPath)) { data, peer in
     await handle(data, peer)
 }
-do { try server.start() } catch { fail("couldn't listen: \(error)") }
+do {
+    try server.start()
+    try UnixSocketLocation.publish(kind: .autotype, socketPath: socketPath)
+} catch {
+    fail("couldn't listen: \(error.localizedDescription)")
+}
 
 // Quit with Triwarden (it passes its pid); started any other way, quit after ten idle minutes.
 let arguments = CommandLine.arguments
 var parentWatch: DispatchSourceProcess?
 if let at = arguments.firstIndex(of: "--parent"), at + 1 < arguments.count, let parent = pid_t(arguments[at + 1]) {
     let watch = DispatchSource.makeProcessSource(identifier: parent, eventMask: .exit, queue: .main)
-    watch.setEventHandler { server.stop(); exit(0) }
+    watch.setEventHandler { server.stop(); UnixSocketLocation.unpublish(kind: .autotype); exit(0) }
     watch.resume()
     parentWatch = watch
-    if kill(parent, 0) != 0 { server.stop(); exit(0) }
+    if kill(parent, 0) != 0 { server.stop(); UnixSocketLocation.unpublish(kind: .autotype); exit(0) }
 } else {
     Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { _ in
         MainActor.assumeIsolated {
-            if Date().timeIntervalSince(lastRequest) > 600 { server.stop(); exit(0) }
+            if Date().timeIntervalSince(lastRequest) > 600 { server.stop(); UnixSocketLocation.unpublish(kind: .autotype); exit(0) }
         }
     }
 }

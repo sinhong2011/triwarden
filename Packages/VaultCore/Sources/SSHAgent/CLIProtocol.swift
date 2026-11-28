@@ -175,8 +175,8 @@ public struct CLIResponse: Codable, Sendable, Equatable {
 }
 
 public enum CLISocket {
-    /// File name inside the App Group container.
-    public static let name = "cli.sock"
+    /// File name of the CLI bridge socket (and of its App Group pointer file's stem).
+    public static let name = UnixSocketLocation.Kind.cli.rawValue
 }
 
 /// Shared App Group flags the app writes so sandboxed clients can tell why the bridge is unreachable.
@@ -191,13 +191,10 @@ public enum BridgeClient {
     public static let appGroup = "FX3VR69P5K.io.github.sinhong2011.triwarden"
     private static let log = Logger(subsystem: "io.github.sinhong2011.triwarden", category: "bridge")
 
-    /// `~/Library/Group Containers/<group>/cli.sock`, resolved for sandboxed and unsandboxed callers alike.
+    /// The CLI bridge socket: a pointer in the App Group when the running app published one,
+    /// otherwise the historic App Group `cli.sock` path (older builds).
     public static var defaultSocketPath: String {
-        if let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroup) {
-            return container.appending(path: CLISocket.name).path
-        }
-        return FileManager.default.homeDirectoryForCurrentUser
-            .appending(path: "Library/Group Containers/\(appGroup)/\(CLISocket.name)").path
+        UnixSocketLocation.connectPath(kind: .cli)
     }
 
     /// App Group defaults the running app mirrors when Browser/CLI is toggled.
@@ -245,7 +242,9 @@ public enum BridgeClient {
             return defaults.bool(forKey: BridgeStatus.wantedKey)
         }()
         let response: CLIResponse
-        if err == ECONNREFUSED || wanted == true {
+        if err == ENAMETOOLONG {
+            response = .failure(UnixSocketLocation.pathTooLongMessage, code: "socket_path_too_long")
+        } else if err == ECONNREFUSED || wanted == true {
             response = .failure(
                 "Triwarden isn't running — open Triwarden to use the browser extension.",
                 code: "app_not_running")
