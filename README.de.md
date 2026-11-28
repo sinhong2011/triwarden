@@ -13,7 +13,8 @@
   <a href="README.md">English</a> · <a href="README.zh-Hant.md">繁體中文</a> ·
   <a href="README.zh-HK.md">粵語</a> · <a href="README.zh-Hans.md">简体中文</a> ·
   <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> ·
-  <a href="README.fr.md">Français</a> · <a href="README.es.md">Español</a> · Deutsch
+  <a href="README.fr.md">Français</a> · <a href="README.es.md">Español</a> ·
+  Deutsch · <a href="README.pl.md">Polski</a>
 </p>
 
 <p align="center">
@@ -118,7 +119,7 @@ Mit `make` erhältst du eine Übersicht aller Befehle. Häufig verwendet werden 
 
 Dein Master-Passwort und die entschlüsselten Tresorschlüssel verlassen den Mac nie. Der Server erhält ausschließlich verschlüsselte Tresordaten. Details, das Bedrohungsmodell und Informationen zur vertraulichen Meldung von Schwachstellen findest du in [SECURITY.md](SECURITY.md).
 
-Triwarden bietet VoiceOver-Beschriftungen und Tastaturkurzbefehle und unterstützt die macOS-Einstellungen „Kontrast erhöhen“ und „Bewegung reduzieren“. Die App ist auf Englisch, Deutsch, 繁體中文, 粵語, 简体中文, 日本語, 한국어, Français, Español und ไทย verfügbar. Bekannte Einschränkungen sind in [ACCESSIBILITY.md](ACCESSIBILITY.md) dokumentiert.
+Triwarden bietet VoiceOver-Beschriftungen und Tastaturkurzbefehle und unterstützt die macOS-Einstellungen „Kontrast erhöhen“ und „Bewegung reduzieren“. Die App ist auf Englisch, Deutsch, 繁體中文, 粵語, 简体中文, 日本語, 한국어, Français, Español, Polski und ไทย verfügbar. Bekannte Einschränkungen sind in [ACCESSIBILITY.md](ACCESSIBILITY.md) dokumentiert.
 
 ## Support und Mitarbeit
 

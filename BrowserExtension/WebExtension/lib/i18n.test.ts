@@ -3,6 +3,7 @@ import { t } from './i18n';
 import en from '../locales/en.json';
 import de from '../locales/de.json';
 import ja from '../locales/ja.json';
+import pl from '../locales/pl.json';
 import zhCN from '../locales/zh_CN.json';
 import zhTW from '../locales/zh_TW.json';
 
@@ -25,6 +26,7 @@ describe('locales', () => {
     ['zh_TW', zhTW],
     ['zh_CN', zhCN],
     ['ja', ja],
+    ['pl', pl],
   ] as const)('%s has the same keys as en', (_name, catalog) => {
     expect(leafKeys(catalog as Record<string, unknown>).sort()).toEqual([...expected].sort());
   });

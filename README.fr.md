@@ -14,7 +14,7 @@
   <a href="README.zh-HK.md">粵語</a> · <a href="README.zh-Hans.md">简体中文</a> ·
   <a href="README.ja.md">日本語</a> · <a href="README.ko.md">한국어</a> · Français ·
   <a href="README.es.md">Español</a> ·
-  <a href="README.de.md">Deutsch</a>
+  <a href="README.de.md">Deutsch</a> · <a href="README.pl.md">Polski</a>
 </p>
 
 <p align="center">
@@ -120,7 +120,7 @@ Exécutez `make` pour afficher toutes les commandes. Les plus courantes sont `ma
 
 Votre mot de passe principal et vos clés ne quittent jamais le Mac ; le serveur ne reçoit que des données chiffrées. Consultez [SECURITY.md](SECURITY.md) pour les détails et le signalement privé des vulnérabilités.
 
-Triwarden fournit des libellés VoiceOver, des raccourcis clavier et prend en charge Augmenter le contraste et Réduire les animations. L’app est disponible en English, Deutsch, 繁體中文, 粵語, 简体中文, 日本語, 한국어, Français, Español et ไทย. Les limites connues sont documentées dans [ACCESSIBILITY.md](ACCESSIBILITY.md).
+Triwarden fournit des libellés VoiceOver, des raccourcis clavier et prend en charge Augmenter le contraste et Réduire les animations. L’app est disponible en English, Deutsch, 繁體中文, 粵語, 简体中文, 日本語, 한국어, Français, Español, Polski et ไทย. Les limites connues sont documentées dans [ACCESSIBILITY.md](ACCESSIBILITY.md).
 
 ## Assistance et contribution
 

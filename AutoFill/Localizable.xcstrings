@@ -51,6 +51,12 @@
             "value": "帳號"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Konto"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -107,6 +113,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "地址"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adres"
           }
         },
         "de": {
@@ -167,6 +179,12 @@
             "value": "取消"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anuluj"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -223,6 +241,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "卡號"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Numer karty"
           }
         },
         "de": {
@@ -283,6 +307,12 @@
             "value": "持卡人"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Posiadacz karty"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -341,6 +371,12 @@
             "value": "公司"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Firma"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -351,6 +387,12 @@
     },
     "Completing the passkey request": {
       "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kończenie żądania klucza dostępu"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -407,6 +449,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無法儲存通行密鑰：%@"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie udało się zapisać klucza dostępu: %@"
           }
         },
         "de": {
@@ -467,6 +515,12 @@
             "value": "電子郵件"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E-mail"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -523,6 +577,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "端對端加密"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szyfrowanie end-to-end"
           }
         },
         "de": {
@@ -583,6 +643,12 @@
             "value": "到期日"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wygasa"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -639,6 +705,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "填入"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wypełnij"
           }
         },
         "de": {
@@ -699,6 +771,12 @@
             "value": "填入一次性驗證碼"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wypełnij kod jednorazowy"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -755,6 +833,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "填入密碼"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wypełnij hasło"
           }
         },
         "de": {
@@ -815,6 +899,12 @@
             "value": "填入驗證碼"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wypełnij kod"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -873,6 +963,12 @@
             "value": "指紋"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odcisk palca"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -929,6 +1025,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "已有通行密鑰"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ma klucz dostępu"
           }
         },
         "de": {
@@ -995,6 +1097,12 @@
             "value": "隱藏密碼"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ukryj hasło"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -1051,6 +1159,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "駕照號碼"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Numer prawa jazdy"
           }
         },
         "de": {
@@ -1117,6 +1231,12 @@
             "value": "主密碼"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hasło główne"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -1173,6 +1293,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "名稱"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nazwa"
           }
         },
         "de": {
@@ -1233,6 +1359,12 @@
             "value": "身分證字號"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nr identyfikacyjny / PESEL"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -1289,6 +1421,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "新增登入項目"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nowe dane logowania"
           }
         },
         "de": {
@@ -1349,6 +1487,12 @@
             "value": "新通行密鑰"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nowy klucz dostępu"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -1405,6 +1549,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "否"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie"
           }
         },
         "de": {
@@ -1465,6 +1615,12 @@
             "value": "此網站沒有登入資料"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brak danych logowania dla tej witryny"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -1521,6 +1677,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "此網站沒有通行密鑰"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brak kluczy dostępu dla tej witryny"
           }
         },
         "de": {
@@ -1581,6 +1743,12 @@
             "value": "沒有結果"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brak wyników"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -1637,6 +1805,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "尚未登入"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nie zalogowano"
           }
         },
         "de": {
@@ -1697,6 +1871,12 @@
             "value": "請先打開 Triwarden 並登入。"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Najpierw otwórz Triwarden i zaloguj się."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -1753,6 +1933,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "請開啟 Triwarden 並重新登入此帳號。"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otwórz Triwarden i ponownie zaloguj się na to konto."
           }
         },
         "de": {
@@ -1813,6 +1999,12 @@
             "value": "請先打開 Triwarden 一次以下載保險庫。"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otwórz raz Triwarden, aby pobrać sejf."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -1869,6 +2061,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "請開啟 Triwarden 一次以更新保險庫。"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otwórz raz Triwarden, aby odświeżyć sejf."
           }
         },
         "de": {
@@ -1929,6 +2127,12 @@
             "value": "你用 Triwarden 儲存的通行密鑰會顯示在這裡。"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tutaj pojawiają się klucze dostępu zapisane w Triwarden."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -1985,6 +2189,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "護照號碼"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Numer paszportu"
           }
         },
         "de": {
@@ -2045,6 +2255,12 @@
             "value": "電話"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Telefon"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -2103,6 +2319,12 @@
             "value": "私密金鑰"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klucz prywatny"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -2159,6 +2381,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "公開金鑰"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Klucz publiczny"
           }
         },
         "de": {
@@ -2225,6 +2453,12 @@
             "value": "顯示（⌥⌘R，或按住 ⌥）"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pokaż (⌥⌘R lub przytrzymaj ⌥)"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -2281,6 +2515,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "儲存通行密鑰"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zapisz klucz dostępu"
           }
         },
         "de": {
@@ -2341,6 +2581,12 @@
             "value": "儲存通行密鑰"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zapisz klucz dostępu"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -2397,6 +2643,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "儲存至"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zapisz w"
           }
         },
         "de": {
@@ -2457,6 +2709,12 @@
             "value": "加密儲存在你的保險庫，並同步到你的其他裝置。"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zapisano w zaszyfrowanej postaci w sejfie i zsynchronizowano z innymi urządzeniami."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -2513,6 +2771,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "儲存在你的保險庫，所有裝置可用。"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zapisano w sejfie, na każdym urządzeniu."
           }
         },
         "de": {
@@ -2573,6 +2837,12 @@
             "value": "搜尋以從任何項目填入。"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wyszukaj, aby wypełnić z dowolnego elementu."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -2629,6 +2899,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "搜尋保險庫"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Szukaj w sejfie"
           }
         },
         "de": {
@@ -2689,6 +2965,12 @@
             "value": "安全碼"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kod zabezpieczający"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -2745,6 +3027,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "共享保險庫"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Udostępniony sejf"
           }
         },
         "de": {
@@ -2811,6 +3099,12 @@
             "value": "顯示密碼"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pokaż hasło"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -2867,6 +3161,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "登入"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zaloguj się"
           }
         },
         "de": {
@@ -2927,6 +3227,12 @@
             "value": "使用通行密鑰登入"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zaloguj się kluczem dostępu"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -2937,6 +3243,12 @@
     },
     "Signing in…": {
       "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logowanie…"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -2993,6 +3305,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "無法在此使用這個通行密鑰。"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tego klucza dostępu nie można tu użyć."
           }
         },
         "de": {
@@ -3053,6 +3371,12 @@
             "value": "這會取代該登入項目上已儲存的通行密鑰。"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Zastąpi to klucz dostępu zapisany już w tych danych logowania."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3111,6 +3435,12 @@
             "value": "此網站需要 Triwarden 無法建立的金鑰類型。"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ta witryna wymaga typu klucza, którego Triwarden nie może utworzyć."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3164,6 +3494,12 @@
           }
         },
         "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Touch ID"
+          }
+        },
+        "pl": {
           "stringUnit": {
             "state": "translated",
             "value": "Touch ID"
@@ -3227,6 +3563,12 @@
             "value": "解鎖"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odblokuj"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3237,6 +3579,12 @@
     },
     "Unlock before signing in with this passkey.": {
       "localizations": {
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odblokuj przed zalogowaniem się tym kluczem dostępu."
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3293,6 +3641,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "解鎖以填入"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odblokuj, aby wypełnić"
           }
         },
         "de": {
@@ -3353,6 +3707,12 @@
             "value": "解鎖以儲存通行密鑰"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odblokuj, aby zapisać klucz dostępu"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3409,6 +3769,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "解鎖以登入"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Odblokuj, aby się zalogować"
           }
         },
         "de": {
@@ -3469,6 +3835,12 @@
             "value": "使用者名稱"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nazwa użytkownika"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3525,6 +3897,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "主密碼錯誤。"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieprawidłowe hasło główne."
           }
         },
         "de": {
@@ -3585,6 +3963,12 @@
             "value": "是"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tak"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3641,6 +4025,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "填入密碼"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "wypełnić hasło"
           }
         },
         "de": {
@@ -3701,6 +4091,12 @@
             "value": "儲存通行密鑰"
           }
         },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zapisać klucz dostępu"
+          }
+        },
         "de": {
           "stringUnit": {
             "state": "translated",
@@ -3757,6 +4153,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "使用通行密鑰登入"
+          }
+        },
+        "pl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "zalogować się kluczem dostępu"
           }
         },
         "de": {
