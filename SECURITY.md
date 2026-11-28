@@ -43,7 +43,7 @@ with `completeUntilFirstUserAuthentication` file protection, and both the app an
 - **AutoFill** never fills without you there. Every request requires Touch ID or the master password inside
   the extension, and `provideCredentialWithoutUserInteraction` always refuses. Only domains, usernames and
   passkey ids are shared with the system's QuickType list, never passwords.
-- **SSH agent** (off by default) listens on a `0600` socket in the App Group container. It only lists and
+- **SSH agent** (off by default) listens on a `0600` socket in a private `/tmp` directory (the path is recorded in the App Group, because a socket path must fit in 104 bytes). It only lists and
   signs; it never adds, removes or exports keys. A signature request names the app that owns the connecting
   process (bundle id and Team ID when the signature is readable, otherwise the executable path). The person
   allows it once, for 10 minutes, until the vault locks, or always for that app. macOS then asks for Touch ID
@@ -57,20 +57,20 @@ with `completeUntilFirstUserAuthentication` file protection, and both the app an
   App Group container (newest 200; app, tool, path, key name, outcome; no key material and no signed payload).
   Private keys are only available while their account is unlocked. So that `ssh` and `git` can still ask
   while the vault is locked, the agent remembers each key's public key, name and account in
-  `agent-public-keys.json` next to the socket (public keys only; removed when the agent is turned off or the
+  `agent-public-keys.json` in the App Group container (public keys only; removed when the agent is turned off or the
   account signs out). A signature for a locked account brings the vault window forward with a line naming
   the app and key, and posts a notification; the request waits up to 60 seconds for unlock, and Cancel or the
   deadline refuses it (logged as denied or "Vault locked"). After unlock the usual approval still appears.
   Because unlocking for that request already proved the owner, allowing it within 90 seconds of the unlock
   skips the second Touch ID / password prompt; Always still asks, since it outlives the unlock. A key that
   changed or was removed while waiting does not sign: the agent only signs with the exact public key asked for.
-- **`tw` command line** (off by default) talks to the app over a `0600` socket in the App Group container.
+- **`tw` command line** (off by default) talks to the app over a `0600` socket in a private `/tmp` directory, with the path published in the App Group so the app, `tw` and the Safari appex agree even when the account name is long.
   Status, generate and lock work without approval. Listing or reading anything needs the vault unlocked and
   Touch ID or the Mac password, with a prompt that names the calling program. Secrets go to stdout only,
   never into arguments or environment variables.
 - **Auto-type** types a login into the app the palette was called over. It's done by a separate helper,
   *Triwarden Auto-Type* (inside the app bundle), which alone holds Accessibility, so the app itself stays
-  sandboxed. The helper listens on a `0600` socket in the App Group container and answers only the Triwarden
+  sandboxed. The helper listens on a `0600` socket in a private `/tmp` directory (path published in the App Group) and answers only the Triwarden
   executable of the bundle it sits in, signed by the same team; anyone else gets no answer at all. It stores
   nothing, types only what one request carries into the app that request names (after it comes forward), and
   quits with Triwarden. Typing takes the same Touch ID / re-prompt as copying. Matching a browser tab is off

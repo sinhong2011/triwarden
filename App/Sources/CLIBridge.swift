@@ -12,8 +12,8 @@ import VaultwardenAPI
 @MainActor @Observable
 final class CLIBridge {
     static var defaultSocket: URL {
-        (FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: AccountStore.appGroup)
-            ?? FileManager.default.temporaryDirectory).appending(path: CLISocket.name)
+        URL(fileURLWithPath: (try? UnixSocketLocation.plannedPath(kind: .cli))
+            ?? UnixSocketLocation.connectPath(kind: .cli))
     }
 
     /// Where the bundled tool lives, for the install command.
@@ -38,6 +38,8 @@ final class CLIBridge {
 
     private(set) var lastError: String?
     private var server: FramedSocketServer?
+    /// True when this instance bound the managed short socket (so stop() can drop the pointer).
+    private var managesLocation = false
     private var approvedUntil: [String: Date] = [:]
     /// Sites whose one-time codes were approved for the browser extension a moment ago, so the code on the screen can
     /// roll over, and the fill that follows, without asking again. In memory only, per site, and dropped on lock.
@@ -69,9 +71,21 @@ final class CLIBridge {
 
     init(model: AppModel) { self.model = model }
 
-    func start(at socket: URL = defaultSocket) {
+    func start(at socket: URL? = nil) {
         guard server == nil else { return }
-        let server = FramedSocketServer(socketURL: socket) { [weak self] request, peer in
+        let managed = socket == nil
+        let url: URL
+        if let socket {
+            url = socket
+        } else {
+            do {
+                url = URL(fileURLWithPath: try UnixSocketLocation.prepareBindPath(kind: .cli))
+            } catch {
+                lastError = Self.startError(error)
+                return
+            }
+        }
+        let server = FramedSocketServer(socketURL: url) { [weak self] request, peer in
             let response: CLIResponse
             if let decoded = try? JSONDecoder().decode(CLIRequest.self, from: request) {
                 response = await self?.handle(decoded, peer: peer) ?? .failure("Triwarden is quitting.")
@@ -82,17 +96,36 @@ final class CLIBridge {
         }
         do {
             try server.start()
+            if managed {
+                try UnixSocketLocation.publish(kind: .cli, socketPath: url.path)
+            }
             self.server = server
+            self.managesLocation = managed
             isRunning = true
             lastError = nil
         } catch {
-            lastError = String(localized: "Couldn't start the command-line bridge: \(String(describing: error))")
+            server.stop()
+            lastError = Self.startError(error)
         }
+    }
+
+    private static func startError(_ error: Error) -> String {
+        if case FramedSocketServer.Failure.pathTooLong = error {
+            return String(localized: "Couldn't start the command-line bridge: \(UnixSocketLocation.pathTooLongMessage)")
+        }
+        if case UnixSocketLocation.Failure.pathTooLong = error {
+            return String(localized: "Couldn't start the command-line bridge: \(UnixSocketLocation.pathTooLongMessage)")
+        }
+        return String(localized: "Couldn't start the command-line bridge: \(error.localizedDescription)")
     }
 
     func stop() {
         server?.stop()
         server = nil
+        if managesLocation {
+            UnixSocketLocation.unpublish(kind: .cli)
+            managesLocation = false
+        }
         isRunning = false
     }
 

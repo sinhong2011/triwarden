@@ -179,4 +179,25 @@ struct CLIProtocolTests {
         let reply = BridgeClient.unavailableResponse(errno: ENOENT, bridgeWanted: nil)
         #expect(reply.code == "app_not_running")
     }
+
+    @Test func unavailableMapsENAMETOOLONGSeparatelyEvenWhenBridgeIsWanted() {
+        let reply = BridgeClient.unavailableResponse(errno: ENAMETOOLONG, bridgeWanted: true)
+        #expect(reply.code == "socket_path_too_long")
+        #expect(reply.code != "app_not_running")
+        #expect(reply.error?.contains("104") == true)
+        #expect(reply.error?.contains("long user names") == true)
+    }
+
+    @Test func attemptConnectReportsENAMETOOLONGForAnOverlongPath() {
+        let path = UnixSocketLocation.classicGroupContainerPath(
+            accountName: "john.smith.longname@icloud.com", kind: .cli)
+        #expect(!UnixSocketLocation.fits(path))
+        if case .failed(let err) = FramedSocketServer.attemptConnect(to: path) {
+            #expect(err == ENAMETOOLONG)
+            let reply = BridgeClient.unavailableResponse(errno: err, socket: path, bridgeWanted: true)
+            #expect(reply.code == "socket_path_too_long")
+        } else {
+            Issue.record("connect should fail with ENAMETOOLONG")
+        }
+    }
 }

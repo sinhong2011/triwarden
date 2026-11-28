@@ -104,22 +104,30 @@ final class SecretsController: NSObject, NSWindowDelegate {
         do {
             profiles = try store.loadAll()
             lastError = nil
-            guard !profiles.isEmpty else { server?.stop(); server = nil; return }
+            guard !profiles.isEmpty else { stopServer(); return }
             try store.requireApprovedRevision(confirmation.read(), profiles: profiles)
-            guard profiles.contains(where: \.enabled) else { server?.stop(); server = nil; return }
+            guard profiles.contains(where: \.enabled) else { stopServer(); return }
             guard server == nil else { return }
-            let server = SecretsServer(socketURL: store.socketURL,
+            let socket = try store.bindSocketURL()
+            let server = SecretsServer(socketURL: socket,
                                        expectedCLI: Bundle.main.bundleURL.appending(path: "Contents/MacOS/tw")) { [weak self] request, peer in
                 guard let self else { return }
                 await self.handle(request, peer: peer)
             }
             try server.start()
+            try store.publishSocket(socket.path)
             self.server = server
         } catch {
             // Missing settings are normal on first run; other failures appear in Secrets.
             if FileManager.default.fileExists(atPath: store.fileURL.path) { lastError = error.localizedDescription }
-            server?.stop(); server = nil
+            stopServer()
         }
+    }
+
+    private func stopServer() {
+        server?.stop()
+        server = nil
+        store.unpublishSocket()
     }
 
     func reset() {

@@ -8,5 +8,10 @@
 	<array>
 		<string>FX3VR69P5K.io.github.sinhong2011.triwarden</string>
 	</array>
+	<key>com.apple.security.temporary-exception.files.absolute-path.read-write</key>
+	<array>
+		<string>/private/tmp/</string>
+		<string>/tmp/</string>
+	</array>
 </dict>
 </plist>
